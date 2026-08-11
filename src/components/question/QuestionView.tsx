@@ -10,6 +10,7 @@ import { StemBlocks } from '@/components/question/StemBlocks'
 import { MarkableRegion } from '@/components/marking/MarkableRegion'
 import { useTextMarks } from '@/components/marking/useTextMarks'
 import { QuestionDiscussions } from '@/components/discussion/QuestionDiscussions'
+import { AllNotesPanel } from '@/components/solution/AllNotesPanel'
 import { PersonalNoteTab } from '@/components/solution/PersonalNoteTab'
 import { SolutionList } from '@/components/solution/SolutionList'
 import { AssignmentEditor } from '@/components/assignments/AssignmentEditor'
@@ -75,7 +76,7 @@ export function QuestionView({
   autoReveal = false,
   autoWrite = false,
 }: Props) {
-  const { session } = useAuth()
+  const { session, isAdmin } = useAuth()
   const userId = session?.user.id ?? ''
 
   const [selected, setSelected] = useState<number[]>([])
@@ -456,6 +457,8 @@ export function QuestionView({
             pendingQuote={askQuote}
             onQuoteHandled={() => setAskQuote(null)}
           />
+
+          {isAdmin && <AllNotesPanel questionId={question.id} groupId={question.groupId} />}
         </div>
       )}
 

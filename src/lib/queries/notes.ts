@@ -58,3 +58,44 @@ export async function deleteNote(id: string): Promise<void> {
   const { error } = await supabase.from('personal_notes').delete().eq('id', id)
   if (error) throw error
 }
+
+export type AllUsersNote = {
+  userId: string
+  displayName: string
+  content: RichDoc
+  updatedAt: string
+}
+
+/**
+ * 관리자 전용. 문항(또는 그룹) 하나에 달린 모든 사람의 개인 메모를 본다.
+ * RLS 의 personal_notes_admin_select 정책이 관리자에게만 전체 행을 열어준다.
+ */
+export async function fetchAllNotes(target: NoteTarget): Promise<AllUsersNote[]> {
+  let query = supabase
+    .from('personal_notes')
+    .select('user_id, content, updated_at')
+
+  query = target.groupId
+    ? query.eq('group_id', target.groupId)
+    : query.eq('question_id', target.questionId)
+
+  const { data, error } = await query.order('updated_at', { ascending: false })
+  if (error) throw error
+  if (!data || data.length === 0) return []
+
+  const ids = [...new Set(data.map((row) => row.user_id))]
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, display_name')
+    .in('id', ids)
+  if (profileError) throw profileError
+
+  const nameById = new Map((profiles ?? []).map((row) => [row.id, row.display_name]))
+
+  return data.map((row) => ({
+    userId: row.user_id,
+    displayName: nameById.get(row.user_id) ?? '알 수 없음',
+    content: parseRichDoc(row.content),
+    updatedAt: row.updated_at,
+  }))
+}
