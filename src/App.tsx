@@ -12,8 +12,10 @@ import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminLabelingPage } from '@/pages/AdminLabelingPage'
 import { AdminQuestionsPage } from '@/pages/AdminQuestionsPage'
 import { AdminReportsPage } from '@/pages/AdminReportsPage'
+import { AdminReviewPage } from '@/pages/AdminReviewPage'
 import { AdminRevisionsPage } from '@/pages/AdminRevisionsPage'
 import { AdminStatsPage } from '@/pages/AdminStatsPage'
+import { AdminUploadPage } from '@/pages/AdminUploadPage'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { AnnouncementsPage } from '@/pages/AnnouncementsPage'
 import { BlockTestPage } from '@/pages/BlockTestPage'
@@ -80,6 +82,8 @@ export default function App() {
                           <Route path="/admin/assignments" element={<AdminAssignmentsPage />} />
                           <Route path="/admin/questions" element={<AdminQuestionsPage />} />
                           <Route path="/admin/labeling" element={<AdminLabelingPage />} />
+                          <Route path="/admin/review" element={<AdminReviewPage />} />
+                          <Route path="/admin/upload" element={<AdminUploadPage />} />
                           <Route path="/admin/groups" element={<AdminGroupsPage />} />
                           <Route path="/admin/users" element={<AdminUsersPage />} />
                           <Route path="/admin/reports" element={<AdminReportsPage />} />

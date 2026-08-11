@@ -43,16 +43,14 @@ const TOOLS: { to: string | null; title: string; description: string; phase?: st
     description: '회원, 문제, 손볼 곳을 한눈에 봅니다.',
   },
   {
-    to: null,
+    to: '/admin/review',
     title: 'PDF 검수',
-    description: '원본 PDF 와 파싱 결과를 나란히 놓고 수정.',
-    phase: '아직 준비 중입니다',
+    description: '원본 PDF 를 옆에 띄우고 본문과 보기를 옮겨 적습니다.',
   },
   {
-    to: null,
+    to: '/admin/upload',
     title: 'CSV 일괄 업로드',
-    description: '표로 정리한 문항을 한 번에 등록.',
-    phase: '아직 준비 중입니다',
+    description: '엑셀로 정리한 문항을 한 번에 등록합니다.',
   },
 ]
 
