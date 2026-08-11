@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { DesktopOnly } from '@/components/DesktopOnly'
 import {
   assignQuestions,
   fetchAssignmentProgress,
+  fetchCompletedAssignmentQuestionIds,
   type AssignmentProgress,
 } from '@/lib/queries/assignments'
 import { fetchMembers, type Member } from '@/lib/queries/profiles'
-import { fetchQuestions, type SolveQuestion } from '@/lib/queries/questions'
+import { fetchQuestions, fetchQuestionsByIds, type SolveQuestion } from '@/lib/queries/questions'
 import { examTitle } from '@/lib/queries/taxonomy'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
+import { formatDateTime } from '@/utils/date'
 import { cn } from '@/utils/cn'
 
 /**
@@ -32,6 +35,9 @@ export function AdminAssignmentsPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [progressNonce, setProgressNonce] = useState(0)
+  const [completedFor, setCompletedFor] = useState<{ assigneeId: string; displayName: string } | null>(
+    null,
+  )
 
   useEffect(() => {
     let active = true
@@ -264,7 +270,15 @@ export function AdminAssignmentsPage() {
             <tbody className="bg-white dark:bg-slate-900">
               {progress.map((row) => (
                 <tr key={row.assigneeId} className="border-t border-slate-200 dark:border-slate-800">
-                  <td className="px-4 py-2">{row.displayName}</td>
+                  <td className="px-4 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setCompletedFor({ assigneeId: row.assigneeId, displayName: row.displayName })}
+                      className="text-brand-600 hover:underline dark:text-brand-300"
+                    >
+                      {row.displayName}
+                    </button>
+                  </td>
                   <td className="px-4 py-2 tabular-nums">{row.done}</td>
                   <td className="px-4 py-2 tabular-nums">{row.total}</td>
                   <td
@@ -280,7 +294,118 @@ export function AdminAssignmentsPage() {
             </tbody>
           </table>
         )}
+
+        {completedFor && (
+          <CompletedListModal
+            assigneeId={completedFor.assigneeId}
+            displayName={completedFor.displayName}
+            onClose={() => setCompletedFor(null)}
+          />
+        )}
       </section>
     </DesktopOnly>
+  )
+}
+
+function CompletedListModal({
+  assigneeId,
+  displayName,
+  onClose,
+}: {
+  assigneeId: string
+  displayName: string
+  onClose: () => void
+}) {
+  const { taxonomy } = useData()
+  const [rows, setRows] = useState<{ question: SolveQuestion; completedAt: string | null }[] | null>(
+    null,
+  )
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    async function load() {
+      try {
+        const completed = await fetchCompletedAssignmentQuestionIds(assigneeId)
+        const questions = await fetchQuestionsByIds(completed.map((row) => row.questionId))
+        const completedAtById = new Map(completed.map((row) => [row.questionId, row.completedAt]))
+        if (active) {
+          setRows(questions.map((question) => ({ question, completedAt: completedAtById.get(question.id) ?? null })))
+        }
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : '목록을 불러오지 못했습니다.')
+      }
+    }
+    void load()
+    return () => {
+      active = false
+    }
+  }, [assigneeId])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 text-left shadow-xl dark:bg-slate-900"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold">{displayName} 님이 해설 완료한 문항</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-slate-500 hover:underline dark:text-slate-400"
+          >
+            닫기
+          </button>
+        </div>
+
+        {error && (
+          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+            {error}
+          </p>
+        )}
+
+        {!error && rows === null && (
+          <div className="flex justify-center py-6">
+            <Spinner className="h-5 w-5" />
+          </div>
+        )}
+
+        {rows !== null && rows.length === 0 && (
+          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+            완료한 문항이 없습니다.
+          </p>
+        )}
+
+        {rows !== null && rows.length > 0 && (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map(({ question, completedAt }) => {
+              const exam = taxonomy?.examById.get(question.examId)
+              const subjectName = exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined
+              return (
+                <li key={question.id}>
+                  <Link
+                    to={`/solve?question=${question.id}&reveal=1`}
+                    onClick={onClose}
+                    className="block px-1 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <p className="truncate text-sm">
+                      {question.stemBlocks.find((block) => block.type === 'text')?.content ?? '본문 없음'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      {question.questionNumber}번 [{exam?.cohort ?? ''} {subjectName ?? ''}]
+                      {completedAt && ` · ${formatDateTime(completedAt)} 완료`}
+                    </p>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }

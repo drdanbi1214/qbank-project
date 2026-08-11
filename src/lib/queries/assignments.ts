@@ -74,6 +74,21 @@ export async function fetchAssignmentProgress(): Promise<AssignmentProgress[]> {
   }))
 }
 
+/** 배정 관리 화면에서 담당자 이름을 눌렀을 때, 그 사람이 완료한 문항을 본다. */
+export async function fetchCompletedAssignmentQuestionIds(
+  assigneeId: string,
+): Promise<{ questionId: string; completedAt: string | null }[]> {
+  const { data, error } = await supabase
+    .from('assignments')
+    .select('question_id, completed_at')
+    .eq('assignee_id', assigneeId)
+    .eq('status', 'done')
+    .order('completed_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((row) => ({ questionId: row.question_id, completedAt: row.completed_at }))
+}
+
 /** 문항 일괄 배정. 이미 같은 담당자에게 배정된 문항은 건너뛴다. */
 export async function assignQuestions(params: {
   questionIds: string[]
