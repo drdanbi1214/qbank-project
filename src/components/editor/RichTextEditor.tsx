@@ -1,0 +1,364 @@
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { EditorContent, useEditor, type Editor } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
+import StarterKit from '@tiptap/starter-kit'
+import Highlight from '@tiptap/extension-highlight'
+import { TableKit } from '@tiptap/extension-table'
+import { Placeholder } from '@tiptap/extensions'
+import { MathBlock, MathInline } from '@/components/editor/extensions/math'
+import { StoredImage } from '@/components/editor/extensions/storedImage'
+import { imageFilesFrom, uploadImage } from '@/lib/uploads'
+import type { RichDoc } from '@/types/richtext'
+import { cn } from '@/utils/cn'
+
+type Props = {
+  /**
+   * 최초 내용. 이 컴포넌트는 비제어(uncontrolled) 다.
+   * 밖에서 내용을 갈아끼워야 하면 부모가 key 로 다시 마운트한다.
+   */
+  initialValue: RichDoc
+  onChange: (doc: RichDoc) => void
+  /** 이미지 저장 경로에 쓰이는 작성자 id */
+  userId: string
+  placeholder?: string
+  /** 댓글 입력처럼 좁은 자리에서는 도구 모음을 줄인다 */
+  compact?: boolean
+  minHeight?: string
+  className?: string
+  /** 도구 모음 우측에 붙일 요소 (등록 버튼 등) */
+  toolbarExtra?: ReactNode
+  onUploadError?: (message: string) => void
+}
+
+export function RichTextEditor({
+  initialValue,
+  onChange,
+  userId,
+  placeholder = '내용을 입력하세요',
+  compact = false,
+  minHeight = '12rem',
+  className,
+  toolbarExtra,
+  onUploadError,
+}: Props) {
+  // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
+  const userIdRef = useRef(userId)
+  const errorRef = useRef(onUploadError)
+  useEffect(() => {
+    userIdRef.current = userId
+    errorRef.current = onUploadError
+  }, [userId, onUploadError])
+
+  const insertImages = useCallback((view: EditorView, files: File[], at?: number) => {
+    for (const file of files) {
+      const uploadId = crypto.randomUUID()
+      const { state } = view
+      const node = state.schema.nodes.image.create({ uploadId })
+      const pos = at ?? state.selection.from
+      view.dispatch(state.tr.insert(pos, node).scrollIntoView())
+
+      void uploadImage(file, userIdRef.current)
+        .then((path) => replacePlaceholder(view, uploadId, path))
+        .catch((caught: unknown) => {
+          removePlaceholder(view, uploadId)
+          errorRef.current?.(
+            caught instanceof Error ? caught.message : '이미지를 올리지 못했습니다.',
+          )
+        })
+    }
+  }, [])
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [2, 3, 4] },
+        link: { openOnClick: false, autolink: true },
+      }),
+      Highlight,
+      TableKit.configure({ table: { resizable: false } }),
+      StoredImage,
+      MathInline,
+      MathBlock,
+      Placeholder.configure({ placeholder }),
+    ],
+    content: initialValue,
+    editorProps: {
+      attributes: {
+        class: cn('rich-text focus:outline-none', compact ? 'min-h-24' : ''),
+        style: compact ? '' : `min-height:${minHeight}`,
+      },
+      handlePaste(view, event) {
+        const files = imageFilesFrom(event.clipboardData)
+        if (files.length === 0) return false
+        event.preventDefault()
+        insertImages(view, files)
+        return true
+      },
+      handleDrop(view, event, _slice, moved) {
+        if (moved) return false
+        const files = imageFilesFrom(event.dataTransfer)
+        if (files.length === 0) return false
+        event.preventDefault()
+        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
+        insertImages(view, files, coords?.pos)
+        return true
+      },
+    },
+    onUpdate({ editor: instance }) {
+      onChange(instance.getJSON() as RichDoc)
+    },
+  })
+
+  if (!editor) return null
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border border-slate-300 bg-white focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900',
+        className,
+      )}
+    >
+      <Toolbar editor={editor} compact={compact} onPickImage={insertImages} extra={toolbarExtra} />
+      <div className="px-3 py-2">
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  )
+}
+
+/** 업로드가 끝난 자리표시자를 실제 경로로 교체한다. */
+function replacePlaceholder(view: EditorView, uploadId: string, src: string) {
+  const found = findPlaceholder(view, uploadId)
+  if (!found) return
+  view.dispatch(
+    view.state.tr.setNodeMarkup(found.pos, undefined, {
+      ...found.attrs,
+      src,
+      uploadId: null,
+    }),
+  )
+}
+
+function removePlaceholder(view: EditorView, uploadId: string) {
+  const found = findPlaceholder(view, uploadId)
+  if (!found) return
+  view.dispatch(view.state.tr.delete(found.pos, found.pos + 1))
+}
+
+function findPlaceholder(
+  view: EditorView,
+  uploadId: string,
+): { pos: number; attrs: Record<string, unknown> } | null {
+  let result: { pos: number; attrs: Record<string, unknown> } | null = null
+  view.state.doc.descendants((node, pos) => {
+    if (result) return false
+    if (node.type.name === 'image' && node.attrs.uploadId === uploadId) {
+      result = { pos, attrs: node.attrs }
+      return false
+    }
+    return true
+  })
+  return result
+}
+
+// -----------------------------------------------------------------------------
+// 도구 모음
+// -----------------------------------------------------------------------------
+
+function Toolbar({
+  editor,
+  compact,
+  onPickImage,
+  extra,
+}: {
+  editor: Editor
+  compact: boolean
+  onPickImage: (view: EditorView, files: File[]) => void
+  extra?: ReactNode
+}) {
+  // 서식 버튼의 활성 상태는 선택 영역이 바뀔 때마다 달라진다.
+  const [, forceRender] = useState(0)
+  useEffect(() => {
+    const rerender = () => forceRender((value) => value + 1)
+    editor.on('selectionUpdate', rerender)
+    editor.on('transaction', rerender)
+    return () => {
+      editor.off('selectionUpdate', rerender)
+      editor.off('transaction', rerender)
+    }
+  }, [editor])
+
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  return (
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 px-2 py-1.5 dark:border-slate-700">
+      <ToolButton
+        label="굵게"
+        active={editor.isActive('bold')}
+        onClick={() => editor.chain().focus().toggleBold().run()}
+      >
+        <span className="font-bold">B</span>
+      </ToolButton>
+      <ToolButton
+        label="기울임"
+        active={editor.isActive('italic')}
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+      >
+        <span className="font-serif italic">I</span>
+      </ToolButton>
+      <ToolButton
+        label="형광펜"
+        active={editor.isActive('highlight')}
+        onClick={() => editor.chain().focus().toggleHighlight().run()}
+      >
+        <span className="rounded bg-amber-200 px-1 dark:bg-amber-500/50">H</span>
+      </ToolButton>
+
+      {!compact && (
+        <>
+          <Divider />
+          <ToolButton
+            label="소제목"
+            active={editor.isActive('heading', { level: 3 })}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          >
+            H3
+          </ToolButton>
+          <ToolButton
+            label="글머리 목록"
+            active={editor.isActive('bulletList')}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+          >
+            •
+          </ToolButton>
+          <ToolButton
+            label="번호 목록"
+            active={editor.isActive('orderedList')}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          >
+            1.
+          </ToolButton>
+          <ToolButton
+            label="인용"
+            active={editor.isActive('blockquote')}
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          >
+            ❝
+          </ToolButton>
+          <ToolButton
+            label="코드블록"
+            active={editor.isActive('codeBlock')}
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          >
+            <span className="font-mono text-xs">{'</>'}</span>
+          </ToolButton>
+
+          <Divider />
+          <ToolButton
+            label="표 삽입"
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                .run()
+            }
+          >
+            표
+          </ToolButton>
+          {editor.isActive('table') && (
+            <>
+              <ToolButton
+                label="열 추가"
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+              >
+                +열
+              </ToolButton>
+              <ToolButton
+                label="행 추가"
+                onClick={() => editor.chain().focus().addRowAfter().run()}
+              >
+                +행
+              </ToolButton>
+              <ToolButton
+                label="표 삭제"
+                onClick={() => editor.chain().focus().deleteTable().run()}
+              >
+                표삭제
+              </ToolButton>
+            </>
+          )}
+        </>
+      )}
+
+      <Divider />
+      <ToolButton label="이미지" onClick={() => fileInput.current?.click()}>
+        🖼
+      </ToolButton>
+      <ToolButton
+        label="인라인 수식"
+        onClick={() => editor.chain().focus().setMathInline('').run()}
+      >
+        <span className="font-serif italic">x</span>
+      </ToolButton>
+      {!compact && (
+        <ToolButton
+          label="블록 수식"
+          onClick={() => editor.chain().focus().setMathBlock('').run()}
+        >
+          <span className="font-serif italic">Σ</span>
+        </ToolButton>
+      )}
+
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? [])
+          if (files.length > 0) onPickImage(editor.view, files)
+          event.target.value = ''
+        }}
+      />
+
+      {extra && <div className="ml-auto flex items-center gap-2">{extra}</div>}
+    </div>
+  )
+}
+
+function Divider() {
+  return <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
+}
+
+function ToolButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string
+  active?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-7 min-w-7 items-center justify-center rounded px-1.5 text-sm transition-colors',
+        active
+          ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200'
+          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+      )}
+    >
+      {children}
+    </button>
+  )
+}

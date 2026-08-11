@@ -1,10 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>qbank-project</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+
+    <!--
+      본문 IBM Plex Sans KR, 서비스 이름 Jua.
+      한글 웹폰트를 직접 담으면 통짜 파일이라 가중치마다 300KB 가까이 나간다.
+      구글은 같은 폰트를 5KB 안팎의 조각으로 쪼개 실제 쓰인 글자만 내려주므로
+      모바일에서 훨씬 가볍다.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Jua&display=swap"
+      rel="stylesheet"
+    />
+    <title>2026 학년말고사</title>
+    <script>
+      // FOUC 방지: 앱이 프로필 테마를 받아오기 전 마지막 적용 테마를 먼저 반영한다.
+      try {
+        var cached = localStorage.getItem('qbank.theme.cache')
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (cached === 'dark' || ((!cached || cached === 'system') && prefersDark)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

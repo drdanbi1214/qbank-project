@@ -1,111 +1,169 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import 'tailwindcss';
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/* 다크모드는 <html class="dark"> 토글 방식. 상태는 profiles.theme 에 저장한다. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  --font-sans:
+    'IBM Plex Sans KR', -apple-system, BlinkMacSystemFont, system-ui,
+    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  /* 서비스 이름 전용. 본문에는 쓰지 않는다. */
+  --font-brand: 'Jua', var(--font-sans);
+
+  /* 드래그 툴바의 빨간 글씨 */
+  --color-marker-red: #cc1616;
+
+  --color-brand-50: oklch(0.97 0.014 254);
+  --color-brand-100: oklch(0.93 0.032 254);
+  --color-brand-200: oklch(0.88 0.06 254);
+  --color-brand-300: oklch(0.81 0.096 254);
+  --color-brand-400: oklch(0.71 0.14 254);
+  --color-brand-500: oklch(0.62 0.18 254);
+  --color-brand-600: oklch(0.55 0.19 254);
+  --color-brand-700: oklch(0.47 0.17 254);
+  --color-brand-800: oklch(0.4 0.14 254);
+  --color-brand-900: oklch(0.34 0.11 254);
 }
 
-@media (prefers-color-scheme: dark) {
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+    font-family: var(--font-sans);
+  }
+
+  /* 모바일 하단 탭바 뒤로 콘텐츠가 가리지 않도록 안전영역 확보 */
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
   }
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
+/*
+ * 본문 서식 (Tiptap 에디터와 읽기 전용 뷰어가 함께 쓴다).
+ * typography 플러그인을 쓰지 않고 필요한 요소만 직접 정의한다.
+ */
+@layer components {
+  .rich-text {
+    @apply text-[15px] leading-7 text-slate-800 dark:text-slate-100;
+  }
 
-body {
-  margin: 0;
-}
+  .rich-text > * + * {
+    @apply mt-3;
+  }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+  .rich-text h1 {
+    @apply mt-5 text-lg font-bold;
+  }
+  .rich-text h2 {
+    @apply mt-5 text-base font-bold;
+  }
+  .rich-text h3 {
+    @apply mt-5 text-[15px] font-bold text-brand-700 dark:text-brand-300;
+  }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+  .rich-text ul {
+    @apply list-outside list-disc space-y-1 pl-5;
+  }
+  .rich-text ol {
+    @apply list-outside list-decimal space-y-1 pl-5;
+  }
+  .rich-text li > p {
+    @apply m-0;
+  }
+
+  .rich-text blockquote {
+    @apply border-l-4 border-slate-300 pl-3 text-slate-600 dark:border-slate-600 dark:text-slate-300;
+  }
+
+  .rich-text code {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[13px] dark:bg-slate-800;
+  }
+
+  .rich-text pre {
+    @apply overflow-x-auto rounded-lg bg-slate-900 p-3 text-[13px] text-slate-100;
+  }
+  .rich-text pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+
+  .rich-text hr {
+    @apply border-slate-200 dark:border-slate-700;
+  }
+
+  .rich-text a {
+    @apply text-brand-600 underline underline-offset-2 dark:text-brand-300;
+  }
+
+  .rich-text mark {
+    @apply rounded bg-amber-200 px-0.5 text-inherit dark:bg-amber-500/40;
+  }
+
+  .rich-text table {
+    @apply w-full table-fixed border-collapse text-sm;
+  }
+  .rich-text th,
+  .rich-text td {
+    @apply border border-slate-300 px-2 py-1 align-top dark:border-slate-600;
+  }
+  .rich-text th {
+    @apply bg-slate-100 text-left font-semibold dark:bg-slate-800;
+  }
+
+  /* 표 편집 중 선택된 셀 */
+  .rich-text .selectedCell:after {
+    @apply pointer-events-none absolute inset-0 bg-brand-500/20 content-[''];
+  }
+  .rich-text .selectedCell {
+    @apply relative;
+  }
+
+  .rich-text .ProseMirror-selectednode {
+    @apply outline-2 outline-brand-500;
+  }
+
+  /* 빈 문서 안내 문구 */
+  .rich-text p.is-editor-empty:first-child::before {
+    @apply pointer-events-none float-left h-0 text-slate-400 content-[attr(data-placeholder)];
   }
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+/*
+ * 인쇄 (문제집 PDF 저장).
+ * 화면용 배경과 다크모드를 걷어내고 종이에 맞춘다.
+ */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
   }
-}
-p {
-  margin: 0;
-}
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
+  /* 헤더, 탭바, 사이드바처럼 인쇄에 불필요한 요소 */
+  header nav,
+  .print-hide {
+    display: none !important;
+  }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  @page {
+    size: A4;
+    margin: 15mm 12mm;
+  }
+
+  .rich-text pre {
+    background: #f1f5f9 !important;
+    color: #000 !important;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: #000 !important;
+  }
 }

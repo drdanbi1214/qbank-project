@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 실제 기출 자료. 이 저장소는 공개라 원본이 올라가면 안 된다.
+*.zip
+*.pdf
+scripts/data/

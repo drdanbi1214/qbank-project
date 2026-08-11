@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# 클라이언트 라우터라 새로고침해도 index.html 로 보내야 한다.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

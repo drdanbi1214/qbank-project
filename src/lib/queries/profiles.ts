@@ -1,0 +1,49 @@
+import { supabase } from '@/lib/supabase'
+
+export type Member = {
+  id: string
+  displayName: string
+  cohort: string | null
+  role: string
+  isSuspended: boolean
+}
+
+export const NICKNAME_MIN = 2
+export const NICKNAME_MAX = 20
+
+/** 가입 화면에서 쓰는 형식 검사. 서버의 CHECK 제약과 같은 기준이다. */
+export function validateNickname(name: string): string | null {
+  const trimmed = name.trim()
+  if (trimmed.length < NICKNAME_MIN || trimmed.length > NICKNAME_MAX) {
+    return `닉네임은 ${NICKNAME_MIN}자 이상 ${NICKNAME_MAX}자 이하로 입력해주세요.`
+  }
+  if (/\s/.test(trimmed)) return '닉네임에는 공백을 넣을 수 없습니다.'
+  return null
+}
+
+export async function isNicknameAvailable(name: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_display_name_available', { p_name: name })
+  if (error) {
+    console.error('닉네임 중복을 확인하지 못했습니다.', error)
+    return true // 확인에 실패하면 서버 제약에 맡긴다
+  }
+  return data === true
+}
+
+/** 배정 대상으로 고를 수 있는 사용자 (정지되지 않은 계정) */
+export async function fetchMembers(): Promise<Member[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, cohort, role, is_suspended')
+    .eq('is_suspended', false)
+    .order('display_name')
+
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    displayName: row.display_name,
+    cohort: row.cohort,
+    role: row.role,
+    isSuspended: row.is_suspended,
+  }))
+}
