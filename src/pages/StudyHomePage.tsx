@@ -5,12 +5,38 @@ import { ProgressBar } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { accuracy, useData } from '@/lib/data'
 import { fetchOpenSession, type StudySession } from '@/lib/queries/study'
+import { examShortLabel, type Taxonomy } from '@/lib/queries/taxonomy'
 
 const SESSION_LABEL: Record<string, string> = {
   sequential: '순서대로 풀기',
   block_test: '블록테스트',
   wrong_only: '오답 재풀이',
   bookmark: '북마크 재풀이',
+}
+
+/** 세션이 어느 단원/시험/과목 범위였는지, 있는 대로 가장 구체적인 이름을 찾는다. */
+function sessionScopeLabel(session: StudySession, taxonomy: Taxonomy | null): string | null {
+  if (!taxonomy) return null
+  const scope = session.scope
+  const unitId = typeof scope.unit_id === 'string' ? scope.unit_id : null
+  const examId = typeof scope.exam_id === 'string' ? scope.exam_id : null
+  const subjectId = typeof scope.subject_id === 'string' ? scope.subject_id : null
+
+  if (unitId) {
+    const unit = taxonomy.unitById.get(unitId)
+    if (unit) return unit.name
+  }
+  if (examId) {
+    const exam = taxonomy.examById.get(examId)
+    const subjectName = exam ? taxonomy.subjectById.get(exam.subjectId)?.name : undefined
+    const label = examShortLabel(exam, subjectName)
+    if (label) return label
+  }
+  if (subjectId) {
+    const subject = taxonomy.subjectById.get(subjectId)
+    if (subject) return subject.name
+  }
+  return null
 }
 
 const TILE_COLORS = [
@@ -67,9 +93,9 @@ export function StudyHomePage() {
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-semibold">이어풀기</span>
-            <span className="block text-xs text-slate-500 dark:text-slate-400">
-              {SESSION_LABEL[openSession.mode] ?? '학습'}, {openSession.currentIndex + 1} /{' '}
-              {openSession.questionIds.length}
+            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+              {sessionScopeLabel(openSession, taxonomy) ?? SESSION_LABEL[openSession.mode] ?? '학습'},{' '}
+              {openSession.currentIndex + 1} / {openSession.questionIds.length}
             </span>
           </span>
         </Link>
