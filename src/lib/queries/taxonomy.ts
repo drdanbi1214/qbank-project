@@ -95,3 +95,11 @@ export function examShortLabel(exam: Exam | undefined, subjectName: string | und
   if (!exam) return ''
   return `${exam.cohort} ${subjectName ?? ''}`.trim()
 }
+
+/** cohort("26학번")를 연도(2026)로 바꿔 exam_name 과 합친다. 예: "2026 학년말고사" */
+export function examYearLabel(exam: Exam | undefined): string {
+  if (!exam) return ''
+  const match = exam.cohort.match(/^(\d{2})학번$/)
+  const year = match ? `20${match[1]}` : exam.cohort
+  return `${year} ${exam.examName}`.trim()
+}
