@@ -16,7 +16,7 @@ import { cn } from '@/utils/cn'
 
 /**
  * 배정 관리. 시험을 고르고 문항을 선택해 담당자에게 넘긴다.
- * 담당자는 `내 배정` 탭에서 자기 몫만 본다.
+ * 담당자는 `풀이 배정` 탭에서 자기 몫만 본다.
  */
 export function AdminAssignmentsPage() {
   const { session } = useAuth()

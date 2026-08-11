@@ -61,7 +61,7 @@ export function MyAssignmentsPage() {
   return (
     <section>
       <header className="mb-4">
-        <h1 className="text-xl font-bold">내 배정</h1>
+        <h1 className="text-xl font-bold">풀이 배정</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           풀이 작성을 맡은 문항입니다. 문항을 열어 풀이를 작성하면 자동으로 완료 처리됩니다.
         </p>

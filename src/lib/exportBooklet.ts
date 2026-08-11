@@ -4,6 +4,7 @@ import { fetchNotesForTargets } from '@/lib/queries/notes'
 import { getSignedUrl } from '@/lib/storage'
 import { circled, effectiveAnswer, type AnswerPayload, type Choice, type StemBlock } from '@/types/question'
 import { richTextToPlain } from '@/types/richtext'
+import { isChunkLoadError, reloadOnce } from '@/utils/reloadOnChunkError'
 import type { SolveQuestion } from '@/lib/queries/questions'
 
 /**
@@ -37,9 +38,15 @@ let pdfLibs: Promise<{
  */
 function loadPdfLibs() {
   if (!pdfLibs) {
-    pdfLibs = Promise.all([import('jspdf'), import('html2canvas-pro')]).then(
-      ([jspdf, html2canvas]) => ({ JsPDF: jspdf.default, captureCanvas: html2canvas.default }),
-    )
+    pdfLibs = Promise.all([import('jspdf'), import('html2canvas-pro')])
+      .then(([jspdf, html2canvas]) => ({ JsPDF: jspdf.default, captureCanvas: html2canvas.default }))
+      .catch((caught: unknown) => {
+        // 실패한 프로미스를 캐시해두면 다음 클릭도 계속 같은 에러만 반복된다.
+        pdfLibs = null
+        // 배포가 새로 올라가 예전 청크 해시가 사라진 경우 새로고침하면 바로 해결된다.
+        if (isChunkLoadError(caught)) reloadOnce()
+        throw caught
+      })
   }
   return pdfLibs
 }

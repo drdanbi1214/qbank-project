@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { downloadExamBooklets } from '@/lib/exportBooklet'
 import { cn } from '@/utils/cn'
+import { isChunkLoadError } from '@/utils/reloadOnChunkError'
 
 /** 학번 -> 과목 순으로 시험을 나열한다. */
 export function ExamsPage() {
@@ -21,7 +22,13 @@ export function ExamsPage() {
     try {
       await downloadExamBooklets(examId, label, session?.user.id ?? null)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '문제집을 만들지 못했습니다.')
+      setError(
+        isChunkLoadError(caught)
+          ? '새 버전이 배포되어 다시 불러오는 중입니다. 잠시 후 다시 눌러주세요.'
+          : caught instanceof Error
+            ? caught.message
+            : '문제집을 만들지 못했습니다.',
+      )
     } finally {
       setDownloadingId(null)
     }
