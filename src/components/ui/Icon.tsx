@@ -17,6 +17,7 @@ export type IconName =
   | 'chevron-right'
   | 'logout'
   | 'search'
+  | 'shuffle'
 
 const PATHS: Record<IconName, string> = {
   study: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H19v14H6.5A2.5 2.5 0 0 0 4 19.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20',
@@ -35,6 +36,7 @@ const PATHS: Record<IconName, string> = {
   'chevron-right': 'M9 6l6 6-6 6',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16M21 21l-4.3-4.3',
+  shuffle: 'M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5',
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {

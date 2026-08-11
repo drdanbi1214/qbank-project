@@ -47,6 +47,8 @@ type Props = {
   onBookmarkChange: (next: boolean) => void
   onPrev?: () => void
   onNext?: () => void
+  /** 남은 문제 순서를 무작위로 섞는다. 여러 문제를 순서대로 푸는 세션에서만 넘긴다. */
+  onShuffle?: () => void
   onExit: () => void
   /** 채점이 끝나면 목록 진행률을 갱신하려고 알린다 */
   onAnswered?: (questionId: string, isCorrect: boolean | null) => void
@@ -67,6 +69,7 @@ export function QuestionView({
   onBookmarkChange,
   onPrev,
   onNext,
+  onShuffle,
   onExit,
   onAnswered,
   autoReveal = false,
@@ -282,6 +285,7 @@ export function QuestionView({
             )}
             <IconButton label="이전 문제" icon="chevron-right" onClick={onPrev} flip disabled={!onPrev} />
             <IconButton label="다음 문제" icon="chevron-right" onClick={onNext} disabled={!onNext} />
+            {onShuffle && <IconButton label="순서 섞기" icon="shuffle" onClick={onShuffle} />}
             <IconButton
               label={bookmarked ? '북마크 해제' : '북마크'}
               icon="wrong-note"
@@ -417,10 +421,12 @@ export function QuestionView({
           {autoWrite ? (
             <AssignmentEditor
               questionId={question.id}
+              examId={question.examId}
               groupId={question.groupId}
               choices={question.choices}
               currentEditorAnswer={answer.editorAnswer}
               yamaAnswer={answer.yamaAnswer}
+              currentUnitId={question.unitId}
               userId={userId}
             />
           ) : (
@@ -516,7 +522,7 @@ function IconButton({
   flip,
 }: {
   label: string
-  icon: 'chevron-right' | 'wrong-note' | 'logout'
+  icon: 'chevron-right' | 'wrong-note' | 'logout' | 'shuffle'
   onClick?: () => void
   disabled?: boolean
   active?: boolean

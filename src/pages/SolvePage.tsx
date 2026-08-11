@@ -11,7 +11,7 @@ import {
   type QuestionSet,
   type SolveQuestion,
 } from '@/lib/queries/questions'
-import { fetchSession, startSession, updateSessionProgress } from '@/lib/queries/study'
+import { fetchSession, startSession, updateSessionOrder, updateSessionProgress } from '@/lib/queries/study'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
@@ -164,6 +164,26 @@ export function SolvePage() {
     [params, setParams, sessionId],
   )
 
+  /** 남은 문제 순서를 무작위로 섞고 처음 문제로 되돌아간다. */
+  const shuffle = useCallback(() => {
+    if (loaded?.key !== requestKey || loaded.questions.length < 2) return
+    const shuffled = [...loaded.questions]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    setLoaded({ key: requestKey, questions: shuffled, startIndex: 0 })
+
+    const next = new URLSearchParams(params)
+    next.set('i', '0')
+    setParams(next, { replace: false })
+    window.scrollTo({ top: 0 })
+
+    // 새로고침해도 섞인 순서가 유지되도록 세션에도 반영한다.
+    const tracking = sessionId ?? trackedSession.current
+    if (tracking) void updateSessionOrder(tracking, shuffled.map((row) => row.id))
+  }, [loaded, requestKey, params, setParams, sessionId])
+
   const examLabelOf = useCallback(
     (id: string) => {
       const exam = taxonomy?.examById.get(id)
@@ -227,6 +247,7 @@ export function SolvePage() {
             }
             onPrev={index > 0 ? () => goTo(index - 1) : undefined}
             onNext={index < questions.length - 1 ? () => goTo(index + 1) : undefined}
+            onShuffle={questions.length > 1 ? shuffle : undefined}
             autoReveal={autoReveal}
             autoWrite={autoWrite}
             onExit={() => navigate(exitTo)}

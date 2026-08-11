@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { createSolution } from '@/lib/queries/solutions'
 import { setEditorAnswer } from '@/lib/queries/questions'
+import { assignUnit } from '@/lib/queries/admin'
+import { useData } from '@/lib/data'
 import { circled, type Choice } from '@/types/question'
 import { emptyDoc, isEmptyDoc, type RichDoc } from '@/types/richtext'
 import { formatDateTime } from '@/utils/date'
@@ -13,12 +15,15 @@ import { cn } from '@/utils/cn'
 
 type Props = {
   questionId: string
+  examId: string
   groupId: string | null
   choices: Choice[]
   /** 이미 편집자답이 있으면 그 값으로 시작한다 (재검토하는 경우) */
   currentEditorAnswer: number[]
   /** 복기 당시 통용됐던 답. 편집자답이 없으면 이 값으로 선택을 미리 채워둔다. */
   yamaAnswer: number[] | null
+  /** 현재 분류된 단원. 없으면 미분류 문항이다. */
+  currentUnitId: string | null
   userId: string
 }
 
@@ -35,13 +40,16 @@ type Props = {
  */
 export function AssignmentEditor({
   questionId,
+  examId,
   groupId,
   choices,
   currentEditorAnswer,
   yamaAnswer,
+  currentUnitId,
   userId,
 }: Props) {
   const navigate = useNavigate()
+  const { taxonomy } = useData()
   // 편집자답이 아직 없으면 야마답으로 미리 채워, 편집자가 다시 고를 필요 없이
   // 다르다고 판단할 때만 바꾸도록 한다.
   const initialSelection = currentEditorAnswer.length > 0 ? currentEditorAnswer : (yamaAnswer ?? [])
@@ -50,6 +58,12 @@ export function AssignmentEditor({
   const [selection, setSelection] = useState<number[]>(initialSelection)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const subjectId = taxonomy?.examById.get(examId)?.subjectId ?? null
+  const subjectUnits = subjectId ? taxonomy!.units.filter((unit) => unit.subjectId === subjectId) : []
+  const [unitId, setUnitId] = useState<string | null>(currentUnitId)
+  const [unitPickerOpen, setUnitPickerOpen] = useState(false)
+  const unitName = unitId ? (taxonomy?.unitById.get(unitId)?.name ?? '알 수 없는 단원') : '미분류'
 
   const draftKey = groupId ?? questionId
   const { savedDraft, schedule, discard } = useDraft({
@@ -87,6 +101,7 @@ export function AssignmentEditor({
     setError(null)
     try {
       await setEditorAnswer(questionId, selection)
+      if (unitId !== currentUnitId) await assignUnit([questionId], unitId)
       await createSolution({
         target: { questionId, groupId },
         authorId: userId,
@@ -107,6 +122,40 @@ export function AssignmentEditor({
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <h3 className="mb-3 text-sm font-bold">풀이 작성</h3>
+
+      {subjectUnits.length > 0 && (
+        <div className="mb-4">
+          <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            단원을 선택해주세요
+          </p>
+          {!unitPickerOpen ? (
+            <Button size="sm" variant="secondary" onClick={() => setUnitPickerOpen(true)}>
+              {unitName}
+            </Button>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {subjectUnits.map((unit) => (
+                <button
+                  key={unit.id}
+                  type="button"
+                  onClick={() => {
+                    setUnitId(unit.id)
+                    setUnitPickerOpen(false)
+                  }}
+                  className={cn(
+                    'rounded-lg px-2.5 py-1.5 text-sm transition-colors',
+                    unitId === unit.id
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
+                  )}
+                >
+                  {unit.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {choices.length > 0 && (
         <div className="mb-4">

@@ -246,6 +246,15 @@ export async function updateSessionProgress(id: string, currentIndex: number): P
   if (error) console.error('세션 진행 위치를 저장하지 못했습니다.', error)
 }
 
+/** 셔플 버튼으로 문제 순서를 바꿨을 때, 새로고침해도 유지되도록 순서 자체를 다시 저장한다. */
+export async function updateSessionOrder(id: string, questionIds: string[]): Promise<void> {
+  const { error } = await supabase
+    .from('study_sessions')
+    .update({ question_ids: questionIds, current_index: 0 })
+    .eq('id', id)
+  if (error) console.error('문제 순서를 저장하지 못했습니다.', error)
+}
+
 export async function finishSession(id: string): Promise<void> {
   const { error } = await supabase
     .from('study_sessions')
