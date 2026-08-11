@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ProgressBadge } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { downloadExamBooklets } from '@/lib/exportBooklet'
 import { cn } from '@/utils/cn'
@@ -9,6 +10,7 @@ import { cn } from '@/utils/cn'
 /** 학번 -> 과목 순으로 시험을 나열한다. */
 export function ExamsPage() {
   const { taxonomy, loading, examProgress } = useData()
+  const { session } = useAuth()
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -17,7 +19,7 @@ export function ExamsPage() {
     setDownloadingId(examId)
     setError(null)
     try {
-      await downloadExamBooklets(examId, label)
+      await downloadExamBooklets(examId, label, session?.user.id ?? null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '문제집을 만들지 못했습니다.')
     } finally {

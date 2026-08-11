@@ -1,7 +1,9 @@
 import katex from 'katex'
 import { fetchQuestions, revealAnswers } from '@/lib/queries/questions'
+import { fetchNotesForTargets } from '@/lib/queries/notes'
 import { getSignedUrl } from '@/lib/storage'
 import { circled, effectiveAnswer, type AnswerPayload, type Choice, type StemBlock } from '@/types/question'
+import { richTextToPlain } from '@/types/richtext'
 import type { SolveQuestion } from '@/lib/queries/questions'
 
 /**
@@ -117,11 +119,16 @@ function renderQuestion(
   index: number,
   images: Map<string, string>,
   answer: AnswerPayload | null,
+  note: string | null,
 ): string {
   const marked = answer ? effectiveAnswer(answer) : null
   const answerLine =
     marked && marked.length > 0
       ? `<p style="margin:6px 0 0;padding:5px 10px;background:#f1f5f9;border-left:3px solid #1e293b;font-size:12px;">정답 ${marked.map(circled).join('')}</p>`
+      : ''
+  const noteLine =
+    note && note.trim().length > 0
+      ? `<p style="margin:6px 0 0;padding:5px 10px;background:#eff6ff;border-left:3px solid #2563eb;font-size:12px;white-space:pre-wrap;">내 메모: ${escapeHtml(note)}</p>`
       : ''
 
   return `
@@ -132,10 +139,16 @@ function renderQuestion(
           ${renderStemBlocks(question.stemBlocks, images)}
           ${question.choices.length > 0 ? renderChoices(question.choices, marked) : ''}
           ${answerLine}
+          ${noteLine}
         </div>
       </div>
     </div>
   `
+}
+
+/** personal_notes 조회/저장과 같은 규칙: 그룹이 있으면 그룹, 없으면 문제 단위 */
+function noteKeyOf(question: SolveQuestion): string {
+  return question.groupId ?? question.id
 }
 
 async function collectImageUrls(questions: SolveQuestion[]): Promise<Map<string, string>> {
@@ -162,16 +175,25 @@ function buildHtml(
   questions: SolveQuestion[],
   images: Map<string, string>,
   answers: Map<string, AnswerPayload> | null,
+  notes: Map<string, string> | null,
 ): string {
   const body = questions
-    .map((question, index) => renderQuestion(question, index, images, answers?.get(question.id) ?? null))
+    .map((question, index) =>
+      renderQuestion(
+        question,
+        index,
+        images,
+        answers?.get(question.id) ?? null,
+        notes?.get(noteKeyOf(question)) ?? null,
+      ),
+    )
     .join('')
 
   return `
     <div style="font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#0f172a;background:#ffffff;padding:24px;width:718px;">
       <h1 style="font-size:19px;margin:0 0 4px;">${escapeHtml(title)}</h1>
       <p style="font-size:11px;color:#64748b;margin:0 0 18px;">
-        총 ${questions.length}문항${answers ? ', 정답 포함' : ''}
+        총 ${questions.length}문항${answers ? ', 정답 포함' : ''}${notes ? ', 내 메모 포함' : ''}
       </p>
       ${body}
     </div>
@@ -265,19 +287,35 @@ function sanitizeFilename(text: string): string {
   return text.replace(/[/\\:*?"<>|]/g, ' ').trim()
 }
 
-export async function downloadExamBooklets(examId: string, examLabel: string): Promise<void> {
+/** userId 가 있으면 "문제+답" 파일에 내 개인 메모를 함께 싣는다. 문제집(정답 없는 쪽)에는 넣지 않는다. */
+export async function downloadExamBooklets(
+  examId: string,
+  examLabel: string,
+  userId?: string | null,
+): Promise<void> {
   const questions = await fetchQuestions({ examId })
   if (questions.length === 0) {
     throw new Error('이 시험에는 공개된 문항이 없습니다.')
   }
 
-  const [images, answers] = await Promise.all([
+  const [images, answers, notes] = await Promise.all([
     collectImageUrls(questions),
     revealAnswers(questions.map((question) => question.id)),
+    userId
+      ? fetchNotesForTargets(questions.map((question) => ({ questionId: question.id, groupId: question.groupId })))
+      : Promise.resolve(new Map()),
   ])
+
+  const plainNotes =
+    notes.size > 0
+      ? new Map([...notes].map(([key, doc]) => [key, richTextToPlain(doc)] as const))
+      : null
 
   const name = sanitizeFilename(examLabel)
   // 두 번째 다운로드가 브라우저의 팝업 차단에 걸리지 않도록 순서대로 처리한다.
-  await renderAndSave(buildHtml(`${examLabel} 문제집`, questions, images, null), `${name} 문제집.pdf`)
-  await renderAndSave(buildHtml(`${examLabel} 문제+답`, questions, images, answers), `${name} 문제+답.pdf`)
+  await renderAndSave(buildHtml(`${examLabel} 문제집`, questions, images, null, null), `${name} 문제집.pdf`)
+  await renderAndSave(
+    buildHtml(`${examLabel} 문제+답`, questions, images, answers, plainNotes),
+    `${name} 문제+답.pdf`,
+  )
 }
