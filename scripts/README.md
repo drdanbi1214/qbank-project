@@ -4,6 +4,31 @@
 완전 자동은 목표가 아니다. 사람이 검수하기 쉬운 중간 결과를 만드는 데 집중하고,
 마지막 확인은 웹의 `관리자 > PDF 검수` 화면에서 한다.
 
+## 지금 쓰는 방식 (권장)
+
+문항 본문/보기/정답은 이제 다른 AI 채팅창이 `convert_file/` 에
+`DATA_INGESTION_HANDOFF.md` 규칙에 따라 전사 JSON(+ 선택적으로 단원 제안
+JSON)으로 직접 만들어 넘겨준다. 아래 1~5단계(`pdf_to_images.py` ~
+`parse_source_tags.py`)는 이 흐름에서는 필요 없다 — 사람이 직접 읽고 판단해
+만든 JSON이 정규식 기반 자동 파싱보다 정확하기 때문이다.
+
+```bash
+# 1. 이미지를 문항번호에 매핑 (convert_file/map_images_to_questions.py, v2)
+python3 ../convert_file/map_images_to_questions.py 원본.pdf ./images 2607 [exam.json]
+
+# 2. DB 반영 (기본은 dry-run — 뭐가 바뀔지만 보여주고 아무것도 안 씀)
+python3 ingest_exam.py exam.json --images ./images --units unit_suggestions.json --pdf 원본.pdf
+
+# 확인 후 실제로 반영
+python3 ingest_exam.py exam.json --images ./images --units unit_suggestions.json --pdf 원본.pdf --apply
+```
+
+`ingest_exam.py` 는 같은 시험을 다시 넣어도 안전하다. 편집자가 이미 검토한
+답/단원은 덮어쓰지 않고, 원문 전사 내용(본문/보기/야마답)만 최신화한다.
+자세한 동작은 스크립트 상단 docstring 참고.
+
+## 예전 방식 (1단계 로컬 파싱 파이프라인, 지금은 잘 안 씀)
+
 ## 준비
 
 ```bash
