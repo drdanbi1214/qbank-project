@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useParams } from 'react-router-dom'
+import { BuildFooter } from '@/components/layout/BuildFooter'
 import { Header } from '@/components/layout/Header'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -114,6 +115,7 @@ export function StudyLayout() {
 
         <main className="min-w-0 flex-1 px-3 pb-24 pt-4 sm:px-4 lg:pb-10">
           <Outlet />
+          <BuildFooter />
         </main>
       </div>
 

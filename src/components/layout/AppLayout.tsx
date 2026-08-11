@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import { BuildFooter } from '@/components/layout/BuildFooter'
 import { Header } from '@/components/layout/Header'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
 
@@ -12,6 +13,7 @@ export function AppLayout() {
       <Header />
       <main className="mx-auto max-w-7xl px-3 pb-24 pt-4 sm:px-4 lg:pb-10">
         <Outlet />
+        <BuildFooter />
       </main>
       <MobileTabBar />
     </div>

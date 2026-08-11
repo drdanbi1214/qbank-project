@@ -218,7 +218,6 @@ export function BlockTestPage() {
             <div className="mt-4">
               <ChoiceList
                 choices={current.choices}
-                answerCount={current.answerCount}
                 selected={answers[current.id] ?? []}
                 onChange={(next) => setAnswers((prev) => ({ ...prev, [current.id]: next }))}
                 revealed={null}

@@ -369,7 +369,6 @@ export function QuestionView({
         ) : (
           <ChoiceList
             choices={question.choices}
-            answerCount={question.answerCount}
             selected={selected}
             onChange={setSelected}
             revealed={answer}
@@ -420,8 +419,8 @@ export function QuestionView({
               questionId={question.id}
               groupId={question.groupId}
               choices={question.choices}
-              answerCount={question.answerCount}
               currentEditorAnswer={answer.editorAnswer}
+              yamaAnswer={answer.yamaAnswer}
               userId={userId}
             />
           ) : (

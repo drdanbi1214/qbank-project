@@ -15,9 +15,10 @@ type Props = {
   questionId: string
   groupId: string | null
   choices: Choice[]
-  answerCount: number
   /** 이미 편집자답이 있으면 그 값으로 시작한다 (재검토하는 경우) */
   currentEditorAnswer: number[]
+  /** 복기 당시 통용됐던 답. 편집자답이 없으면 이 값으로 선택을 미리 채워둔다. */
+  yamaAnswer: number[] | null
   userId: string
 }
 
@@ -36,15 +37,17 @@ export function AssignmentEditor({
   questionId,
   groupId,
   choices,
-  answerCount,
   currentEditorAnswer,
+  yamaAnswer,
   userId,
 }: Props) {
   const navigate = useNavigate()
-  const multiple = answerCount >= 2
+  // 편집자답이 아직 없으면 야마답으로 미리 채워, 편집자가 다시 고를 필요 없이
+  // 다르다고 판단할 때만 바꾸도록 한다.
+  const initialSelection = currentEditorAnswer.length > 0 ? currentEditorAnswer : (yamaAnswer ?? [])
 
-  const [pickerOpen, setPickerOpen] = useState(currentEditorAnswer.length > 0)
-  const [selection, setSelection] = useState<number[]>(currentEditorAnswer)
+  const [pickerOpen, setPickerOpen] = useState(initialSelection.length > 0)
+  const [selection, setSelection] = useState<number[]>(initialSelection)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,10 +69,6 @@ export function AssignmentEditor({
   }
 
   function toggleChoice(no: number) {
-    if (!multiple) {
-      setSelection([no])
-      return
-    }
     setSelection((prev) =>
       prev.includes(no) ? prev.filter((value) => value !== no) : [...prev, no].sort((a, b) => a - b),
     )
@@ -137,21 +136,13 @@ export function AssignmentEditor({
                       >
                         <span
                           className={cn(
-                            'grid h-4 w-4 shrink-0 place-items-center border-2 transition-colors',
-                            multiple ? 'rounded' : 'rounded-full',
+                            'grid h-4 w-4 shrink-0 place-items-center rounded border-2 transition-colors',
                             isSelected
                               ? 'border-brand-600 bg-brand-600'
                               : 'border-slate-300 dark:border-slate-600',
                           )}
                         >
-                          {isSelected && (
-                            <span
-                              className={cn(
-                                'block bg-white',
-                                multiple ? 'h-1.5 w-2.5 rounded-[1px]' : 'h-1.5 w-1.5 rounded-full',
-                              )}
-                            />
-                          )}
+                          {isSelected && <span className="block h-1.5 w-2.5 rounded-[1px] bg-white" />}
                         </span>
                         <span className="font-semibold text-slate-500 dark:text-slate-400">
                           {circled(choice.no)}
