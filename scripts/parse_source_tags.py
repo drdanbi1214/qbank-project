@@ -1,7 +1,7 @@
 """본문에서 출처 태그를 뽑아낸다.
 
 복기 자료에는 `(21Y)`, `(22Y 변형)` 처럼 어느 해 문제인지 표시가 붙는다.
-이걸 source_tags 로 옮기고 변형이면 variant_type 을 variant 로 둔다.
+이걸 source_tags 로 옮기고 변형이면 variant_type 을 modified 로 둔다.
 
 태그는 본문에서 지운다. 화면에서는 태그를 따로 표시하므로 본문에 남겨두면
 같은 정보가 두 번 나온다.
@@ -57,7 +57,7 @@ def main() -> None:
             continue
         question["stem"] = cleaned
         question["source_tags"] = tags
-        question["variant_type"] = "variant" if variant else "original"
+        question["variant_type"] = "modified" if variant else "original"
         tagged += 1
 
     target = args.questions_json if args.in_place else args.questions_json.replace(

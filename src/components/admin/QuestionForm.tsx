@@ -330,7 +330,8 @@ export function QuestionForm({ draft: initial, userId, onSaved, onCancel, compac
             className={inputClass}
           >
             <option value="original">원본</option>
-            <option value="variant">변형</option>
+            <option value="identical">동일 (다른 학번에 그대로 재출제)</option>
+            <option value="modified">변형</option>
           </select>
         </Field>
         <Field label="공개 상태">
