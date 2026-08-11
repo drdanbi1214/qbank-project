@@ -11,15 +11,17 @@ import { useData } from '@/lib/data'
 import {
   deleteDiscussion,
   fetchDiscussion,
+  fetchDiscussionRevisions,
   fetchReplies,
   markDiscussionViewed,
   toggleDiscussionBookmark,
   toggleDiscussionUpvote,
   type Discussion,
+  type DiscussionRevision,
   type Reply,
 } from '@/lib/queries/discussions'
 import { submitReport } from '@/lib/queries/reports'
-import { formatShortDate } from '@/utils/date'
+import { formatDateTime, formatShortDate } from '@/utils/date'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -159,28 +161,26 @@ export function DiscussionDetail({
               userId={userId}
               initial={discussion.bookmarked}
             />
-            {(isAuthor || isAdmin) && (
-              <>
-                {isAuthor && (
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-                    수정
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    if (!window.confirm('게시글을 삭제할까요?')) return
-                    void deleteDiscussion(discussion.id)
-                      .then(onDeleted)
-                      .catch((caught: unknown) =>
-                        console.error('게시글을 삭제하지 못했습니다.', caught),
-                      )
-                  }}
-                >
-                  삭제
-                </Button>
-              </>
+            {isAuthor && (
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                수정
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (!window.confirm('게시글을 삭제할까요?')) return
+                  void deleteDiscussion(discussion.id)
+                    .then(onDeleted)
+                    .catch((caught: unknown) =>
+                      console.error('게시글을 삭제하지 못했습니다.', caught),
+                    )
+                }}
+              >
+                삭제
+              </Button>
             )}
             {!isAuthor && (
               <ReportButton targetId={discussion.id} userId={userId} />
@@ -191,6 +191,13 @@ export function DiscussionDetail({
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
           {discussion.author.displayName} | 조회 {discussion.viewCount} |{' '}
           {formatShortDate(discussion.createdAt)}
+          {discussion.contentEditedAt && (
+            <>
+              {' | '}
+              {formatDateTime(discussion.contentEditedAt)} 수정됨{' '}
+              <RevisionsButton discussionId={discussion.id} />
+            </>
+          )}
         </p>
       </header>
 
@@ -324,6 +331,89 @@ function BookmarkButton({
     >
       {on ? '★' : '☆'}
     </button>
+  )
+}
+
+function RevisionsButton({ discussionId }: { discussionId: string }) {
+  const [open, setOpen] = useState(false)
+  const [revisions, setRevisions] = useState<DiscussionRevision[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function show() {
+    setOpen(true)
+    if (revisions !== null) return
+    void fetchDiscussionRevisions(discussionId)
+      .then(setRevisions)
+      .catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : '이전 버전을 불러오지 못했습니다.')
+      })
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={show}
+        className="text-brand-600 hover:underline dark:text-brand-300"
+      >
+        이전 버전 보기
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 text-left shadow-xl dark:bg-slate-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold">수정 전 버전</h2>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-sm text-slate-500 hover:underline dark:text-slate-400"
+              >
+                닫기
+              </button>
+            </div>
+
+            {error && (
+              <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                {error}
+              </p>
+            )}
+
+            {!error && revisions === null && (
+              <div className="flex justify-center py-6">
+                <Spinner className="h-5 w-5" />
+              </div>
+            )}
+
+            {revisions !== null && revisions.length === 0 && (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                이전 버전이 없습니다.
+              </p>
+            )}
+
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {revisions?.map((revision) => (
+                <li key={revision.id} className="py-3 first:pt-0">
+                  <p className="mb-1 text-xs text-slate-400 dark:text-slate-500">
+                    {formatDateTime(revision.editedAt)} 이전 내용
+                  </p>
+                  <p className="text-sm font-semibold">{revision.title}</p>
+                  <div className="mt-1">
+                    <RichTextViewer doc={revision.content} className="text-sm" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

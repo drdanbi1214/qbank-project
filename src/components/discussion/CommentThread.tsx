@@ -37,9 +37,12 @@ export function CommentThread({
           아직 댓글이 없습니다.
         </p>
       ) : (
-        <ul className="divide-y divide-slate-200 dark:divide-slate-700">
-          {replies.map((reply) => (
-            <li key={reply.id} className="py-3">
+        <ul>
+          {replies.map((reply, index) => (
+            <li
+              key={reply.id}
+              className={cn('py-3', index > 0 && 'border-t border-slate-100 dark:border-slate-800/70')}
+            >
               <ReplyItem
                 reply={reply}
                 discussionId={discussionId}

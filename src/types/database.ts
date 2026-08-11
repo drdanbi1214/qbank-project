@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       announcements: {
@@ -400,6 +375,51 @@ export type Database = {
           },
         ]
       }
+      discussion_revisions: {
+        Row: {
+          category: string
+          confusion_point: string | null
+          content: Json
+          discussion_id: string
+          edited_at: string
+          id: string
+          title: string
+        }
+        Insert: {
+          category: string
+          confusion_point?: string | null
+          content: Json
+          discussion_id: string
+          edited_at?: string
+          id?: string
+          title: string
+        }
+        Update: {
+          category?: string
+          confusion_point?: string | null
+          content?: Json
+          discussion_id?: string
+          edited_at?: string
+          id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_revisions_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_revisions_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "discussions_feed"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discussion_upvotes: {
         Row: {
           created_at: string
@@ -446,6 +466,7 @@ export type Database = {
           category: string
           confusion_point: string | null
           content: Json
+          content_edited_at: string | null
           created_at: string
           id: string
           question_id: string | null
@@ -462,6 +483,7 @@ export type Database = {
           category?: string
           confusion_point?: string | null
           content: Json
+          content_edited_at?: string | null
           created_at?: string
           id?: string
           question_id?: string | null
@@ -478,6 +500,7 @@ export type Database = {
           category?: string
           confusion_point?: string | null
           content?: Json
+          content_edited_at?: string | null
           created_at?: string
           id?: string
           question_id?: string | null
@@ -1478,6 +1501,7 @@ export type Database = {
           category: string | null
           confusion_point: string | null
           content: Json | null
+          content_edited_at: string | null
           created_at: string | null
           id: string | null
           question_cohort: string | null
@@ -1701,6 +1725,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      effective_answer: {
+        Args: { q: Database["public"]["Tables"]["questions"]["Row"] }
+        Returns: number[]
       }
       find_similar_questions: {
         Args: { p_limit?: number; p_question_id: string; p_threshold?: number }
@@ -1988,9 +2016,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

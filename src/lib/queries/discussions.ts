@@ -38,6 +38,17 @@ export type Discussion = DiscussionListItem & {
   confusionPoint: string | null
   upvoted: boolean
   bookmarked: boolean
+  /** 마지막으로 본문을 수정한 시각. 한 번도 수정 안 했으면 null */
+  contentEditedAt: string | null
+}
+
+export type DiscussionRevision = {
+  id: string
+  title: string
+  category: DiscussionCategory
+  content: RichDoc
+  confusionPoint: string | null
+  editedAt: string
 }
 
 type FeedRow = {
@@ -59,13 +70,14 @@ type FeedRow = {
   question_exam_id: string | null
   question_subject_id: string | null
   question_cohort: string | null
+  content_edited_at: string | null
 }
 
 const FEED_COLUMNS =
   `id, question_id, author_id, category, title, content, confusion_point, status,
    view_count, upvote_count, reply_count, created_at,
    question_unit_id, question_number, question_stem_text, question_exam_id,
-   question_subject_id, question_cohort`
+   question_subject_id, question_cohort, content_edited_at`
 
 function toCategory(value: string): DiscussionCategory {
   return (DISCUSSION_CATEGORIES as readonly string[]).includes(value)
@@ -180,6 +192,7 @@ export async function fetchDiscussion(id: string, userId: string): Promise<Discu
     confusionPoint: row.confusion_point,
     upvoted,
     bookmarked,
+    contentEditedAt: row.content_edited_at,
   }
 }
 
@@ -227,6 +240,11 @@ export async function createDiscussion(params: {
   return data.id
 }
 
+/**
+ * 수정하기 전 상태를 revision 으로 남긴 뒤 새 내용으로 덮어쓴다.
+ * content_edited_at 을 이 함수에서만 채워서, "수정됨" 표시가 조회수/댓글수
+ * 증가 같은 다른 변경과 섞이지 않게 한다.
+ */
 export async function updateDiscussion(params: {
   id: string
   category: DiscussionCategory
@@ -234,6 +252,22 @@ export async function updateDiscussion(params: {
   content: RichDoc
   confusionPoint: string | null
 }): Promise<void> {
+  const { data: current, error: fetchError } = await supabase
+    .from('discussions')
+    .select('title, category, content, confusion_point')
+    .eq('id', params.id)
+    .single()
+  if (fetchError) throw fetchError
+
+  const { error: revisionError } = await supabase.from('discussion_revisions').insert({
+    discussion_id: params.id,
+    title: current.title,
+    category: current.category,
+    content: current.content,
+    confusion_point: current.confusion_point,
+  })
+  if (revisionError) throw revisionError
+
   const { error } = await supabase
     .from('discussions')
     .update({
@@ -241,9 +275,28 @@ export async function updateDiscussion(params: {
       title: params.title,
       content: toJson(params.content),
       confusion_point: params.confusionPoint,
+      content_edited_at: new Date().toISOString(),
     })
     .eq('id', params.id)
   if (error) throw error
+}
+
+export async function fetchDiscussionRevisions(discussionId: string): Promise<DiscussionRevision[]> {
+  const { data, error } = await supabase
+    .from('discussion_revisions')
+    .select('id, title, category, content, confusion_point, edited_at')
+    .eq('discussion_id', discussionId)
+    .order('edited_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    category: toCategory(row.category),
+    content: parseRichDoc(row.content),
+    confusionPoint: row.confusion_point,
+    editedAt: row.edited_at,
+  }))
 }
 
 export async function deleteDiscussion(id: string): Promise<void> {

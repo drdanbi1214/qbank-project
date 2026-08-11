@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { RequireAvatar } from '@/components/layout/RequireAvatar'
 import { StudyLayout } from '@/components/layout/StudyLayout'
 import { AuthProvider } from '@/lib/auth'
 import { DataProvider } from '@/lib/data'
@@ -52,46 +53,48 @@ export default function App() {
                     <Route path="/pending" element={<PendingApprovalPage />} />
 
                     <Route element={<ApprovedRoute />}>
-                      {/* 좌측 사이드바가 붙는 학습 화면 */}
-                      <Route path="/study" element={<StudyLayout />}>
-                        <Route index element={<StudyHomePage />} />
-                        <Route path=":subjectId" element={<SubjectPage />} />
-                        <Route path=":subjectId/:unitId" element={<UnitQuestionsPage />} />
-                      </Route>
-
-                      {/* 풀이 화면은 문제에 집중하도록 사이드바 없이 단독 */}
-                      <Route path="/solve" element={<SolvePage />} />
-                      <Route path="/block-test" element={<BlockTestPage />} />
-                      {/* 인쇄 화면은 종이에 맞춰야 해서 레이아웃 없이 단독으로 연다 */}
-                      <Route path="/print" element={<PrintPage />} />
-
-                      <Route element={<AppLayout />}>
-                        <Route index element={<Navigate to="/study" replace />} />
-                        <Route path="/exams" element={<ExamsPage />} />
-                        <Route path="/exams/:examId" element={<ExamDetailPage />} />
-                        <Route path="/assignments" element={<MyAssignmentsPage />} />
-                        <Route path="/wrong-notes" element={<WrongNotesPage />} />
-                        <Route path="/search" element={<SearchPage />} />
-                        <Route path="/discussions" element={<DiscussionsPage />} />
-                        <Route path="/announcements" element={<AnnouncementsPage />} />
-                        <Route path="/notifications" element={<NotificationsPage />} />
-                        <Route path="/me" element={<MyPage />} />
-
-                        <Route element={<AdminRoute />}>
-                          <Route path="/admin" element={<AdminHomePage />} />
-                          <Route path="/admin/assignments" element={<AdminAssignmentsPage />} />
-                          <Route path="/admin/questions" element={<AdminQuestionsPage />} />
-                          <Route path="/admin/labeling" element={<AdminLabelingPage />} />
-                          <Route path="/admin/review" element={<AdminReviewPage />} />
-                          <Route path="/admin/upload" element={<AdminUploadPage />} />
-                          <Route path="/admin/groups" element={<AdminGroupsPage />} />
-                          <Route path="/admin/users" element={<AdminUsersPage />} />
-                          <Route path="/admin/reports" element={<AdminReportsPage />} />
-                          <Route path="/admin/revisions" element={<AdminRevisionsPage />} />
-                          <Route path="/admin/stats" element={<AdminStatsPage />} />
+                      <Route element={<RequireAvatar />}>
+                        {/* 좌측 사이드바가 붙는 학습 화면 */}
+                        <Route path="/study" element={<StudyLayout />}>
+                          <Route index element={<StudyHomePage />} />
+                          <Route path=":subjectId" element={<SubjectPage />} />
+                          <Route path=":subjectId/:unitId" element={<UnitQuestionsPage />} />
                         </Route>
 
-                        <Route path="*" element={<NotFoundPage />} />
+                        {/* 풀이 화면은 문제에 집중하도록 사이드바 없이 단독 */}
+                        <Route path="/solve" element={<SolvePage />} />
+                        <Route path="/block-test" element={<BlockTestPage />} />
+                        {/* 인쇄 화면은 종이에 맞춰야 해서 레이아웃 없이 단독으로 연다 */}
+                        <Route path="/print" element={<PrintPage />} />
+
+                        <Route element={<AppLayout />}>
+                          <Route index element={<Navigate to="/study" replace />} />
+                          <Route path="/exams" element={<ExamsPage />} />
+                          <Route path="/exams/:examId" element={<ExamDetailPage />} />
+                          <Route path="/assignments" element={<MyAssignmentsPage />} />
+                          <Route path="/wrong-notes" element={<WrongNotesPage />} />
+                          <Route path="/search" element={<SearchPage />} />
+                          <Route path="/discussions" element={<DiscussionsPage />} />
+                          <Route path="/announcements" element={<AnnouncementsPage />} />
+                          <Route path="/notifications" element={<NotificationsPage />} />
+                          <Route path="/me" element={<MyPage />} />
+
+                          <Route element={<AdminRoute />}>
+                            <Route path="/admin" element={<AdminHomePage />} />
+                            <Route path="/admin/assignments" element={<AdminAssignmentsPage />} />
+                            <Route path="/admin/questions" element={<AdminQuestionsPage />} />
+                            <Route path="/admin/labeling" element={<AdminLabelingPage />} />
+                            <Route path="/admin/review" element={<AdminReviewPage />} />
+                            <Route path="/admin/upload" element={<AdminUploadPage />} />
+                            <Route path="/admin/groups" element={<AdminGroupsPage />} />
+                            <Route path="/admin/users" element={<AdminUsersPage />} />
+                            <Route path="/admin/reports" element={<AdminReportsPage />} />
+                            <Route path="/admin/revisions" element={<AdminRevisionsPage />} />
+                            <Route path="/admin/stats" element={<AdminStatsPage />} />
+                          </Route>
+
+                          <Route path="*" element={<NotFoundPage />} />
+                        </Route>
                       </Route>
                     </Route>
                   </Route>
