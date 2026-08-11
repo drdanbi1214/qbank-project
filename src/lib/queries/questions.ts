@@ -32,6 +32,8 @@ export type SolveQuestion = {
   groupId: string | null
   completeness: Completeness
   viewCount: number
+  /** 'ai_suggested' 면 사람이 아직 확인하지 않은 AI 1차 단원 분류다 */
+  unitSource: 'ai_suggested' | 'human_confirmed' | null
 }
 
 export type QuestionSet = {
@@ -48,7 +50,7 @@ export type QuestionState = {
 }
 
 const SOLVE_COLUMNS =
-  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, completeness, view_count'
+  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, completeness, view_count, unit_source'
 
 type SolveRow = {
   id: string
@@ -65,6 +67,7 @@ type SolveRow = {
   group_id: string | null
   completeness: string
   view_count: number
+  unit_source: string | null
 }
 
 function toSolveQuestion(row: SolveRow): SolveQuestion {
@@ -83,6 +86,7 @@ function toSolveQuestion(row: SolveRow): SolveQuestion {
     groupId: row.group_id,
     completeness: (row.completeness as Completeness) ?? 'complete',
     viewCount: row.view_count,
+    unitSource: row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed' ? row.unit_source : null,
   }
 }
 

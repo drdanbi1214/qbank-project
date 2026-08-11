@@ -993,6 +993,7 @@ export type Database = {
           stem_norm: string | null
           stem_text: string | null
           unit_id: string | null
+          unit_source: string | null
           updated_at: string
           updated_by: string | null
           variant_type: string
@@ -1025,6 +1026,7 @@ export type Database = {
           stem_norm?: string | null
           stem_text?: string | null
           unit_id?: string | null
+          unit_source?: string | null
           updated_at?: string
           updated_by?: string | null
           variant_type?: string
@@ -1057,6 +1059,7 @@ export type Database = {
           stem_norm?: string | null
           stem_text?: string | null
           unit_id?: string | null
+          unit_source?: string | null
           updated_at?: string
           updated_by?: string | null
           variant_type?: string
@@ -1584,6 +1587,7 @@ export type Database = {
           stem_blocks: Json | null
           stem_text: string | null
           unit_id: string | null
+          unit_source: string | null
           updated_at: string | null
           updated_by: string | null
           variant_type: string | null
@@ -1609,6 +1613,7 @@ export type Database = {
           stem_blocks?: Json | null
           stem_text?: string | null
           unit_id?: string | null
+          unit_source?: string | null
           updated_at?: string | null
           updated_by?: string | null
           variant_type?: string | null
@@ -1634,6 +1639,7 @@ export type Database = {
           stem_blocks?: Json | null
           stem_text?: string | null
           unit_id?: string | null
+          unit_source?: string | null
           updated_at?: string | null
           updated_by?: string | null
           variant_type?: string | null

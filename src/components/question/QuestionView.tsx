@@ -428,6 +428,7 @@ export function QuestionView({
               currentEditorAnswer={answer.editorAnswer}
               yamaAnswer={answer.yamaAnswer}
               currentUnitId={question.unitId}
+              currentUnitSource={question.unitSource}
               userId={userId}
             />
           ) : (

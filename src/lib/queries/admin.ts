@@ -247,12 +247,16 @@ export async function fetchAdminQuestions(
   )
 }
 
-/** 단원 라벨링 큐에서 여러 문항을 한 번에 단원에 넣는다. */
+/**
+ * 단원 라벨링 큐, 배정 편집 화면의 단원 선택에서 쓴다.
+ * 화면에서 사람이 직접 고른 값이라 unit_source 를 human_confirmed 로 남긴다.
+ * AI 1차 분류는 이 함수를 거치지 않고 별도 스크립트가 ai_suggested 로 채운다.
+ */
 export async function assignUnit(questionIds: string[], unitId: string | null): Promise<void> {
   if (questionIds.length === 0) return
   const { error } = await supabase
     .from('questions')
-    .update({ unit_id: unitId })
+    .update({ unit_id: unitId, unit_source: unitId ? 'human_confirmed' : null })
     .in('id', questionIds)
   if (error) throw error
 }

@@ -24,6 +24,8 @@ type Props = {
   yamaAnswer: number[] | null
   /** 현재 분류된 단원. 없으면 미분류 문항이다. */
   currentUnitId: string | null
+  /** 'ai_suggested' 면 사람이 아직 확인 안 한 AI 1차 분류라 검토가 필요하다 */
+  currentUnitSource: 'ai_suggested' | 'human_confirmed' | null
   userId: string
 }
 
@@ -46,6 +48,7 @@ export function AssignmentEditor({
   currentEditorAnswer,
   yamaAnswer,
   currentUnitId,
+  currentUnitSource,
   userId,
 }: Props) {
   const navigate = useNavigate()
@@ -64,6 +67,9 @@ export function AssignmentEditor({
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
   const [unitPickerOpen, setUnitPickerOpen] = useState(false)
   const unitName = unitId ? (taxonomy?.unitById.get(unitId)?.name ?? '알 수 없는 단원') : '미분류'
+  // 아직 아무도 안 건드린 AI 1차 분류일 때만 안내를 보여준다. 여기서 바꾸면
+  // 저장 시 human_confirmed 로 바뀌므로 다음에 들어오면 안 뜬다.
+  const isUnconfirmedAiSuggestion = unitId === currentUnitId && currentUnitSource === 'ai_suggested'
 
   const draftKey = groupId ?? questionId
   const { savedDraft, schedule, discard } = useDraft({
@@ -129,9 +135,16 @@ export function AssignmentEditor({
             단원을 선택해주세요
           </p>
           {!unitPickerOpen ? (
-            <Button size="sm" variant="secondary" onClick={() => setUnitPickerOpen(true)}>
-              {unitName}
-            </Button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button size="sm" variant="secondary" onClick={() => setUnitPickerOpen(true)}>
+                {unitName}
+              </Button>
+              {isUnconfirmedAiSuggestion && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                  AI 1차 분류 · 확인 필요
+                </span>
+              )}
+            </div>
           ) : (
             <div className="flex flex-wrap gap-1">
               {subjectUnits.map((unit) => (
