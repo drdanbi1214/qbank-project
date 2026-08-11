@@ -72,9 +72,6 @@ export function LoginPage() {
         <div className="mb-8 text-center">
           <BrandMark className="mx-auto mb-3 h-14 w-14 text-lg" />
           <h1 className="font-brand text-2xl">{BRAND_NAME}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            정해진 그룹만 이용하는 폐쇄형 서비스입니다.
-          </p>
         </div>
 
         <div className="mb-4 flex rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
@@ -115,8 +112,8 @@ export function LoginPage() {
                 className={inputClass}
               />
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                풀이와 댓글에 표시되는 이름입니다. {NICKNAME_MIN}자 이상 {NICKNAME_MAX}자 이하,
-                공백 없이 입력해주세요.
+                풀이와 댓글에 표시됩니다. {NICKNAME_MIN}~{NICKNAME_MAX}자, 공백 없이
+                입력해주세요.
               </p>
             </div>
           )}

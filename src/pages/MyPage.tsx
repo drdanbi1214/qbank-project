@@ -164,7 +164,8 @@ export function MyPage() {
               className={inputClass}
             />
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              풀이와 댓글에 표시되는 이름입니다.
+              풀이와 댓글에 표시됩니다. {NICKNAME_MIN}~{NICKNAME_MAX}자, 공백 없이
+              입력해주세요.
             </p>
           </div>
 
