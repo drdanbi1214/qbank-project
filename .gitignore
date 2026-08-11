@@ -27,3 +27,4 @@ dist-ssr
 *.zip
 *.pdf
 scripts/data/
+convert_file/
