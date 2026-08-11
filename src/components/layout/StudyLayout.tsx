@@ -63,7 +63,7 @@ export function StudyLayout() {
                         <span className="truncate">{subject.name}</span>
                         <ProgressBadge
                           progress={subjectProgress(subject.id)}
-                          showAccuracy={false}
+                          showRate={false}
                         />
                       </NavLink>
                       <button
@@ -99,7 +99,7 @@ export function StudyLayout() {
                               <span className="truncate">{unit.name}</span>
                               <ProgressBadge
                                 progress={unitProgress(unit.id)}
-                                showAccuracy={false}
+                                showRate={false}
                               />
                             </NavLink>
                           </li>

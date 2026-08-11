@@ -1,24 +1,30 @@
-import { accuracy, type Progress } from '@/lib/data'
+import type { Progress } from '@/lib/data'
 import { cn } from '@/utils/cn'
 
-/** `Q 15/117` 형태의 진행률 뱃지 + 정답률 */
+/** 전체 중 몇 %를 풀었는지. 정답률이 아니라 진행도다. */
+function progressRate(progress: Progress): number | null {
+  if (progress.total === 0) return null
+  return Math.round((progress.solved / progress.total) * 100)
+}
+
+/** `Q 15/117` 형태의 진행률 뱃지 + 진행도(%) */
 export function ProgressBadge({
   progress,
-  showAccuracy = true,
+  showRate = true,
   className,
 }: {
   progress: Progress
-  showAccuracy?: boolean
+  showRate?: boolean
   className?: string
 }) {
-  const rate = accuracy(progress)
+  const rate = progressRate(progress)
 
   return (
     <span className={cn('flex shrink-0 items-center gap-2 text-xs tabular-nums', className)}>
       <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
         Q {progress.solved}/{progress.total}
       </span>
-      {showAccuracy && rate !== null && (
+      {showRate && rate !== null && (
         <span
           className={cn(
             'font-medium',
