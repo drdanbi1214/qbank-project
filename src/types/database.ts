@@ -1392,6 +1392,7 @@ export type Database = {
       }
       subjects: {
         Row: {
+          code: string | null
           created_at: string
           icon_key: string | null
           id: string
@@ -1400,6 +1401,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code?: string | null
           created_at?: string
           icon_key?: string | null
           id?: string
@@ -1408,6 +1410,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code?: string | null
           created_at?: string
           icon_key?: string | null
           id?: string
@@ -1578,6 +1581,7 @@ export type Database = {
           group_id: string | null
           id: string | null
           professor: string | null
+          question_code: string | null
           question_number: number | null
           question_type: string | null
           restorer_note: string | null
@@ -1604,6 +1608,7 @@ export type Database = {
           group_id?: string | null
           id?: string | null
           professor?: string | null
+          question_code?: never
           question_number?: number | null
           question_type?: string | null
           restorer_note?: string | null
@@ -1630,6 +1635,7 @@ export type Database = {
           group_id?: string | null
           id?: string | null
           professor?: string | null
+          question_code?: never
           question_number?: number | null
           question_type?: string | null
           restorer_note?: string | null
@@ -1842,6 +1848,10 @@ export type Database = {
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
       normalize_search_text: { Args: { input: string }; Returns: string }
       normalize_stem: { Args: { blocks: Json }; Returns: string }
+      question_code: {
+        Args: { q: Database["public"]["Tables"]["questions"]["Row"] }
+        Returns: string
+      }
       reset_progress: {
         Args: { p_exam_id?: string; p_subject_id?: string; p_unit_id?: string }
         Returns: number

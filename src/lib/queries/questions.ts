@@ -34,6 +34,8 @@ export type SolveQuestion = {
   viewCount: number
   /** 'ai_suggested' 면 사람이 아직 확인하지 않은 AI 1차 단원 분류다 */
   unitSource: 'ai_suggested' | 'human_confirmed' | null
+  /** 학번2자리+과목코드2자리+문항번호3자리. 과목에 code 가 없으면 null */
+  questionCode: string | null
 }
 
 export type QuestionSet = {
@@ -50,7 +52,7 @@ export type QuestionState = {
 }
 
 const SOLVE_COLUMNS =
-  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, completeness, view_count, unit_source'
+  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, completeness, view_count, unit_source, question_code'
 
 type SolveRow = {
   id: string
@@ -68,6 +70,7 @@ type SolveRow = {
   completeness: string
   view_count: number
   unit_source: string | null
+  question_code: string | null
 }
 
 function toSolveQuestion(row: SolveRow): SolveQuestion {
@@ -87,6 +90,7 @@ function toSolveQuestion(row: SolveRow): SolveQuestion {
     completeness: (row.completeness as Completeness) ?? 'complete',
     viewCount: row.view_count,
     unitSource: row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed' ? row.unit_source : null,
+    questionCode: row.question_code,
   }
 }
 

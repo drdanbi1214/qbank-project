@@ -1,6 +1,13 @@
 import { supabase } from '@/lib/supabase'
 
-export type Subject = { id: string; name: string; iconKey: string | null; sortOrder: number }
+export type Subject = {
+  id: string
+  name: string
+  iconKey: string | null
+  sortOrder: number
+  /** 문제 코드용 2자리 과목코드. 없으면 문제 코드를 만들 수 없다 */
+  code: string | null
+}
 export type Unit = { id: string; subjectId: string; name: string; sortOrder: number }
 export type Exam = {
   id: string
@@ -30,7 +37,7 @@ export type Taxonomy = {
  */
 export async function fetchTaxonomy(): Promise<Taxonomy> {
   const [subjectsRes, unitsRes, examsRes] = await Promise.all([
-    supabase.from('subjects').select('id, name, icon_key, sort_order'),
+    supabase.from('subjects').select('id, name, icon_key, sort_order, code'),
     supabase.from('units').select('id, subject_id, name, sort_order'),
     supabase
       .from('exams')
@@ -48,6 +55,7 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
       name: row.name,
       iconKey: row.icon_key,
       sortOrder: row.sort_order,
+      code: row.code,
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ko'))
 
