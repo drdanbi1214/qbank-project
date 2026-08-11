@@ -317,56 +317,6 @@ export async function setBookmark(
 }
 
 // -----------------------------------------------------------------------------
-// 정답 투표 (미확정 문제)
-// -----------------------------------------------------------------------------
-
-export type AnswerVoteSummary = {
-  /** 보기 번호 -> 표 수 */
-  distribution: Record<number, number>
-  totalVotes: number
-  myVote: number[] | null
-}
-
-export async function fetchAnswerVotes(
-  questionId: string,
-  userId: string,
-): Promise<AnswerVoteSummary> {
-  const { data, error } = await supabase
-    .from('answer_votes')
-    .select('user_id, voted_answer')
-    .eq('question_id', questionId)
-
-  if (error) throw error
-
-  const distribution: Record<number, number> = {}
-  let myVote: number[] | null = null
-
-  for (const row of data ?? []) {
-    for (const no of row.voted_answer ?? []) {
-      distribution[no] = (distribution[no] ?? 0) + 1
-    }
-    if (row.user_id === userId) myVote = row.voted_answer ?? []
-  }
-
-  return { distribution, totalVotes: (data ?? []).length, myVote }
-}
-
-export async function castAnswerVote(params: {
-  questionId: string
-  userId: string
-  votedAnswer: number[]
-  reason?: string | null
-}): Promise<void> {
-  const { error } = await supabase.from('answer_votes').upsert({
-    question_id: params.questionId,
-    user_id: params.userId,
-    voted_answer: params.votedAnswer,
-    reason: params.reason ?? null,
-  })
-  if (error) throw error
-}
-
-// -----------------------------------------------------------------------------
 // 진행률
 // -----------------------------------------------------------------------------
 

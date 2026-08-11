@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ResetProgressMenu } from '@/components/ResetProgressMenu'
 import { ProgressBar } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
@@ -10,23 +10,61 @@ import {
   type SolveQuestion,
 } from '@/lib/queries/questions'
 import { examTitle } from '@/lib/queries/taxonomy'
+import { startSession } from '@/lib/queries/study'
+import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { cn } from '@/utils/cn'
 
-/** 시험 상세. 총평과 문항 목록, 블록테스트 시작 버튼. */
+/** 시험 상세. 총평과 풀기 방식 선택. */
 export function ExamDetailPage() {
   const { examId } = useParams()
+  const navigate = useNavigate()
+  const { session } = useAuth()
   const { taxonomy, loading: taxonomyLoading, examProgress } = useData()
+  const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState<{
     key: string
     questions: SolveQuestion[]
     states: Map<string, QuestionState>
   } | null>(null)
 
+  // 매 렌더마다 새 배열이 되면 아래 useMemo 가 계속 다시 계산된다.
   const fresh = loaded !== null && loaded.key === examId
-  const questions = fresh ? loaded.questions : []
-  const states = fresh ? loaded.states : new Map<string, QuestionState>()
-  const loading = !fresh
+  const questions = useMemo(() => (fresh ? loaded.questions : []), [fresh, loaded])
+  const states = useMemo(
+    () => (fresh ? loaded.states : new Map<string, QuestionState>()),
+    [fresh, loaded],
+  )
+
+  // 이 시험에서 마지막 시도가 오답이었던 문항
+  const wrongIds = useMemo(
+    () =>
+      questions
+        .filter((question) => {
+          const state = states.get(question.id)
+          return state && state.attempts > 0 && state.isCorrect === false
+        })
+        .map((question) => question.id),
+    [questions, states],
+  )
+  const wrongCount = wrongIds.length
+
+  async function retryWrong() {
+    if (wrongIds.length === 0 || busy) return
+    setBusy(true)
+    try {
+      const id = await startSession({
+        userId: session?.user.id ?? '',
+        mode: 'wrong_only',
+        scope: { exam_id: examId },
+        questionIds: wrongIds,
+      })
+      navigate(`/solve?session=${id}`)
+    } catch (caught) {
+      console.error('오답 세션을 시작하지 못했습니다.', caught)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!examId) return
@@ -114,6 +152,16 @@ export function ExamDetailPage() {
             >
               블록테스트 {exam.durationMin ? `(${exam.durationMin}분)` : ''}
             </Link>
+            {wrongCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void retryWrong()}
+                disabled={busy}
+                className="inline-flex h-9 items-center rounded-lg border border-slate-300 px-4 text-sm font-medium hover:border-brand-400 disabled:opacity-60 dark:border-slate-600"
+              >
+                오답만 다시 풀기 ({wrongCount})
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -127,45 +175,6 @@ export function ExamDetailPage() {
         </section>
       )}
 
-      <h2 className="mb-2 text-sm font-bold text-slate-500 dark:text-slate-400">
-        문항 {questions.length}개
-      </h2>
-
-      {loading ? (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      ) : questions.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
-          <p className="text-sm text-slate-500 dark:text-slate-400">등록된 문항이 없습니다.</p>
-        </div>
-      ) : (
-        <ol className="grid grid-cols-5 gap-2 sm:grid-cols-8 lg:grid-cols-10">
-          {questions.map((question, index) => {
-            const state = states.get(question.id)
-            const solved = state && state.attempts > 0
-
-            return (
-              <li key={question.id}>
-                <Link
-                  to={`/solve?exam=${examId}&i=${index}`}
-                  title={`${question.questionNumber}번`}
-                  className={cn(
-                    'grid aspect-square place-items-center rounded-lg border text-sm font-medium transition-colors',
-                    !solved
-                      ? 'border-slate-200 bg-white text-slate-600 hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
-                      : state.isCorrect
-                        ? 'border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300'
-                        : 'border-pink-300 bg-pink-100 text-pink-700 dark:border-pink-800 dark:bg-pink-950/50 dark:text-pink-300',
-                  )}
-                >
-                  {question.questionNumber}
-                </Link>
-              </li>
-            )
-          })}
-        </ol>
-      )}
     </section>
   )
 }

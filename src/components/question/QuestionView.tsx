@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
 import { AnswerNotice } from '@/components/question/AnswerNotice'
-import { AnswerVotePanel } from '@/components/question/AnswerVotePanel'
 import { ChoiceList } from '@/components/question/ChoiceList'
 import { StatsBar } from '@/components/question/StatsBar'
 import { StemBlocks } from '@/components/question/StemBlocks'
@@ -27,6 +26,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import {
   COMPLETENESS_LABEL,
+  effectiveAnswer,
   formatAnswer,
   type AnswerPayload,
   type QuestionStats,
@@ -246,7 +246,7 @@ export function QuestionView({
       <p className="text-base font-bold text-brand-600 dark:text-brand-300">정답입니다.</p>
     ) : (
       <p className="text-base font-bold text-marker-red">
-        오답입니다. 정답은 {formatAnswer(answer.editorAnswer)} 입니다.
+        오답입니다. 정답은 {formatAnswer(effectiveAnswer(answer))} 입니다.
       </p>
     )
   }, [revealed, isCorrect, answer])
@@ -387,18 +387,9 @@ export function QuestionView({
         <div className="mt-5 space-y-4">
           {resultBanner}
 
-          <AnswerNotice answer={answer} questionId={question.id} threadCount={threadCount} />
+          <AnswerNotice answer={answer} />
 
           {stats && <StatsBar stats={stats} />}
-
-          {answer.answerStatus === 'unconfirmed' && userId && !isEssay && (
-            <AnswerVotePanel
-              questionId={question.id}
-              userId={userId}
-              choices={question.choices}
-              answerCount={question.answerCount}
-            />
-          )}
 
           {siblings.length > 0 && (
             <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">

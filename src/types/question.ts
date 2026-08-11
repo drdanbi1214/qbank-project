@@ -235,6 +235,15 @@ export function circled(no: number): string {
   return CIRCLED[no - 1] ?? String(no)
 }
 
+/**
+ * 실제 채점 기준이 되는 정답.
+ * 편집자가 검토해 답을 넣었으면 그것을, 아직 없으면 복기 당시의 야마답을 쓴다.
+ * DB 의 effective_answer() 와 같은 규칙이라 화면과 채점 결과가 어긋나지 않는다.
+ */
+export function effectiveAnswer(answer: AnswerPayload): number[] {
+  return answer.editorAnswer.length > 0 ? answer.editorAnswer : (answer.yamaAnswer ?? [])
+}
+
 export function formatAnswer(answer: number[]): string {
   return answer.map(circled).join('')
 }

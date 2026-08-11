@@ -1,5 +1,5 @@
 import { useSignedUrl } from '@/lib/storage'
-import { circled, type AnswerPayload, type Choice } from '@/types/question'
+import { circled, effectiveAnswer, type AnswerPayload, type Choice } from '@/types/question'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -23,6 +23,8 @@ export function ChoiceList({
 }: Props) {
   const multiple = answerCount >= 2
   const locked = disabled || revealed !== null
+  // 편집자답이 없으면 야마답이 곧 정답이다.
+  const answer = revealed ? effectiveAnswer(revealed) : []
 
   function toggle(no: number) {
     if (locked) return
@@ -48,16 +50,14 @@ export function ChoiceList({
       <ul role={multiple ? 'group' : 'radiogroup'}>
         {choices.map((choice) => {
           const isSelected = selected.includes(choice.no)
+          const isAnswer = answer.includes(choice.no)
           const inEditor = revealed?.editorAnswer.includes(choice.no) ?? false
           const inYama = revealed?.yamaAnswer?.includes(choice.no) ?? false
           // 내가 고른 오답만 X 로 표시한다. 고르지 않은 오답은 건드리지 않는다.
-          const isMyWrong = revealed !== null && isSelected && !inEditor
+          const isMyWrong = revealed !== null && isSelected && !isAnswer
 
           return (
-            <li
-              key={choice.no}
-              className="border-b border-slate-100 last:border-b-0 dark:border-slate-800"
-            >
+            <li key={choice.no}>
               <button
                 type="button"
                 onClick={() => toggle(choice.no)}
@@ -74,7 +74,7 @@ export function ChoiceList({
                       ? isSelected
                         ? 'selected'
                         : 'idle'
-                      : inEditor
+                      : isAnswer
                         ? 'correct'
                         : isMyWrong
                           ? 'wrong'
@@ -86,7 +86,7 @@ export function ChoiceList({
                 <span
                   className={cn(
                     'shrink-0 text-base font-semibold leading-6',
-                    inEditor || (isSelected && revealed === null)
+                    isAnswer || (isSelected && revealed === null)
                       ? 'text-brand-600 dark:text-brand-300'
                       : 'text-slate-400',
                   )}
@@ -99,7 +99,7 @@ export function ChoiceList({
                     <span
                       className={cn(
                         'block whitespace-pre-wrap text-[15px] leading-6',
-                        inEditor && 'font-medium text-brand-600 dark:text-brand-300',
+                        isAnswer && 'font-medium text-brand-600 dark:text-brand-300',
                       )}
                     >
                       {choice.text}
@@ -113,7 +113,7 @@ export function ChoiceList({
                   <span
                     className={cn(
                       'shrink-0 self-center whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold',
-                      inEditor ? 'bg-brand-600 text-white' : 'bg-amber-500 text-white',
+                      isAnswer ? 'bg-brand-600 text-white' : 'bg-amber-500 text-white',
                     )}
                   >
                     {inYama && inEditor ? 'Y답/편집자답' : inEditor ? '편집자답' : 'Y답'}
