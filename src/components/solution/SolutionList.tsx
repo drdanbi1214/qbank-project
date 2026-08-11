@@ -17,12 +17,9 @@ import { cn } from '@/utils/cn'
 export function SolutionList({
   questionId,
   groupId,
-  autoWrite = false,
 }: {
   questionId: string
   groupId: string | null
-  /** 배정 화면에서 들어온 경우 작성창을 펼친 채로 시작한다 */
-  autoWrite?: boolean
 }) {
   const { session } = useAuth()
   const userId = session?.user.id ?? ''
@@ -39,7 +36,7 @@ export function SolutionList({
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** null 이면 보기 모드, 'new' 면 새 글, 그 외에는 수정할 풀이 id */
-  const [editing, setEditing] = useState<string | null>(autoWrite ? 'new' : null)
+  const [editing, setEditing] = useState<string | null>(null)
 
   const requestKey = `${target.groupId ?? target.questionId}|${sort}|${reloadKey}`
   const loading = loaded?.key !== requestKey && error === null

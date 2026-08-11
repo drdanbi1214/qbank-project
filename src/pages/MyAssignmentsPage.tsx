@@ -170,8 +170,8 @@ export function MyAssignmentsPage() {
       )}
 
       <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
-        문항을 선택하면 정답이 공개된 상태로 열리고 풀이 작성창이 바로 펼쳐집니다.
-        풀이를 등록하면 배정이 자동으로 완료 처리됩니다.
+        문항을 선택하면 정답이 공개된 상태로 열립니다. 편집자 답을 체크하고 풀이를
+        등록하면 배정이 자동으로 완료 처리됩니다.
       </p>
     </section>
   )

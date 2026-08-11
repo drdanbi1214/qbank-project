@@ -161,20 +161,3 @@ export function collectImagePaths(doc: RichDoc): string[] {
   for (const child of doc.content) walk(child)
   return paths
 }
-
-/** 새 풀이에 자동 삽입하는 4단계 스켈레톤 */
-export const SOLUTION_SECTIONS = ['한줄요약', '출제 Point', '정답 해설', '실전 Tip'] as const
-
-export function solutionSkeleton(): RichDoc {
-  return {
-    type: 'doc',
-    content: SOLUTION_SECTIONS.flatMap((title, index) => [
-      {
-        type: 'heading',
-        attrs: { level: 3 },
-        content: [{ type: 'text', text: `${index + 1}. ${title}` }],
-      },
-      { type: 'paragraph' },
-    ]),
-  }
-}

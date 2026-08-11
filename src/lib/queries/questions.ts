@@ -194,6 +194,15 @@ export async function fetchQuestionSet(setId: string): Promise<QuestionSet | nul
 }
 
 /** 정답 확인 및 스킵 시점에만 호출한다. */
+/**
+ * 편집자답을 정한다. 배정 화면에서 문항을 검토할 때 쓴다.
+ * can_write() 를 만족하는 계정이면 누구나 호출할 수 있다 (위키형 편집 정책과 동일).
+ */
+export async function setEditorAnswer(questionId: string, answer: number[]): Promise<void> {
+  const { error } = await supabase.from('questions').update({ editor_answer: answer }).eq('id', questionId)
+  if (error) throw error
+}
+
 export async function revealAnswer(questionId: string): Promise<AnswerPayload | null> {
   const { data, error } = await supabase.rpc('reveal_answer', { p_question_id: questionId })
   if (error) throw error

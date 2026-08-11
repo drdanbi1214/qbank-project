@@ -25,8 +25,12 @@ type DataState = {
   taxonomy: Taxonomy | null
   loading: boolean
   error: string | null
-  /** 단원별 진행률. 단원 미분류 문제는 unitId = null 로 들어온다. */
-  unitProgress: (unitId: string | null) => Progress
+  /**
+   * 단원별 진행률. 단원 미분류 문제는 unitId = null 로 들어온다.
+   * unitId 가 null 이면 subjectId 도 함께 넘겨야 한다. null 은 모든 과목에서
+   * 공유되는 값이라, 과목을 지정하지 않으면 여러 과목의 미분류 문제가 합쳐진다.
+   */
+  unitProgress: (unitId: string | null, subjectId?: string) => Progress
   subjectProgress: (subjectId: string) => Progress
   examProgress: (examId: string) => Progress
   /** 아직 끝내지 않은 내 배정 개수 (네비게이션 뱃지용) */
@@ -114,8 +118,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [enabled, progressNonce])
 
   const unitProgress = useCallback(
-    (unitId: string | null): Progress => {
-      const rows = units.filter((row) => row.unitId === unitId)
+    (unitId: string | null, subjectId?: string): Progress => {
+      const rows = units.filter(
+        (row) => row.unitId === unitId && (unitId !== null || row.subjectId === subjectId),
+      )
       return rows.length > 0 ? accumulate(rows) : { ...EMPTY }
     },
     [units],

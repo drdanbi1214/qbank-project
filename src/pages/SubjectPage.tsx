@@ -28,7 +28,7 @@ export function SubjectPage() {
   }
 
   const units = taxonomy?.units.filter((unit) => unit.subjectId === subjectId) ?? []
-  const unlabeled = unitProgress(null)
+  const unlabeled = unitProgress(null, subjectId)
   const total = subjectProgress(subjectId)
 
   return (

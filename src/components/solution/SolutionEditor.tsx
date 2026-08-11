@@ -10,7 +10,7 @@ import {
   type SolutionTarget,
 } from '@/lib/queries/solutions'
 import { formatDateTime } from '@/utils/date'
-import { isEmptyDoc, solutionSkeleton, type RichDoc } from '@/types/richtext'
+import { emptyDoc, isEmptyDoc, type RichDoc } from '@/types/richtext'
 
 type Props = {
   target: SolutionTarget
@@ -35,7 +35,7 @@ export function SolutionEditor({ target, userId, existing, onSaved, onCancel }: 
 
   // 에디터는 비제어라 내용을 갈아끼울 때만 version 을 올려 다시 마운트한다.
   const [seed, setSeed] = useState(() => ({
-    doc: existing?.content ?? solutionSkeleton(),
+    doc: existing?.content ?? emptyDoc(),
     version: 0,
   }))
   const [draftDismissed, setDraftDismissed] = useState(false)
