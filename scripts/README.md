@@ -13,6 +13,10 @@ JSON)으로 직접 만들어 넘겨준다. 아래 1~5단계(`pdf_to_images.py` ~
 만든 JSON이 정규식 기반 자동 파싱보다 정확하기 때문이다.
 
 ```bash
+# 0. 정답(굵은 보기) 자동 추출 — 절대 눈으로 판단하지 않는다 (아래 "정답 표시는
+#    반드시 코드로" 참고)
+python3 ../convert_file/extract_bold_answers.py 원본.pdf answers.json
+
 # 1. 이미지를 문항번호에 매핑 (convert_file/map_images_to_questions.py, v2)
 python3 ../convert_file/map_images_to_questions.py 원본.pdf ./images 2607 [exam.json]
 
@@ -26,6 +30,20 @@ python3 ingest_exam.py exam.json --images ./images --units unit_suggestions.json
 `ingest_exam.py` 는 같은 시험을 다시 넣어도 안전하다. 편집자가 이미 검토한
 답/단원은 덮어쓰지 않고, 원문 전사 내용(본문/보기/야마답)만 최신화한다.
 자세한 동작은 스크립트 상단 docstring 참고.
+
+### 정답 표시는 반드시 코드로 (`extract_bold_answers.py`)
+
+과거에 렌더링된 PDF 페이지를 사람(AI)이 눈으로 보고 "이 문항은 정답 표시가
+없다"고 판단했다가, 실제로는 60문항 중 7문항에서 굵은 글씨를 놓친 사고가
+있었다. 원인은 시각 판단 자체의 신뢰도 문제였다 — 인접한 문항의 굵은 글씨는
+잘 잡으면서도 특정 문항에서만 놓치는 식이라 패턴도 없었다.
+
+PDF는 폰트 메타데이터(굵은 글씨 비트, 폰트명)를 그대로 갖고 있으므로 코드로
+읽으면 100% 객관적으로 판별된다. `extract_bold_answers.py` 가 이 방식을
+구현한다. **전사 작업에서 `yama_answer` 를 채울 때는 반드시 이 스크립트
+결과를 우선 신뢰**하고, 스크립트가 빈 배열(`[]`)을 준 문항만 사람이 원본을
+다시 봐서 "진짜로 표시가 없는지" 확인한다 (진짜로 없는 경우도 있다 — 정답
+표시 없이 문제만 있는 문항은 실제로 존재한다).
 
 ## 예전 방식 (1단계 로컬 파싱 파이프라인, 지금은 잘 안 씀)
 
