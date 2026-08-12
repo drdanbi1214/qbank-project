@@ -27,7 +27,10 @@ type AuthState = {
 }
 
 export type ProfilePatch = Partial<
-  Pick<Profile, 'display_name' | 'cohort' | 'avatar_url' | 'theme' | 'font_scale'>
+  Pick<
+    Profile,
+    'display_name' | 'cohort' | 'avatar_url' | 'theme' | 'font_scale' | 'welcome_popup_dismissed'
+  >
 >
 
 const AuthContext = createContext<AuthState | null>(null)

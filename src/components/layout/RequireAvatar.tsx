@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { WelcomePopup } from '@/components/layout/WelcomePopup'
 import { useAuth } from '@/lib/auth'
 import { uploadAvatar } from '@/lib/uploads'
 
@@ -18,7 +19,7 @@ export function RequireAvatar() {
   return (
     <>
       <Outlet />
-      {profile && !profile.avatar_url && <AvatarGateModal />}
+      {profile && !profile.avatar_url ? <AvatarGateModal /> : <WelcomePopup />}
     </>
   )
 }

@@ -153,14 +153,14 @@ export type Database = {
           {
             foreignKeyName: "assignments_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "assignments_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "questions_solve"
             referencedColumns: ["id"]
           },
@@ -847,6 +847,7 @@ export type Database = {
           role: string
           theme: string
           updated_at: string
+          welcome_popup_dismissed: boolean
         }
         Insert: {
           avatar_url?: string | null
@@ -860,6 +861,7 @@ export type Database = {
           role?: string
           theme?: string
           updated_at?: string
+          welcome_popup_dismissed?: boolean
         }
         Update: {
           avatar_url?: string | null
@@ -873,6 +875,7 @@ export type Database = {
           role?: string
           theme?: string
           updated_at?: string
+          welcome_popup_dismissed?: boolean
         }
         Relationships: []
       }
