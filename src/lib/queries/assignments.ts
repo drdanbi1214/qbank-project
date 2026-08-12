@@ -89,7 +89,15 @@ export async function fetchCompletedAssignmentQuestionIds(
   return (data ?? []).map((row) => ({ questionId: row.question_id, completedAt: row.completed_at }))
 }
 
-/** 문항 일괄 배정. 이미 같은 담당자에게 배정된 문항은 건너뛴다. */
+/** 이미 누군가에게 배정된 문항 id 전체. 한 문항은 한 명에게만 배정되므로
+ * 이 목록에 있는 문항은 배정 화면에서 선택 대상으로 보여주지 않는다. */
+export async function fetchAssignedQuestionIds(): Promise<Set<string>> {
+  const { data, error } = await supabase.from('assignments').select('question_id')
+  if (error) throw error
+  return new Set((data ?? []).map((row) => row.question_id))
+}
+
+/** 문항 일괄 배정. 이미 다른 사람에게 배정된 문항(레이스 컨디션 등)은 건너뛴다. */
 export async function assignQuestions(params: {
   questionIds: string[]
   assigneeId: string
@@ -107,7 +115,7 @@ export async function assignQuestions(params: {
 
   const { data, error } = await supabase
     .from('assignments')
-    .upsert(rows, { onConflict: 'question_id,assignee_id', ignoreDuplicates: true })
+    .upsert(rows, { onConflict: 'question_id', ignoreDuplicates: true })
     .select('id')
 
   if (error) throw error

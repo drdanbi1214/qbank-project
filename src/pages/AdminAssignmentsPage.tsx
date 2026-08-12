@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { DesktopOnly } from '@/components/DesktopOnly'
 import {
   assignQuestions,
+  fetchAssignedQuestionIds,
   fetchAssignmentProgress,
   fetchCompletedAssignmentQuestionIds,
   type AssignmentProgress,
@@ -27,6 +28,7 @@ export function AdminAssignmentsPage() {
 
   const [examId, setExamId] = useState('')
   const [questions, setQuestions] = useState<SolveQuestion[] | null>(null)
+  const [assignedQuestionIds, setAssignedQuestionIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [members, setMembers] = useState<Member[]>([])
   const [assigneeId, setAssigneeId] = useState('')
@@ -64,6 +66,18 @@ export function AdminAssignmentsPage() {
   }, [progressNonce])
 
   useEffect(() => {
+    let active = true
+    void fetchAssignedQuestionIds()
+      .then((ids) => {
+        if (active) setAssignedQuestionIds(ids)
+      })
+      .catch((error: unknown) => console.error('배정된 문항 목록을 불러오지 못했습니다.', error))
+    return () => {
+      active = false
+    }
+  }, [progressNonce])
+
+  useEffect(() => {
     if (!examId) return
     let active = true
     void fetchQuestions({ examId })
@@ -76,7 +90,10 @@ export function AdminAssignmentsPage() {
     }
   }, [examId])
 
-  const shown = examId ? questions : null
+  const shown = useMemo(() => {
+    if (!examId || questions === null) return null
+    return questions.filter((question) => !assignedQuestionIds.has(question.id))
+  }, [examId, questions, assignedQuestionIds])
 
   const exams = useMemo(() => taxonomy?.exams ?? [], [taxonomy])
 
@@ -125,7 +142,8 @@ export function AdminAssignmentsPage() {
         <header className="mb-4">
           <h1 className="text-xl font-bold">배정 관리</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            시험을 고르고 문항을 선택해 담당자에게 배정합니다.
+            시험을 고르고 문항을 선택해 담당자에게 배정합니다. 한 문항은 한
+            명에게만 배정되며, 이미 배정된 문항은 목록에 표시되지 않습니다.
           </p>
         </header>
 
@@ -195,6 +213,12 @@ export function AdminAssignmentsPage() {
           <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
             <p className="text-sm text-slate-500 dark:text-slate-400">
               시험을 선택하면 문항이 표시됩니다.
+            </p>
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              이 시험의 문항은 전부 이미 배정되었습니다.
             </p>
           </div>
         ) : (
