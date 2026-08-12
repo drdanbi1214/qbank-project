@@ -248,6 +248,7 @@ export function SolvePage() {
             onPrev={index > 0 ? () => goTo(index - 1) : undefined}
             onNext={index < questions.length - 1 ? () => goTo(index + 1) : undefined}
             onShuffle={questions.length > 1 ? shuffle : undefined}
+            onJumpTo={questions.length > 1 ? goTo : undefined}
             autoReveal={autoReveal}
             autoWrite={autoWrite}
             onExit={() => navigate(exitTo)}
