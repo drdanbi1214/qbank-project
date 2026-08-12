@@ -9,7 +9,7 @@ import { setEditorAnswer } from '@/lib/queries/questions'
 import { assignUnit } from '@/lib/queries/admin'
 import { useData } from '@/lib/data'
 import { circled, type Choice } from '@/types/question'
-import { emptyDoc, isEmptyDoc, type RichDoc } from '@/types/richtext'
+import { isEmptyDoc, solutionTemplateDoc, type RichDoc } from '@/types/richtext'
 import { formatDateTime } from '@/utils/date'
 import { cn } from '@/utils/cn'
 
@@ -79,7 +79,7 @@ export function AssignmentEditor({
     enabled: true,
   })
 
-  const [seed, setSeed] = useState(() => ({ doc: emptyDoc(), version: 0 }))
+  const [seed, setSeed] = useState(() => ({ doc: solutionTemplateDoc(choices.length), version: 0 }))
   const [draftDismissed, setDraftDismissed] = useState(false)
   const doc = useRef<RichDoc>(seed.doc)
 

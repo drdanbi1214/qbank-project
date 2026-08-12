@@ -46,6 +46,32 @@ export function emptyDoc(): RichDoc {
   return { type: 'doc', content: [{ type: 'paragraph' }] }
 }
 
+const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
+
+function textParagraph(text: string): RichNode {
+  return { type: 'paragraph', content: text ? [{ type: 'text', text }] : undefined }
+}
+
+/**
+ * 새 풀이를 작성할 때 기본으로 채워주는 서식.
+ * 문항의 선지 개수만큼 "① →" 줄을 만든다 (선지가 1개면 ①만).
+ */
+export function solutionTemplateDoc(choiceCount: number): RichDoc {
+  const content: RichNode[] = [
+    textParagraph('Imp.'),
+    textParagraph(''),
+    textParagraph('해설: '),
+    textParagraph(''),
+    textParagraph('선지)'),
+  ]
+  const count = Math.max(choiceCount, 0)
+  for (let i = 0; i < count; i += 1) {
+    const label = CIRCLED[i] ?? String(i + 1)
+    content.push(textParagraph(`${label} → `))
+  }
+  return { type: 'doc', content }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

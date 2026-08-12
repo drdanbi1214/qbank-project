@@ -50,6 +50,8 @@ type Props = {
   onNext?: () => void
   /** 남은 문제 순서를 무작위로 섞는다. 여러 문제를 순서대로 푸는 세션에서만 넘긴다. */
   onShuffle?: () => void
+  /** 번호(1-based)를 직접 입력해 이동한다. 0-based index 로 넘겨준다. */
+  onJumpTo?: (index: number) => void
   onExit: () => void
   /** 채점이 끝나면 목록 진행률을 갱신하려고 알린다 */
   onAnswered?: (questionId: string, isCorrect: boolean | null) => void
@@ -71,6 +73,7 @@ export function QuestionView({
   onPrev,
   onNext,
   onShuffle,
+  onJumpTo,
   onExit,
   onAnswered,
   autoReveal = false,
@@ -280,9 +283,11 @@ export function QuestionView({
 
           <div className="flex shrink-0 items-center gap-1">
             {position && (
-              <span className="mr-1 hidden text-sm tabular-nums text-slate-500 sm:inline dark:text-slate-400">
-                {position.index} / {position.total}
-              </span>
+              <PositionJump
+                position={position}
+                onJumpTo={onJumpTo}
+                className="mr-1 hidden text-sm tabular-nums text-slate-500 sm:inline dark:text-slate-400"
+              />
             )}
             <IconButton label="이전 문제" icon="chevron-right" onClick={onPrev} flip disabled={!onPrev} />
             <IconButton label="다음 문제" icon="chevron-right" onClick={onNext} disabled={!onNext} />
@@ -310,9 +315,11 @@ export function QuestionView({
         </div>
 
         {position && (
-          <p className="mt-1 text-sm tabular-nums text-slate-500 sm:hidden dark:text-slate-400">
-            {position.index} / {position.total}
-          </p>
+          <PositionJump
+            position={position}
+            onJumpTo={onJumpTo}
+            className="mt-1 block text-sm tabular-nums text-slate-500 sm:hidden dark:text-slate-400"
+          />
         )}
       </header>
 
@@ -443,7 +450,11 @@ export function QuestionView({
               </div>
 
               {tab === 'solutions' ? (
-                <SolutionList questionId={question.id} groupId={question.groupId} />
+                <SolutionList
+                  questionId={question.id}
+                  groupId={question.groupId}
+                  choiceCount={question.choices.length}
+                />
               ) : (
                 <PersonalNoteTab questionId={question.id} groupId={question.groupId} />
               )}
@@ -513,6 +524,71 @@ function TabButton({
       )}
     >
       {children}
+    </button>
+  )
+}
+
+function PositionJump({
+  position,
+  onJumpTo,
+  className,
+}: {
+  position: { index: number; total: number }
+  onJumpTo?: (index: number) => void
+  className: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(String(position.index))
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      setValue(String(position.index))
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [editing, position.index])
+
+  function commit() {
+    const parsed = Number.parseInt(value, 10)
+    if (Number.isFinite(parsed)) {
+      const clamped = Math.min(Math.max(parsed, 1), position.total)
+      onJumpTo?.(clamped - 1)
+    }
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <span className={className}>
+        <input
+          ref={inputRef}
+          type="number"
+          min={1}
+          max={position.total}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commit()
+            if (event.key === 'Escape') setEditing(false)
+          }}
+          onBlur={commit}
+          className="w-10 rounded border border-slate-300 bg-white px-1 text-center tabular-nums dark:border-slate-600 dark:bg-slate-800"
+        />
+        {' / '}
+        {position.total}
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onJumpTo && setEditing(true)}
+      disabled={!onJumpTo}
+      className={cn(className, onJumpTo && 'cursor-pointer hover:underline')}
+    >
+      {position.index} / {position.total}
     </button>
   )
 }

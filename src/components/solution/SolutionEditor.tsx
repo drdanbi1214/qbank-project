@@ -10,18 +10,19 @@ import {
   type SolutionTarget,
 } from '@/lib/queries/solutions'
 import { formatDateTime } from '@/utils/date'
-import { emptyDoc, isEmptyDoc, type RichDoc } from '@/types/richtext'
+import { isEmptyDoc, solutionTemplateDoc, type RichDoc } from '@/types/richtext'
 
 type Props = {
   target: SolutionTarget
   userId: string
   /** 값이 있으면 수정, 없으면 새 풀이 */
   existing?: Solution | null
+  choiceCount: number
   onSaved: () => void
   onCancel: () => void
 }
 
-export function SolutionEditor({ target, userId, existing, onSaved, onCancel }: Props) {
+export function SolutionEditor({ target, userId, existing, choiceCount, onSaved, onCancel }: Props) {
   const isNew = !existing
   // 그룹이 있으면 그룹 단위로 임시저장한다. 같은 문제의 다른 학번에서 이어 쓸 수 있다.
   const draftKey = target.groupId ?? target.questionId
@@ -35,7 +36,7 @@ export function SolutionEditor({ target, userId, existing, onSaved, onCancel }: 
 
   // 에디터는 비제어라 내용을 갈아끼울 때만 version 을 올려 다시 마운트한다.
   const [seed, setSeed] = useState(() => ({
-    doc: existing?.content ?? emptyDoc(),
+    doc: existing?.content ?? solutionTemplateDoc(choiceCount),
     version: 0,
   }))
   const [draftDismissed, setDraftDismissed] = useState(false)

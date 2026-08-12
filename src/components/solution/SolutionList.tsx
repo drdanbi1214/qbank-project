@@ -17,9 +17,11 @@ import { cn } from '@/utils/cn'
 export function SolutionList({
   questionId,
   groupId,
+  choiceCount,
 }: {
   questionId: string
   groupId: string | null
+  choiceCount: number
 }) {
   const { session } = useAuth()
   const userId = session?.user.id ?? ''
@@ -76,6 +78,7 @@ export function SolutionList({
         target={target}
         userId={userId}
         existing={editingSolution}
+        choiceCount={choiceCount}
         onSaved={() => {
           setEditing(null)
           reload()
