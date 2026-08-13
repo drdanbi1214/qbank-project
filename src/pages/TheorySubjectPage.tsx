@@ -11,6 +11,7 @@ export function TheorySubjectPage() {
   const { taxonomy, loading: taxonomyLoading } = useData()
   const [documents, setDocuments] = useState<TheoryDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     if (!subjectId) return
@@ -40,8 +41,14 @@ export function TheorySubjectPage() {
   const childrenOf = (parentId: string) => documents.filter((document) => document.parentId === parentId).sort(compareTheory)
   const current = documents.find((item) => item.id === documentId) ?? null
   const selected = current?.hasContent ? current : null
-  const navItems = current && !current.hasContent ? childrenOf(current.id) : current?.parentId ? childrenOf(current.parentId) : topLevel
-  const parent = current?.parentId ? documents.find((item) => item.id === current.parentId) ?? null : null
+  function toggleExpanded(id: string) {
+    setExpanded((currentSet) => {
+      const next = new Set(currentSet)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <section>
@@ -62,13 +69,7 @@ export function TheorySubjectPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
-            {current && !current.hasContent && parent && (
-              <Link to={`/theory/${subject.id}/${parent.id}`} className="mb-1 block rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800">← {parent.title}</Link>
-            )}
-            {current && current.hasContent && parent && (
-              <Link to={`/theory/${subject.id}/${parent.id}`} className="mb-1 block rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800">← {parent.title}</Link>
-            )}
-            {navItems.map((document) => <TheoryNavItem key={document.id} document={document} subjectId={subject.id} selectedId={selected?.id} group={childrenOf(document.id).length > 0} />)}
+            {topLevel.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={selected?.id} childrenOf={childrenOf} expanded={expanded} onToggle={toggleExpanded} />)}
           </nav>
 
           {selected && (
@@ -77,12 +78,7 @@ export function TheorySubjectPage() {
               <RichTextViewer doc={selected.content} />
             </article>
           )}
-          {current && !current.hasContent && (
-            <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
-              <p className="text-sm text-slate-500 dark:text-slate-400">목차에서 이론을 선택하세요.</p>
-            </div>
-          )}
-          {!current && (
+          {!selected && (
             <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
               <p className="text-sm text-slate-500 dark:text-slate-400">부속 이론 또는 단원을 선택하세요.</p>
             </div>
@@ -93,35 +89,55 @@ export function TheorySubjectPage() {
   )
 }
 
+function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0 }: {
+  document: TheoryDocument; subjectId: string; selectedId?: string; childrenOf: (id: string) => TheoryDocument[]; expanded: Set<string>; onToggle: (id: string) => void; depth?: number
+}) {
+  const children = childrenOf(document.id)
+  const hasChildren = children.length > 0
+  const isExpanded = expanded.has(document.id)
+  return <div>
+    <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} depth={depth} expanded={isExpanded} onToggle={hasChildren ? () => onToggle(document.id) : undefined} />
+    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} />)}
+  </div>
+}
+
 function TheoryNavItem({
   document,
   subjectId,
   selectedId,
   group = false,
+  depth = 0,
+  expanded = false,
+  onToggle,
 }: {
   document: TheoryDocument
   subjectId: string
   selectedId?: string
   group?: boolean
+  depth?: number
+  expanded?: boolean
+  onToggle?: () => void
 }) {
   const label = <span className={cn('min-w-0 truncate', group && 'font-semibold')}>{document.title}</span>
   const className = cn(
     'flex min-w-0 items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+    depth > 0 && 'ml-3',
     selectedId === document.id
       ? 'bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
       : document.hasContent ? 'hover:bg-slate-50 dark:hover:bg-slate-800' : 'text-slate-700 dark:text-slate-200',
   )
 
-  if (!document.hasContent) {
-    return group ? <Link to={`/theory/${subjectId}/${document.id}`} className={className}>{label}<span className="text-xs text-slate-400">목차</span></Link> : <div className={className}>{label}</div>
-  }
+  if (!document.hasContent) return <div className={className}>{label}{onToggle && <button type="button" onClick={onToggle} aria-label={`${document.title} ${expanded ? '접기' : '펼치기'}`} className="px-1 text-slate-400">{expanded ? '⌄' : '›'}</button>}</div>
 
   return (
-    <Link to={`/theory/${subjectId}/${document.id}`} className={className}>
+    <div className={className}>
+      <Link to={`/theory/${subjectId}/${document.id}`} className="min-w-0 flex-1 truncate">
       {label}
+      </Link>
+      {onToggle && <button type="button" onClick={onToggle} aria-label={`${document.title} ${expanded ? '접기' : '펼치기'}`} className="px-1 text-slate-400">{expanded ? '⌄' : '›'}</button>}
       <span className="shrink-0 rounded border border-brand-200 px-1.5 py-0.5 text-[11px] font-medium text-brand-700 dark:border-brand-800 dark:text-brand-200">
         이론 보기
       </span>
-    </Link>
+    </div>
   )
 }
