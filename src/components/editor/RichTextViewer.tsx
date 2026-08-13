@@ -91,16 +91,16 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
 
   switch (node.type) {
     case 'paragraph':
-      return <p className={indentClass(indentLevel)}>{children.length > 0 ? children : <br />}</p>
+      return <p className={hierarchyClass(node, indentLevel)}>{children.length > 0 ? children : <br />}</p>
     case 'aiTitle':
       return <p className="mb-1 mt-4 font-bold text-slate-900 dark:text-slate-100">{children}</p>
     case 'aiEvidence':
       return <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{children}</p>
     case 'heading': {
       const level = typeof node.attrs?.level === 'number' ? node.attrs.level : 3
-      if (level <= 2) return <h2 className={indentClass(indentLevel)}>{children}</h2>
-      if (level === 3) return <h3 className={indentClass(indentLevel)}>{children}</h3>
-      return <h4 className={indentClass(indentLevel)}>{children}</h4>
+      if (level <= 2) return <h2 className={hierarchyClass(node, indentLevel)}>{children}</h2>
+      if (level === 3) return <h3 className={hierarchyClass(node, indentLevel)}>{children}</h3>
+      return <h4 className={hierarchyClass(node, indentLevel)}>{children}</h4>
     }
     case 'bulletList':
       return <ul className={cn(indentClass(indentLevel), indentLevel !== undefined && 'inherited-bullet-list')}>{children}</ul>
@@ -134,6 +134,13 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
       // 모르는 블록은 내용만 살려서 보여준다.
       return <div>{children}</div>
   }
+}
+
+function hierarchyClass(node: RichNode, level?: number): string | undefined {
+  return cn(
+    indentClass(level),
+    level !== undefined && /^\s*\d+\./.test(nodeText(node)) && 'hierarchy-section-start',
+  ) || undefined
 }
 
 function indentClass(level?: number): string | undefined {

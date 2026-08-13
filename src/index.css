@@ -99,6 +99,12 @@
     list-style-position: inside;
     padding-inline-start: 0;
   }
+  .hierarchical-rich-text .inherited-bullet-list > li > p:first-child {
+    display: inline;
+  }
+  .hierarchical-rich-text > * + .hierarchy-section-start {
+    margin-top: 2.5rem;
+  }
 
   @media (max-width: 639px) {
     .hierarchical-rich-text .hierarchy-indent-1 {
@@ -106,6 +112,9 @@
     }
     .hierarchical-rich-text .hierarchy-indent-2 {
       margin-inline-start: 2rem;
+    }
+    .hierarchical-rich-text > * + .hierarchy-section-start {
+      margin-top: 2rem;
     }
   }
 
