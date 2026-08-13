@@ -161,7 +161,8 @@ export async function fetchDiscussions(
   // 추천순, 댓글순은 값이 같은 글이 많아 최신순을 2차 기준으로 둔다.
   if (sort !== 'recent') query = query.order('created_at', { ascending: false })
 
-  const { data, error } = await query.limit(filter.limit ?? 50)
+  const defaultLimit = filter.category === '정답이의' ? 1000 : 50
+  const { data, error } = await query.limit(filter.limit ?? defaultLimit)
   if (error) throw error
 
   const rows = (data ?? []) as unknown as FeedRow[]

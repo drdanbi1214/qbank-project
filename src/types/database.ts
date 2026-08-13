@@ -567,6 +567,7 @@ export type Database = {
           content_edited_at: string | null
           created_at: string
           id: string
+          is_auto_answer_dispute: boolean
           question_id: string | null
           reply_count: number
           resolved_by: string | null
@@ -584,6 +585,7 @@ export type Database = {
           content_edited_at?: string | null
           created_at?: string
           id?: string
+          is_auto_answer_dispute?: boolean
           question_id?: string | null
           reply_count?: number
           resolved_by?: string | null
@@ -601,6 +603,7 @@ export type Database = {
           content_edited_at?: string | null
           created_at?: string
           id?: string
+          is_auto_answer_dispute?: boolean
           question_id?: string | null
           reply_count?: number
           resolved_by?: string | null
@@ -1973,6 +1976,10 @@ export type Database = {
       admin_set_suspended: {
         Args: { p_suspended: boolean; p_user_id: string }
         Returns: undefined
+      }
+      answers_differ: {
+        Args: { editor_answer: number[]; yama_answer: number[] }
+        Returns: boolean
       }
       can_write: { Args: never; Returns: boolean }
       circled_answer: { Args: { a: number[] }; Returns: string }
