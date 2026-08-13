@@ -115,6 +115,9 @@ python3 scripts/import_notion_theory.py "신경과 신경외과.zip" --subject-c
 
 # 실제 등록
 python3 scripts/import_notion_theory.py "신경과 신경외과.zip" --subject-code 06 --apply
+
+# 내과 안에 순환기 부속 목차를 만들어 등록
+python3 scripts/import_notion_theory.py "순환기 이론.zip" --subject-code 01 --section "순환기" --apply
 ```
 
 같은 Notion ZIP을 다시 등록해도 원본 경로를 기준으로 같은 문서를 갱신한다.

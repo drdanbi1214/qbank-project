@@ -34,11 +34,12 @@ export function TheorySubjectPage() {
 
   const subject = taxonomy?.subjectById.get(subjectId)
   if (!subject) return <Navigate to="/theory" replace />
-  const selected = documents.find((item) => item.id === documentId && item.hasContent)
-    ?? documents.find((item) => item.hasContent)
-    ?? null
   const topLevel = documents.filter((document) => document.parentId === null)
   const childrenOf = (parentId: string) => documents.filter((document) => document.parentId === parentId)
+  const current = documents.find((item) => item.id === documentId) ?? null
+  const selected = current?.hasContent ? current : null
+  const navItems = current && !current.hasContent ? childrenOf(current.id) : current?.parentId ? childrenOf(current.parentId) : topLevel
+  const parent = current?.parentId ? documents.find((item) => item.id === current.parentId) ?? null : null
 
   return (
     <section>
@@ -59,14 +60,13 @@ export function TheorySubjectPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
-            {topLevel.map((group) => (
-              <div key={group.id} className="mb-1 last:mb-0">
-                <TheoryNavItem document={group} subjectId={subject.id} selectedId={selected?.id} group />
-                {childrenOf(group.id).map((document) => (
-                  <TheoryNavItem key={document.id} document={document} subjectId={subject.id} selectedId={selected?.id} />
-                ))}
-              </div>
-            ))}
+            {current && !current.hasContent && parent && (
+              <Link to={`/theory/${subject.id}/${parent.id}`} className="mb-1 block rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800">← {parent.title}</Link>
+            )}
+            {current && current.hasContent && parent && (
+              <Link to={`/theory/${subject.id}/${parent.id}`} className="mb-1 block rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800">← {parent.title}</Link>
+            )}
+            {navItems.map((document) => <TheoryNavItem key={document.id} document={document} subjectId={subject.id} selectedId={selected?.id} group={childrenOf(document.id).length > 0} />)}
           </nav>
 
           {selected && (
@@ -74,6 +74,16 @@ export function TheorySubjectPage() {
               <h2 className="mb-4 text-lg font-bold">{selected.title}</h2>
               <RichTextViewer doc={selected.content} />
             </article>
+          )}
+          {current && !current.hasContent && (
+            <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+              <p className="text-sm text-slate-500 dark:text-slate-400">목차에서 이론을 선택하세요.</p>
+            </div>
+          )}
+          {!current && (
+            <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+              <p className="text-sm text-slate-500 dark:text-slate-400">부속 이론 또는 단원을 선택하세요.</p>
+            </div>
           )}
         </div>
       )}
@@ -95,13 +105,14 @@ function TheoryNavItem({
   const label = <span className={cn('min-w-0 truncate', group && 'font-semibold')}>{document.title}</span>
   const className = cn(
     'flex min-w-0 items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-    !group && 'ml-2',
     selectedId === document.id
       ? 'bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
       : document.hasContent ? 'hover:bg-slate-50 dark:hover:bg-slate-800' : 'text-slate-700 dark:text-slate-200',
   )
 
-  if (!document.hasContent) return <div className={className}>{label}</div>
+  if (!document.hasContent) {
+    return group ? <Link to={`/theory/${subjectId}/${document.id}`} className={className}>{label}<span className="text-xs text-slate-400">목차</span></Link> : <div className={className}>{label}</div>
+  }
 
   return (
     <Link to={`/theory/${subjectId}/${document.id}`} className={className}>

@@ -3,6 +3,7 @@
 사용법:
   python3 scripts/import_notion_theory.py "convert_file/이론 보기/신경과 신경외과.zip" --subject-code 06
   python3 scripts/import_notion_theory.py "...zip" --subject-code 06 --apply
+  python3 scripts/import_notion_theory.py "순환기 이론.zip" --subject-code 01 --section "순환기" --apply
 
 Notion의 Markdown & CSV 내보내기 ZIP을 그대로 받는다. 대분류 문서 중 목차만
 있는 것은 has_content=false로 등록해 목차에는 보이되 '이론 보기' 버튼은 만들지
@@ -142,6 +143,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Notion Markdown ZIP 이론 등록")
     parser.add_argument("zip_path")
     parser.add_argument("--subject-code", required=True, help="과목 코드. 신경과는 06")
+    parser.add_argument("--section", default="", help="과목 안에 만들 부속 목차 이름. 예: 순환기")
+    parser.add_argument("--resume", action="store_true", help="이미 등록된 문서는 건너뛰고 중단 지점부터 이어서 등록")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     outer = zipfile.ZipFile(args.zip_path)
@@ -170,14 +173,31 @@ def main() -> None:
     entries.sort(key=lambda row: (row[2], row[0]))
     top = [(path, text, title) for path, text, depth, title in entries if depth == 0]
     children = [(path, text, title) for path, text, depth, title in entries if depth == 1]
-    print(f"{subject['name']}: 대분류 {len(top)}개, 세부 문서 {len(children)}개")
+    section_label = f" > {args.section}" if args.section else ""
+    print(f"{subject['name']}{section_label}: 대분류 {len(top)}개, 세부 문서 {len(children)}개")
     if not args.apply:
         for _, text, title in top: print(f"  목차  {title} ({'본문 있음' if doc_has_body(text) else '목차만'})")
         for _, _, title in children: print(f"  문서  {title}")
         return
+    source_prefix = f"section:{args.section}/" if args.section else ""
+    existing_keys: set[str] = set()
+    if args.resume:
+        existing_keys = {row["source_key"] for row in client.get("theory_documents", {"select": "source_key", "subject_id": f"eq.{subject['id']}"}) if row.get("source_key")}
+    section_id = None
+    if args.section:
+        section_row = {
+            "subject_id": subject["id"],
+            "source_key": f"section:{args.section}",
+            "title": args.section,
+            "sort_order": len(top) * 1000,
+            "has_content": False,
+            "is_published": True,
+            "content": {"type": "doc", "content": [{"type": "paragraph"}]},
+        }
+        section_id = client.upsert([section_row])[0]["id"]
     source_to_id = {}
     for order, (path, text, title) in enumerate(top, 1):
-        row = {"subject_id": subject["id"], "source_key": path, "title": title, "sort_order": order * 100, "has_content": doc_has_body(text), "is_published": True, "content": markdown_doc(text, lambda _: "")}
+        row = {"subject_id": subject["id"], "source_key": source_prefix + path, "parent_id": section_id, "title": title, "sort_order": order * 100, "has_content": doc_has_body(text), "is_published": True, "content": markdown_doc(text, lambda _: "")}
         source_to_id[path] = client.upsert([row])[0]["id"]
     image_cache = {}
     def image_path(source: str, document_path: str) -> str:
@@ -195,9 +215,11 @@ def main() -> None:
         image_cache[key] = stored
         return stored
     for order, (path, text, title) in enumerate(children, 1):
+        if source_prefix + path in existing_keys:
+            continue
         parent_folder = PurePosixPath(path).parent.name
         parent = next((candidate for candidate, _, _ in top if clean_title(candidate).split(" ", 1)[0] == parent_folder.split(" ", 1)[0]), None)
-        row = {"subject_id": subject["id"], "source_key": path, "parent_id": source_to_id.get(parent), "title": title, "sort_order": order, "has_content": True, "is_published": True, "content": markdown_doc(text, lambda source: image_path(source, path))}
+        row = {"subject_id": subject["id"], "source_key": source_prefix + path, "parent_id": source_to_id.get(parent), "title": title, "sort_order": order, "has_content": True, "is_published": True, "content": markdown_doc(text, lambda source: image_path(source, path))}
         client.upsert([row]); print(f"등록: {title}")
     print(f"완료: 목차 {len(top)}개, 본문 {len(children)}개, 이미지 {len(image_cache)}개")
 
