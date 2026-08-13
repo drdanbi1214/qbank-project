@@ -10,6 +10,7 @@ import {
   type StemBlock,
 } from '@/types/question'
 import { toJson } from '@/types/richtext'
+import { isPermissionKey, type PermissionKey } from '@/lib/permissions'
 
 // =============================================================================
 // 관리자 조회 및 편집
@@ -360,6 +361,7 @@ export type Member = {
   attemptCount: number
   solutionCount: number
   lastActiveAt: string | null
+  permissions: PermissionKey[]
 }
 
 export async function fetchMembers(): Promise<Member[]> {
@@ -376,6 +378,7 @@ export async function fetchMembers(): Promise<Member[]> {
     attemptCount: row.attempt_count ?? 0,
     solutionCount: row.solution_count ?? 0,
     lastActiveAt: row.last_active_at,
+    permissions: (row.permission_keys ?? []).filter(isPermissionKey),
   }))
 }
 
@@ -389,6 +392,19 @@ export async function setSuspended(userId: string, suspended: boolean): Promise<
 
 export async function setRole(userId: string, role: 'admin' | 'member'): Promise<void> {
   const { error } = await supabase.rpc('admin_set_role', { p_user_id: userId, p_role: role })
+  if (error) throw error
+}
+
+export async function setPermission(
+  userId: string,
+  permission: PermissionKey,
+  enabled: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_permission', {
+    p_user_id: userId,
+    p_permission_key: permission,
+    p_enabled: enabled,
+  })
   if (error) throw error
 }
 

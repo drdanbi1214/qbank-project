@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, type Profile } from '@/lib/supabase'
+import { isPermissionKey, type PermissionKey } from '@/lib/permissions'
 
 type AuthState = {
   session: Session | null
@@ -19,6 +20,8 @@ type AuthState = {
   /** 로그인했지만 관리자 승인 전이라 모든 쓰기가 막힌 상태 */
   isPending: boolean
   isAdmin: boolean
+  permissions: PermissionKey[]
+  hasPermission: (permission: PermissionKey) => boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, displayName: string) => Promise<void>
   signOut: () => Promise<void>
@@ -49,9 +52,33 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
   return data
 }
 
+async function fetchPermissions(userId: string): Promise<PermissionKey[]> {
+  const { data, error } = await supabase
+    .from('profile_permissions')
+    .select('permission_key')
+    .eq('profile_id', userId)
+
+  if (error) {
+    console.error('콘텐츠 권한을 불러오지 못했습니다.', error)
+    return []
+  }
+  return (data ?? []).map((row) => row.permission_key).filter(isPermissionKey)
+}
+
+type Account = { profile: Profile | null; permissions: PermissionKey[] }
+
+async function fetchAccount(userId: string): Promise<Account> {
+  const [profile, permissions] = await Promise.all([
+    fetchProfile(userId),
+    fetchPermissions(userId),
+  ])
+  return { profile, permissions }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [permissions, setPermissions] = useState<PermissionKey[]>([])
   const [loading, setLoading] = useState(true)
   /**
    * getSession() 과 onAuthStateChange 가 같은 사용자에 대해 거의 동시에 들어온다.
@@ -59,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * loading 을 내리도록 한다. 그러지 않으면 프로필이 아직 null 인 상태로
    * 권한 가드가 판정해 관리자가 /admin 에서 튕겨난다.
    */
-  const profileRequest = useRef<{ userId: string; promise: Promise<Profile | null> } | null>(null)
+  const profileRequest = useRef<{ userId: string; promise: Promise<Account> } | null>(null)
 
   useEffect(() => {
     let active = true
@@ -69,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profileRequest.current = null
         if (active) {
           setProfile(null)
+          setPermissions([])
           setLoading(false)
         }
         return
@@ -76,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const userId = next.user.id
       if (profileRequest.current?.userId !== userId) {
-        profileRequest.current = { userId, promise: fetchProfile(userId) }
+        profileRequest.current = { userId, promise: fetchAccount(userId) }
       }
 
       const request = profileRequest.current
@@ -84,7 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // 그 사이 사용자가 바뀌었으면 낡은 응답은 버린다.
       if (!active || profileRequest.current !== request) return
-      setProfile(loaded)
+      setProfile(loaded.profile)
+      setPermissions(loaded.permissions)
       setLoading(false)
     }
 
@@ -109,7 +138,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const userId = session?.user.id
     if (!userId) return
-    setProfile(await fetchProfile(userId))
+    const loaded = await fetchAccount(userId)
+    setProfile(loaded.profile)
+    setPermissions(loaded.permissions)
   }, [session?.user.id])
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -133,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     setProfile(null)
+    setPermissions([])
     profileRequest.current = null
   }, [])
 
@@ -152,19 +184,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo<AuthState>(
-    () => ({
+    () => {
+      const permissionSet = new Set(permissions)
+      return {
+        session,
+        profile,
+        loading,
+        isPending: Boolean(session) && profile?.is_suspended === true,
+        isAdmin: profile?.role === 'admin',
+        permissions,
+        hasPermission: (permission: PermissionKey) => permissionSet.has(permission),
+        signIn,
+        signUp,
+        signOut,
+        refreshProfile,
+        updateProfile,
+      }
+    },
+    [
       session,
       profile,
+      permissions,
       loading,
-      isPending: Boolean(session) && profile?.is_suspended === true,
-      isAdmin: profile?.role === 'admin',
       signIn,
       signUp,
       signOut,
       refreshProfile,
       updateProfile,
-    }),
-    [session, profile, loading, signIn, signUp, signOut, refreshProfile, updateProfile],
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

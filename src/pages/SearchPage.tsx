@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
+import { useAuth } from '@/lib/auth'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
 import { cn } from '@/utils/cn'
@@ -15,9 +16,11 @@ import { cn } from '@/utils/cn'
 export function SearchPage() {
   const [params, setParams] = useSearchParams()
   const { taxonomy } = useData()
+  const { hasPermission } = useAuth()
+  const canViewStudySolutions = hasPermission('study_hapbon3')
 
   const query = params.get('q') ?? ''
-  const includeSolutions = params.get('scope') === 'all'
+  const includeSolutions = canViewStudySolutions && params.get('scope') === 'all'
   const subjectId = params.get('subject')
   const cohort = params.get('cohort')
 
@@ -105,20 +108,16 @@ export function SearchPage() {
       </form>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-          <ScopeButton
-            active={!includeSolutions}
-            onClick={() => update({ scope: null })}
-          >
-            문제만
-          </ScopeButton>
-          <ScopeButton
-            active={includeSolutions}
-            onClick={() => update({ scope: 'all' })}
-          >
-            문제 + 풀이
-          </ScopeButton>
-        </div>
+        {canViewStudySolutions && (
+          <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+            <ScopeButton active={!includeSolutions} onClick={() => update({ scope: null })}>
+              문제만
+            </ScopeButton>
+            <ScopeButton active={includeSolutions} onClick={() => update({ scope: 'all' })}>
+              문제 + 풀이
+            </ScopeButton>
+          </div>
+        )}
 
         <select
           value={subjectId ?? ''}

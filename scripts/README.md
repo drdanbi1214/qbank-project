@@ -45,6 +45,45 @@ PDF는 폰트 메타데이터(굵은 글씨 비트, 폰트명)를 그대로 갖�
 다시 봐서 "진짜로 표시가 없는지" 확인한다 (진짜로 없는 경우도 있다 — 정답
 표시 없이 문제만 있는 문항은 실제로 존재한다).
 
+## AI 풀이 일괄 입력 (`import_ai_solutions.py`)
+
+`AI 풀이 탭` 권한이 체크된 사용자에게만 보이는 별도 풀이 트랙
+(`ai_solutions` 테이블)에 CSV로 한 번에 넣는다. 권한이 없는 사용자에게는
+탭과 데이터가 모두 노출되지 않는다.
+
+```bash
+# 확인만 (기본값 dry-run)
+python3 scripts/import_ai_solutions.py ai_solutions.csv --images ./ai_images
+
+# 실제 반영
+python3 scripts/import_ai_solutions.py ai_solutions.csv --images ./ai_images --apply
+```
+
+CSV는 `question_code,content` 두 컬럼(헤더 포함, UTF-8)이다.
+`question_code` 는 학번2자리+과목코드2자리+문항번호3자리 7자리 코드다
+(예: `2607044` = 26학번 정형외과 44번).
+
+`content` 안에서 빈 줄은 문단 구분, 단독 줄바꿈은 그대로 줄바꿈이 된다.
+이미지를 넣을 자리에는 그 줄만 단독으로 `[[img:파일명.png]]` 라고 적고,
+`--images` 로 준 폴더에 같은 파일명으로 이미지를 넣어둔다 (하위 폴더 없이
+평평하게). 지원 형식은 PNG, JPG/JPEG, WEBP, GIF이고 파일명에 `/`나 `\`를
+넣으면 안 된다. `scripts/ai_solutions_example.csv`를 복사해 시작하면 된다.
+
+전달할 때는 CSV와 이미지 폴더를 아래처럼 한 폴더로 묶으면 된다.
+
+```text
+ai_solution_delivery/
+├── ai_solutions.csv
+└── ai_images/
+    ├── 2607044-01.png
+    └── 2607045-chart.jpg
+```
+
+CSV의 이미지 표기는 실제 파일명과 대소문자까지 같아야 한다. 이미지가 없는
+풀이에는 `[[img:...]]` 줄을 넣지 않으면 되고 `--images`도 생략할 수 있다.
+
+같은 문제코드로 다시 돌리면 그 문제의 AI 풀이를 덮어쓴다.
+
 ## 예전 방식 (1단계 로컬 파싱 파이프라인, 지금은 잘 안 씀)
 
 ## 준비

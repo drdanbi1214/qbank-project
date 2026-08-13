@@ -93,6 +93,33 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
   }
 }
 
+/**
+ * 배정/풀이 작성 화면에서 필요한 단원이 목록에 없을 때 그 자리에서 새로 만든다.
+ * sort_order 는 같은 과목 안에서 기존 최대값 + 1 로 둬 목록 맨 뒤에 오게 한다.
+ * (subject_id, name) 유니크 제약이 있어 이름이 겹치면 DB 에서 에러가 난다 —
+ * 호출 전에 같은 이름이 이미 있는지 확인하는 건 호출부 책임.
+ */
+export async function createUnit(subjectId: string, name: string, existingUnits: Unit[]): Promise<Unit> {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('단원 이름을 입력해주세요.')
+
+  const maxSortOrder = existingUnits
+    .filter((unit) => unit.subjectId === subjectId)
+    .reduce((max, unit) => Math.max(max, unit.sortOrder), 0)
+
+  const { data, error } = await supabase
+    .from('units')
+    .insert({ subject_id: subjectId, name: trimmed, sort_order: maxSortOrder + 1 })
+    .select('id, subject_id, name, sort_order')
+    .single()
+  if (error) {
+    if (error.code === '23505') throw new Error('이미 있는 단원 이름입니다.')
+    throw error
+  }
+
+  return { id: data.id, subjectId: data.subject_id, name: data.name, sortOrder: data.sort_order }
+}
+
 /** `20학번 정신건강의학과 학년말고사` 형태의 표시명 */
 export function examTitle(exam: Exam, subjectName: string | undefined): string {
   return [exam.cohort, subjectName, exam.examName].filter(Boolean).join(' ')

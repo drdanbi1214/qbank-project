@@ -10,6 +10,7 @@ import { StemBlocks } from '@/components/question/StemBlocks'
 import { MarkableRegion } from '@/components/marking/MarkableRegion'
 import { useTextMarks } from '@/components/marking/useTextMarks'
 import { QuestionDiscussions } from '@/components/discussion/QuestionDiscussions'
+import { AiSolutionPanel } from '@/components/solution/AiSolutionPanel'
 import { AllNotesPanel } from '@/components/solution/AllNotesPanel'
 import { PersonalNoteTab } from '@/components/solution/PersonalNoteTab'
 import { SolutionList } from '@/components/solution/SolutionList'
@@ -79,8 +80,10 @@ export function QuestionView({
   autoReveal = false,
   autoWrite = false,
 }: Props) {
-  const { session, isAdmin } = useAuth()
+  const { session, isAdmin, hasPermission } = useAuth()
   const userId = session?.user.id ?? ''
+  const canViewStudySolutions = hasPermission('study_hapbon3')
+  const canViewAiSolution = hasPermission('ai_solution_view')
 
   const [selected, setSelected] = useState<number[]>([])
   const [answer, setAnswer] = useState<AnswerPayload | null>(null)
@@ -95,8 +98,10 @@ export function QuestionView({
   const [essayText, setEssayText] = useState('')
   const [graded, setGraded] = useState(false)
 
-  // 해설 영역 탭
-  const [tab, setTab] = useState<'solutions' | 'note'>('solutions')
+  // 권한이 없는 탭은 버튼뿐 아니라 데이터 조회 컴포넌트도 만들지 않는다.
+  const [tab, setTab] = useState<'solutions' | 'note' | 'ai'>(() =>
+    canViewStudySolutions ? 'solutions' : canViewAiSolution ? 'ai' : 'note',
+  )
 
   // 형광펜. 문제 본문과 원본 해설은 같은 문제 id 를 쓰되 종류로 구분한다.
   const stemMarks = useTextMarks('question', question.id)
@@ -441,23 +446,30 @@ export function QuestionView({
           ) : (
             <div>
               <div className="mb-3 flex gap-1 border-b border-slate-200 dark:border-slate-800">
-                <TabButton active={tab === 'solutions'} onClick={() => setTab('solutions')}>
-                  풀이
-                </TabButton>
+                {canViewStudySolutions && (
+                  <TabButton active={tab === 'solutions'} onClick={() => setTab('solutions')}>
+                    풀이
+                  </TabButton>
+                )}
+                {canViewAiSolution && (
+                  <TabButton active={tab === 'ai'} onClick={() => setTab('ai')}>
+                    AI 풀이
+                  </TabButton>
+                )}
                 <TabButton active={tab === 'note'} onClick={() => setTab('note')}>
                   내 노트
                 </TabButton>
               </div>
 
-              {tab === 'solutions' ? (
+              {tab === 'solutions' && canViewStudySolutions && (
                 <SolutionList
                   questionId={question.id}
                   groupId={question.groupId}
                   choiceCount={question.choices.length}
                 />
-              ) : (
-                <PersonalNoteTab questionId={question.id} groupId={question.groupId} />
               )}
+              {tab === 'note' && <PersonalNoteTab questionId={question.id} groupId={question.groupId} />}
+              {tab === 'ai' && canViewAiSolution && <AiSolutionPanel questionId={question.id} />}
             </div>
           )}
 
@@ -543,11 +555,10 @@ function PositionJump({
 
   useEffect(() => {
     if (editing) {
-      setValue(String(position.index))
       inputRef.current?.focus()
       inputRef.current?.select()
     }
-  }, [editing, position.index])
+  }, [editing])
 
   function commit() {
     const parsed = Number.parseInt(value, 10)
@@ -584,7 +595,11 @@ function PositionJump({
   return (
     <button
       type="button"
-      onClick={() => onJumpTo && setEditing(true)}
+      onClick={() => {
+        if (!onJumpTo) return
+        setValue(String(position.index))
+        setEditing(true)
+      }}
       disabled={!onJumpTo}
       className={cn(className, onJumpTo && 'cursor-pointer hover:underline')}
     >

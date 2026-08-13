@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_permissions: {
+        Row: {
+          created_at: string
+          description: string | null
+          key: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          key: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          key?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      ai_solutions: {
+        Row: {
+          content: Json
+          created_at: string
+          id: string
+          question_id: string
+          required_permission: string
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          id?: string
+          question_id: string
+          required_permission?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          id?: string
+          question_id?: string
+          required_permission?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_solutions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_solutions_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           author_id: string | null
@@ -879,6 +945,49 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_permissions: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          permission_key: string
+          profile_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          permission_key: string
+          profile_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          permission_key?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_permissions_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "profile_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_groups: {
         Row: {
           canonical_question_id: string | null
@@ -1280,6 +1389,7 @@ export type Database = {
           is_verified: boolean
           question_id: string | null
           references: Json | null
+          required_permission: string
           updated_at: string
           upvote_count: number
         }
@@ -1293,6 +1403,7 @@ export type Database = {
           is_verified?: boolean
           question_id?: string | null
           references?: Json | null
+          required_permission?: string
           updated_at?: string
           upvote_count?: number
         }
@@ -1306,6 +1417,7 @@ export type Database = {
           is_verified?: boolean
           question_id?: string | null
           references?: Json | null
+          required_permission?: string
           updated_at?: string
           upvote_count?: number
         }
@@ -1323,6 +1435,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "question_groups"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solutions_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
           },
           {
             foreignKeyName: "solutions_question_id_fkey"
@@ -1711,12 +1830,21 @@ export type Database = {
           id: string
           is_suspended: boolean
           last_active_at: string
+          permission_keys: string[]
           role: string
           solution_count: number
         }[]
       }
       admin_resolve_report: {
         Args: { p_report_id: string; p_status: string }
+        Returns: undefined
+      }
+      admin_set_permission: {
+        Args: {
+          p_enabled: boolean
+          p_permission_key: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       admin_set_role: {
@@ -1848,6 +1976,7 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      has_permission: { Args: { p_permission_key: string }; Returns: boolean }
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
       normalize_search_text: { Args: { input: string }; Returns: string }
       normalize_stem: { Args: { blocks: Json }; Returns: string }

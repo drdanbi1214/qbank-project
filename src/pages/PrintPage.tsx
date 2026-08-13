@@ -5,6 +5,7 @@ import { StemBlocks } from '@/components/question/StemBlocks'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
+import { useAuth } from '@/lib/auth'
 import {
   fetchQuestionsByIds,
   revealAnswers,
@@ -37,6 +38,8 @@ export function PrintPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { taxonomy } = useData()
+  const { hasPermission } = useAuth()
+  const canViewStudySolutions = hasPermission('study_hapbon3')
 
   const source = params.get('source') === 'bookmark' ? 'bookmark' : 'wrong'
   const subjectId = params.get('subject')
@@ -45,7 +48,9 @@ export function PrintPage() {
   const cohort = params.get('cohort')
 
   const [withAnswer, setWithAnswer] = useState(params.get('answer') !== '0')
-  const [withSolution, setWithSolution] = useState(params.get('solution') !== '0')
+  const [withSolution, setWithSolution] = useState(
+    canViewStudySolutions && params.get('solution') !== '0',
+  )
 
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,9 +72,11 @@ export function PrintPage() {
         const questions = await fetchQuestionsByIds(ids)
         const [answers, solutions] = await Promise.all([
           revealAnswers(questions.map((row) => row.id)),
-          fetchSolutionsForQuestions(
-            questions.map((row) => ({ questionId: row.id, groupId: row.groupId })),
-          ),
+          canViewStudySolutions
+            ? fetchSolutionsForQuestions(
+                questions.map((row) => ({ questionId: row.id, groupId: row.groupId })),
+              )
+            : Promise.resolve(new Map<string, Solution[]>()),
         ])
 
         if (!active) return
@@ -85,7 +92,7 @@ export function PrintPage() {
     return () => {
       active = false
     }
-  }, [source, subjectId, unitId, examId, cohort, requestKey])
+  }, [source, subjectId, unitId, examId, cohort, requestKey, canViewStudySolutions])
 
   const examLabelOf = useMemo(() => {
     return (id: string) => {
@@ -116,14 +123,16 @@ export function PrintPage() {
           />
           정답 포함
         </label>
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={withSolution}
-            onChange={(event) => setWithSolution(event.target.checked)}
-          />
-          풀이 포함
-        </label>
+        {canViewStudySolutions && (
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={withSolution}
+              onChange={(event) => setWithSolution(event.target.checked)}
+            />
+            풀이 포함
+          </label>
+        )}
 
         <Button className="ml-auto" onClick={() => window.print()} disabled={!ready}>
           인쇄 또는 PDF 저장

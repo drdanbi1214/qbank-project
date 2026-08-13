@@ -4,7 +4,14 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
-import { fetchMembers, setRole, setSuspended, type Member } from '@/lib/queries/admin'
+import {
+  fetchMembers,
+  setPermission,
+  setRole,
+  setSuspended,
+  type Member,
+} from '@/lib/queries/admin'
+import { PERMISSION_KEYS, PERMISSION_LABEL, type PermissionKey } from '@/lib/permissions'
 import { formatShortDate, formatRelative } from '@/utils/date'
 import { cn } from '@/utils/cn'
 
@@ -15,7 +22,7 @@ import { cn } from '@/utils/cn'
  * 여기서 승인해야 실제로 활동할 수 있다.
  */
 export function AdminUsersPage() {
-  const { session } = useAuth()
+  const { session, refreshProfile } = useAuth()
   const myId = session?.user.id ?? ''
 
   const [reloadKey, setReloadKey] = useState(0)
@@ -65,7 +72,7 @@ export function AdminUsersPage() {
         <header className="mb-4">
           <h1 className="text-xl font-bold">사용자 관리</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            가입 승인, 정지, 관리자 권한을 다룹니다.
+            가입 승인과 운영자 역할, 콘텐츠별 열람 권한을 각각 관리합니다.
           </p>
         </header>
 
@@ -96,6 +103,7 @@ export function AdminUsersPage() {
                   <th className="px-3 py-2 text-right font-medium">풀이</th>
                   <th className="px-3 py-2 text-left font-medium">최근 활동</th>
                   <th className="px-3 py-2 text-left font-medium">상태</th>
+                  <th className="px-3 py-2 text-left font-medium">콘텐츠 권한</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -134,6 +142,24 @@ export function AdminUsersPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2">
+                      <div className="flex flex-col gap-1.5">
+                        {PERMISSION_KEYS.map((permission) => (
+                          <PermissionCheckbox
+                            key={permission}
+                            permission={permission}
+                            checked={row.permissions.includes(permission)}
+                            disabled={busyId === row.id}
+                            onChange={(enabled) =>
+                              void run(row.id, async () => {
+                                await setPermission(row.id, permission, enabled)
+                                if (row.id === myId) await refreshProfile()
+                              })
+                            }
+                          />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
                         <Button
                           size="sm"
@@ -167,9 +193,34 @@ export function AdminUsersPage() {
         )}
 
         <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
-          본인 계정은 실수로 잠기지 않도록 정지와 권한 변경을 막아두었습니다.
+          본인 계정은 실수로 잠기지 않도록 정지와 관리자 역할 변경만 막아두었습니다.
         </p>
       </section>
     </DesktopOnly>
+  )
+}
+
+function PermissionCheckbox({
+  permission,
+  checked,
+  disabled,
+  onChange,
+}: {
+  permission: PermissionKey
+  checked: boolean
+  disabled: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 accent-brand-600"
+      />
+      {PERMISSION_LABEL[permission]}
+    </label>
   )
 }
