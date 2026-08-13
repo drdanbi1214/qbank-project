@@ -95,6 +95,9 @@
   .hierarchical-rich-text .hierarchy-indent-2 {
     margin-inline-start: 3rem;
   }
+  .hierarchical-rich-text .hierarchy-indent-3 {
+    margin-inline-start: 4.5rem;
+  }
   .hierarchical-rich-text .inherited-bullet-list {
     list-style-position: inside;
     padding-inline-start: 0;
@@ -105,6 +108,11 @@
   .hierarchical-rich-text > * + .hierarchy-section-start {
     margin-top: 2.5rem;
   }
+  .hierarchical-rich-text .hierarchy-section-start {
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.75rem;
+  }
 
   @media (max-width: 639px) {
     .hierarchical-rich-text .hierarchy-indent-1 {
@@ -112,6 +120,9 @@
     }
     .hierarchical-rich-text .hierarchy-indent-2 {
       margin-inline-start: 2rem;
+    }
+    .hierarchical-rich-text .hierarchy-indent-3 {
+      margin-inline-start: 3rem;
     }
     .hierarchical-rich-text > * + .hierarchy-section-start {
       margin-top: 2rem;

@@ -146,6 +146,7 @@ function hierarchyClass(node: RichNode, level?: number): string | undefined {
 function indentClass(level?: number): string | undefined {
   if (level === 1) return 'hierarchy-indent-1'
   if (level === 2) return 'hierarchy-indent-2'
+  if (level === 3) return 'hierarchy-indent-3'
   return undefined
 }
 
@@ -157,6 +158,7 @@ function inferIndentLevels(nodes: RichNode[]): number[] {
     if (/^\s*\d+\./.test(text)) level = 0
     else if (/^\s*\d+\)/.test(text)) level = 1
     else if (/^\s*\(\d+\)/.test(text)) level = 2
+    else if (/^\s*[\u2460-\u2473]/.test(text)) level = 3
     else if (node.type === 'bulletList' || /^\s*[-*+]\s+/.test(text)) level = previousLevel
     else level = 0
 
