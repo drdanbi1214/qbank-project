@@ -36,7 +36,7 @@ export function TheorySubjectPage() {
   const subject = taxonomy?.subjectById.get(subjectId)
   if (!subject) return <Navigate to="/theory" replace />
   const compareTheory = (a: TheoryDocument, b: TheoryDocument) =>
-    a.title.localeCompare(b.title, 'ko', { numeric: true }) || a.sortOrder - b.sortOrder
+    a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko', { numeric: true })
   const topLevel = documents.filter((document) => document.parentId === null).sort(compareTheory)
   const childrenOf = (parentId: string) => documents.filter((document) => document.parentId === parentId).sort(compareTheory)
   const current = documents.find((item) => item.id === documentId) ?? null
