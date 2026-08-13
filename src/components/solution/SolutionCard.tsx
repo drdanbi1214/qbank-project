@@ -166,6 +166,19 @@ export function SolutionCard({
             />
           </MarkableRegion>
 
+          {solution.references.length > 0 && (
+            <div className="mt-4 border-t border-slate-200 pt-3 text-sm dark:border-slate-700">
+              <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">관련 단원 · 알렌</p>
+              <div className="flex flex-wrap gap-1.5">
+                {solution.references.map((reference) => reference.url && (
+                  <a key={reference.url} href={reference.url} className="rounded-lg bg-brand-50 px-2 py-1 text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200">
+                    {reference.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {pending && (
             <div className="mt-3 rounded-lg border border-brand-300 bg-brand-50 p-3 dark:border-brand-700 dark:bg-brand-900/30">
               <p className="mb-1 border-l-2 border-amber-400 pl-2 text-xs text-slate-600 dark:text-slate-300">

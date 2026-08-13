@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { createSolution } from '@/lib/queries/solutions'
+import { createSolution, type SolutionReference } from '@/lib/queries/solutions'
 import { setEditorAnswer } from '@/lib/queries/questions'
 import { assignUnit } from '@/lib/queries/admin'
 import { createUnit, type Unit } from '@/lib/queries/taxonomy'
@@ -62,6 +63,7 @@ export function AssignmentEditor({
   const [selection, setSelection] = useState<number[]>(initialSelection)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [references, setReferences] = useState<SolutionReference[]>([])
 
   const subjectId = taxonomy?.examById.get(examId)?.subjectId ?? null
   // 화면에서 방금 만든 단원은 다음 taxonomy 새로고침 전까지 여기 따로 들고 있는다.
@@ -158,7 +160,7 @@ export function AssignmentEditor({
         target: { questionId, groupId },
         authorId: userId,
         content: doc.current,
-        references: [],
+        references,
       })
       await discard()
       navigate('/assignments')
@@ -349,6 +351,10 @@ export function AssignmentEditor({
         minHeight="14rem"
         onUploadError={setError}
       />
+
+      <div className="mt-3">
+        <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} />
+      </div>
 
       {error && (
         <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-marker-red dark:bg-rose-950/50">
