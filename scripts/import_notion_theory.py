@@ -198,10 +198,6 @@ def main() -> None:
             "content": {"type": "doc", "content": [{"type": "paragraph"}]},
         }
         section_id = client.upsert([section_row])[0]["id"]
-    source_to_id = {}
-    for order, (path, text, title) in enumerate(top, 1):
-        row = {"subject_id": subject["id"], "source_key": source_prefix + path, "parent_id": section_id, "title": title, "sort_order": order * 100, "has_content": doc_has_body(text), "is_published": True, "content": markdown_doc(text, lambda _: "")}
-        source_to_id[path] = client.upsert([row])[0]["id"]
     image_cache = {}
     def image_path(source: str, document_path: str) -> str:
         # Notion이 외부로 참조한 이미지는 우선 원본 URL을 유지한다. 응답이
@@ -209,14 +205,19 @@ def main() -> None:
         # ZIP 안에 실제로 포함된 이미지는 아래에서 비공개 버킷으로 복사한다.
         if source.startswith("http"):
             return source
-        key = source if source.startswith("http") else str(PurePosixPath(document_path).parent / unquote(source))
+        key = str(PurePosixPath(document_path).parent / unquote(source))
         if key in image_cache: return image_cache[key]
         data = archive.read(key); suffix = os.path.splitext(key)[1] or ".png"
         digest = hashlib.sha256(data).hexdigest()[:20]
         stored = f"{subject['id']}/{digest}{suffix.lower()}"
         client.upload(stored, data, mimetypes.guess_type(stored)[0] or "image/png")
-        image_cache[key] = stored
-        return stored
+        # 뷰어는 첫 경로 조각을 Storage 버킷 이름으로 해석한다.
+        image_cache[key] = f"{BUCKET}/{stored}"
+        return image_cache[key]
+    source_to_id = {}
+    for order, (path, text, title) in enumerate(top, 1):
+        row = {"subject_id": subject["id"], "source_key": source_prefix + path, "parent_id": section_id, "title": title, "sort_order": order * 100, "has_content": doc_has_body(text), "is_published": True, "content": markdown_doc(text, lambda source: image_path(source, path))}
+        source_to_id[path] = client.upsert([row])[0]["id"]
     for order, (path, text, title) in enumerate(children, 1):
         if source_prefix + path in existing_keys:
             continue
