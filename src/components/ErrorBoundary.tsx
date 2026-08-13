@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/Button'
+import { isChunkLoadError, reloadOnce } from '@/utils/reloadOnChunkError'
 
 type Props = { children: ReactNode }
 type State = { error: Error | null }
@@ -16,6 +17,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('화면을 렌더링하지 못했습니다.', error, info.componentStack)
+
+    // lazy() 내부뿐 아니라, 이미 실패한 lazy import가 React에 의해 다시
+    // 던져지는 경우도 여기까지 온다. 배포 교체로 인한 청크 불일치라면
+    // 사용자에게 오류 화면을 보이기 전에 최신 배포본으로 한 번 복구한다.
+    if (isChunkLoadError(error)) reloadOnce()
   }
 
   render() {

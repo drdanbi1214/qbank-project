@@ -11,7 +11,9 @@ export function isChunkLoadError(error: unknown): boolean {
   )
 }
 
-const RELOAD_FLAG = 'qbank:chunk-reload-attempted'
+// 이 값은 배포할 때마다 달라진다. 이전 배포본에서 한 번 복구를 시도했다는
+// 사실 때문에, 다음 배포본에서도 자동 복구가 막히지 않도록 버전별로 기록한다.
+const RELOAD_FLAG = `qbank:chunk-reload-attempted:${__BUILD_TIME__}`
 
 /**
  * 새로고침하면 최신 index.html 을 받아와 청크 해시가 다시 맞아떨어진다.
