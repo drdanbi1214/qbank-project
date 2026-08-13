@@ -28,7 +28,9 @@ try:
 except ImportError:
     sys.exit("PyMuPDF 가 필요하다. pip install -r requirements.txt")
 
-QUESTION_START = re.compile(r"^(\d{1,3})\.\s*\S")
+# `38.5도` 같은 검사수치를 38번 문항으로 오인하지 않는다. 번호 뒤에
+# 공백이 없더라도 다음 글자가 숫자가 아닌 실제 문항 표기는 허용한다.
+QUESTION_START = re.compile(r"^(\d{1,3})[.,](?!\d)(?:\s*\S|\s*$)")
 CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩"
 CHOICE_START = re.compile(rf"^\s*([{CIRCLED}]|\(?(\d)\))")
 
