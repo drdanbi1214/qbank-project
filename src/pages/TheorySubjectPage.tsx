@@ -98,7 +98,7 @@ export function TheorySubjectPage() {
           {selected && (
             <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
               <h2 className="mb-4 text-lg font-bold">{selected.title}</h2>
-              <RichTextViewer doc={selected.content} />
+              <RichTextViewer doc={selected.content} hierarchicalIndent />
             </article>
           )}
           {!selected && (

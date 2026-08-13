@@ -88,6 +88,27 @@
     @apply m-0;
   }
 
+  /* 이론 원문의 1. → 1) → (1) 계층을 모든 문서에서 같은 폭으로 표시한다. */
+  .hierarchical-rich-text .hierarchy-indent-1 {
+    margin-inline-start: 1.5rem;
+  }
+  .hierarchical-rich-text .hierarchy-indent-2 {
+    margin-inline-start: 3rem;
+  }
+  .hierarchical-rich-text .inherited-bullet-list {
+    list-style-position: inside;
+    padding-inline-start: 0;
+  }
+
+  @media (max-width: 639px) {
+    .hierarchical-rich-text .hierarchy-indent-1 {
+      margin-inline-start: 1rem;
+    }
+    .hierarchical-rich-text .hierarchy-indent-2 {
+      margin-inline-start: 2rem;
+    }
+  }
+
   .rich-text blockquote {
     @apply border-l-4 border-slate-300 pl-3 text-slate-600 dark:border-slate-600 dark:text-slate-300;
   }

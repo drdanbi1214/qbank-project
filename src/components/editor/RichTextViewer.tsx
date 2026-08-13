@@ -9,6 +9,8 @@ import { cn } from '@/utils/cn'
 type Props = {
   doc: RichDoc
   className?: string
+  /** `1.` → `1)` → `(1)` 표기를 읽어 문단 들여쓰기를 자동 적용한다. */
+  hierarchicalIndent?: boolean
   /** 인라인 코멘트와 사용자 형광펜을 같은 통로로 그린다 */
   marks?: RenderMark[]
   /** 표시된 구간을 누르면 해당 코멘트로 이동 */
@@ -29,6 +31,7 @@ type Props = {
 export function RichTextViewer({
   doc,
   className,
+  hierarchicalIndent = false,
   marks = [],
   onMarkClick,
   activeMarkId,
@@ -42,11 +45,12 @@ export function RichTextViewer({
     activeMarkId: activeMarkId ?? null,
     onZoom: setZoomed,
   }
+  const indentLevels = hierarchicalIndent ? inferIndentLevels(doc.content) : []
 
   return (
-    <div className={cn('rich-text', className)}>
+    <div className={cn('rich-text', hierarchicalIndent && 'hierarchical-rich-text', className)}>
       {doc.content.map((node, index) => (
-        <Fragment key={index}>{renderNode(node, cursor, context)}</Fragment>
+        <Fragment key={index}>{renderNode(node, cursor, context, indentLevels[index])}</Fragment>
       ))}
       {zoomed && <ImageZoomModal src={zoomed} caption={null} onClose={() => setZoomed(null)} />}
     </div>
@@ -68,7 +72,7 @@ function renderChildren(node: RichNode, cursor: Cursor, context: RenderContext):
   ))
 }
 
-function renderNode(node: RichNode, cursor: Cursor, context: RenderContext): ReactNode {
+function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, indentLevel?: number): ReactNode {
   if (node.type === 'text') {
     return renderText(node, cursor, context)
   }
@@ -87,21 +91,21 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext): Rea
 
   switch (node.type) {
     case 'paragraph':
-      return <p>{children.length > 0 ? children : <br />}</p>
+      return <p className={indentClass(indentLevel)}>{children.length > 0 ? children : <br />}</p>
     case 'aiTitle':
       return <p className="mb-1 mt-4 font-bold text-slate-900 dark:text-slate-100">{children}</p>
     case 'aiEvidence':
       return <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{children}</p>
     case 'heading': {
       const level = typeof node.attrs?.level === 'number' ? node.attrs.level : 3
-      if (level <= 2) return <h2>{children}</h2>
-      if (level === 3) return <h3>{children}</h3>
-      return <h4>{children}</h4>
+      if (level <= 2) return <h2 className={indentClass(indentLevel)}>{children}</h2>
+      if (level === 3) return <h3 className={indentClass(indentLevel)}>{children}</h3>
+      return <h4 className={indentClass(indentLevel)}>{children}</h4>
     }
     case 'bulletList':
-      return <ul>{children}</ul>
+      return <ul className={cn(indentClass(indentLevel), indentLevel !== undefined && 'inherited-bullet-list')}>{children}</ul>
     case 'orderedList':
-      return <ol>{children}</ol>
+      return <ol className={indentClass(indentLevel)}>{children}</ol>
     case 'listItem':
       return <li>{children}</li>
     case 'blockquote':
@@ -130,6 +134,33 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext): Rea
       // 모르는 블록은 내용만 살려서 보여준다.
       return <div>{children}</div>
   }
+}
+
+function indentClass(level?: number): string | undefined {
+  if (level === 1) return 'hierarchy-indent-1'
+  if (level === 2) return 'hierarchy-indent-2'
+  return undefined
+}
+
+function inferIndentLevels(nodes: RichNode[]): number[] {
+  let previousLevel = 0
+  return nodes.map((node) => {
+    const text = nodeText(node)
+    let level: number
+    if (/^\s*\d+\./.test(text)) level = 0
+    else if (/^\s*\d+\)/.test(text)) level = 1
+    else if (/^\s*\(\d+\)/.test(text)) level = 2
+    else if (node.type === 'bulletList' || /^\s*[-*+]\s+/.test(text)) level = previousLevel
+    else level = 0
+
+    if (node.type !== 'bulletList' && !/^\s*[-*+]\s+/.test(text)) previousLevel = level
+    return level
+  })
+}
+
+function nodeText(node: RichNode): string {
+  if (node.type === 'text') return node.text ?? ''
+  return (node.content ?? []).map(nodeText).join('')
 }
 
 function spanOf(node: RichNode, key: 'colspan' | 'rowspan'): number | undefined {
@@ -170,7 +201,10 @@ function ViewerImage({
   alt: string | null
   onZoom: (src: string) => void
 }) {
-  if (/^https?:\/\//i.test(path)) {
+  const external = /^https?:\/\//i.test(path)
+  const signedUrl = useSignedUrl(external ? null : path)
+
+  if (external) {
     return (
       <button type="button" onClick={() => onZoom(path)} className="block cursor-zoom-in">
         <img src={path} alt={alt ?? '본문 이미지'} loading="lazy" className="max-h-96 rounded-lg border border-slate-200 dark:border-slate-700" />
@@ -178,16 +212,14 @@ function ViewerImage({
     )
   }
 
-  const url = useSignedUrl(path)
-
-  if (!url) {
+  if (!signedUrl) {
     return <div className="h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
   }
 
   return (
-    <button type="button" onClick={() => onZoom(url)} className="block cursor-zoom-in">
+    <button type="button" onClick={() => onZoom(signedUrl)} className="block cursor-zoom-in">
       <img
-        src={url}
+        src={signedUrl}
         alt={alt ?? '본문 이미지'}
         loading="lazy"
         className="max-h-96 rounded-lg border border-slate-200 dark:border-slate-700"
