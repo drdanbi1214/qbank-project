@@ -28,6 +28,8 @@ type Props = {
   /** 도구 모음 우측에 붙일 요소 (등록 버튼 등) */
   toolbarExtra?: ReactNode
   onUploadError?: (message: string) => void
+  /** 본문 종류별 Storage 버킷을 선택할 수 있게 한다. */
+  uploadImageFile?: (file: File, userId: string) => Promise<string>
 }
 
 export function RichTextEditor({
@@ -40,14 +42,17 @@ export function RichTextEditor({
   className,
   toolbarExtra,
   onUploadError,
+  uploadImageFile = uploadImage,
 }: Props) {
   // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
   const userIdRef = useRef(userId)
   const errorRef = useRef(onUploadError)
+  const uploadImageRef = useRef(uploadImageFile)
   useEffect(() => {
     userIdRef.current = userId
     errorRef.current = onUploadError
-  }, [userId, onUploadError])
+    uploadImageRef.current = uploadImageFile
+  }, [userId, onUploadError, uploadImageFile])
 
   const insertImages = useCallback((view: EditorView, files: File[], at?: number) => {
     for (const file of files) {
@@ -57,7 +62,7 @@ export function RichTextEditor({
       const pos = at ?? state.selection.from
       view.dispatch(state.tr.insert(pos, node).scrollIntoView())
 
-      void uploadImage(file, userIdRef.current)
+      void uploadImageRef.current(file, userIdRef.current)
         .then((path) => replacePlaceholder(view, uploadId, path))
         .catch((caught: unknown) => {
           removePlaceholder(view, uploadId)

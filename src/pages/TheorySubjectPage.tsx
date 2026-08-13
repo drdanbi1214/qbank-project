@@ -1,18 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
+import { fetchTheoryDocuments, updateTheoryDocumentContent, type TheoryDocument } from '@/lib/queries/theory'
+import { uploadTheoryImage } from '@/lib/uploads'
+import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 export function TheorySubjectPage() {
   const { subjectId, documentId } = useParams()
+  const { session, isAdmin } = useAuth()
   const { taxonomy, loading: taxonomyLoading } = useData()
   const [documents, setDocuments] = useState<TheoryDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const editedContent = useRef<RichDoc | null>(null)
 
   useEffect(() => {
     if (!subjectId) return
@@ -67,6 +77,24 @@ export function TheorySubjectPage() {
       return next
     })
   }
+  async function saveTheory(document: TheoryDocument) {
+    if (!editedContent.current) return
+    setEditBusy(true)
+    setEditError(null)
+    try {
+      const content = editedContent.current
+      const updatedAt = await updateTheoryDocumentContent(document.id, content)
+      setDocuments((currentDocuments) => currentDocuments?.map((item) => (
+        item.id === document.id ? { ...item, content, updatedAt } : item
+      )) ?? null)
+      setEditingId(null)
+      editedContent.current = null
+    } catch (caught) {
+      setEditError(caught instanceof Error ? caught.message : '이론을 저장하지 못했습니다.')
+    } finally {
+      setEditBusy(false)
+    }
+  }
 
   return (
     <section>
@@ -97,8 +125,56 @@ export function TheorySubjectPage() {
 
           {selected && (
             <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-              <h2 className="mb-5 text-2xl font-bold tracking-tight">{selected.title}</h2>
-              <RichTextViewer doc={selected.content} hierarchicalIndent />
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-bold tracking-tight">{selected.title}</h2>
+                {isAdmin && session && editingId !== selected.id && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      editedContent.current = selected.content
+                      setEditError(null)
+                      setEditingId(selected.id)
+                    }}
+                  >
+                    수정
+                  </Button>
+                )}
+              </div>
+              {editingId === selected.id && session ? (
+                <div className="space-y-3">
+                  <LazyRichTextEditor
+                    key={selected.id}
+                    initialValue={selected.content}
+                    onChange={(content) => { editedContent.current = content }}
+                    userId={session.user.id}
+                    uploadImageFile={uploadTheoryImage}
+                    placeholder="이론 내용을 입력하세요. 이미지는 붙여넣거나 이미지 버튼으로 추가할 수 있습니다."
+                    minHeight="30rem"
+                    onUploadError={setEditError}
+                  />
+                  {editError && <p className="text-sm text-rose-600 dark:text-rose-400">{editError}</p>}
+                  <div className="flex gap-2">
+                    <Button onClick={() => void saveTheory(selected)} disabled={editBusy}>
+                      {editBusy && <Spinner className="h-4 w-4 border-white/40 border-t-white" />}
+                      저장
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingId(null)
+                        setEditError(null)
+                        editedContent.current = null
+                      }}
+                      disabled={editBusy}
+                    >
+                      취소
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <RichTextViewer doc={selected.content} hierarchicalIndent />
+              )}
             </article>
           )}
           {!selected && (

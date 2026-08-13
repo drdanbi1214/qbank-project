@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { parseRichDoc, type RichDoc } from '@/types/richtext'
+import { parseRichDoc, toJson, type RichDoc } from '@/types/richtext'
 
 export type TheoryDocument = {
   id: string
@@ -51,4 +51,16 @@ export async function fetchTheoryDocuments(subjectId?: string): Promise<TheoryDo
     sortOrder: row.sort_order,
     updatedAt: row.updated_at,
   }))
+}
+
+export async function updateTheoryDocumentContent(id: string, content: RichDoc): Promise<string> {
+  const { data, error } = await supabase
+    .from('theory_documents')
+    .update({ content: toJson(content) })
+    .eq('id', id)
+    .select('updated_at')
+    .single()
+
+  if (error) throw error
+  return data.updated_at
 }
