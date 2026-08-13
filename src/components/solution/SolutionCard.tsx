@@ -159,6 +159,11 @@ export function SolutionCard({
         )}
       >
         <div className="min-w-0">
+          {!hasCommentThreads && (
+            <p className="mb-2 text-right text-xs text-slate-400 dark:text-slate-500">
+              본문을 드래그하면 그 부분에 코멘트를 남길 수 있습니다.
+            </p>
+          )}
           <MarkableRegion
             onApply={apply}
             onErase={erase}
