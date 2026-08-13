@@ -21,6 +21,7 @@ export type Database = {
           key: string
           name: string
           sort_order: number
+          source_key: string | null
         }
         Insert: {
           created_at?: string
@@ -28,6 +29,7 @@ export type Database = {
           key: string
           name: string
           sort_order?: number
+          source_key?: string | null
         }
         Update: {
           created_at?: string
@@ -35,6 +37,7 @@ export type Database = {
           key?: string
           name?: string
           sort_order?: number
+          source_key?: string | null
         }
         Relationships: []
       }
@@ -1549,6 +1552,8 @@ export type Database = {
           created_by: string | null
           id: string
           is_published: boolean
+          has_content: boolean
+          parent_id: string | null
           required_permission: string
           sort_order: number
           subject_id: string
@@ -1562,6 +1567,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_published?: boolean
+          has_content?: boolean
+          parent_id?: string | null
           required_permission?: string
           sort_order?: number
           subject_id: string
@@ -1575,6 +1582,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_published?: boolean
+          has_content?: boolean
+          parent_id?: string | null
           required_permission?: string
           sort_order?: number
           subject_id?: string

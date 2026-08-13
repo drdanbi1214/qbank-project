@@ -5,6 +5,8 @@ export type TheoryDocument = {
   id: string
   subjectId: string
   unitId: string | null
+  parentId: string | null
+  hasContent: boolean
   title: string
   content: RichDoc
   sortOrder: number
@@ -15,6 +17,8 @@ type TheoryRow = {
   id: string
   subject_id: string
   unit_id: string | null
+  parent_id: string | null
+  has_content: boolean
   title: string
   content: unknown
   sort_order: number
@@ -24,7 +28,7 @@ type TheoryRow = {
 export async function fetchTheoryDocuments(subjectId?: string): Promise<TheoryDocument[]> {
   let query = supabase
     .from('theory_documents')
-    .select('id, subject_id, unit_id, title, content, sort_order, updated_at')
+    .select('id, subject_id, unit_id, parent_id, has_content, title, content, sort_order, updated_at')
     .order('sort_order')
     .order('title')
 
@@ -37,6 +41,8 @@ export async function fetchTheoryDocuments(subjectId?: string): Promise<TheoryDo
     id: row.id,
     subjectId: row.subject_id,
     unitId: row.unit_id,
+    parentId: row.parent_id,
+    hasContent: row.has_content,
     title: row.title,
     content: parseRichDoc(row.content),
     sortOrder: row.sort_order,

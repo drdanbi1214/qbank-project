@@ -102,6 +102,23 @@ cp .env.example .env      # SUPABASE_URL, SUPABASE_SERVICE_KEY 채우기
 `SUPABASE_SERVICE_KEY` 는 service_role 키다. RLS 를 우회하므로 절대 저장소나
 브라우저에 넣지 않는다. 이 폴더의 `.env` 는 `.gitignore` 로 막아두었다.
 
+## Notion 이론 일괄 등록 (`import_notion_theory.py`)
+
+Notion에서 `Markdown & CSV`로 내보낸 ZIP을 과목별 이론 목차로 등록한다.
+대분류는 목차 그룹으로 만들고, 본문이 있는 세부 페이지에만 사이트의 `이론 보기`
+버튼이 표시된다. 내보낸 ZIP 안의 로컬 이미지와 외부 이미지도 QBank의 비공개
+이미지 저장소로 복사한다.
+
+```bash
+# 먼저 구조만 확인 (DB 변경 없음)
+python3 scripts/import_notion_theory.py "신경과 신경외과.zip" --subject-code 06
+
+# 실제 등록
+python3 scripts/import_notion_theory.py "신경과 신경외과.zip" --subject-code 06 --apply
+```
+
+같은 Notion ZIP을 다시 등록해도 원본 경로를 기준으로 같은 문서를 갱신한다.
+
 ## 실행 순서
 
 ```bash

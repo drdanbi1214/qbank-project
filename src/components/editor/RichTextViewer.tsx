@@ -170,6 +170,14 @@ function ViewerImage({
   alt: string | null
   onZoom: (src: string) => void
 }) {
+  if (/^https?:\/\//i.test(path)) {
+    return (
+      <button type="button" onClick={() => onZoom(path)} className="block cursor-zoom-in">
+        <img src={path} alt={alt ?? '본문 이미지'} loading="lazy" className="max-h-96 rounded-lg border border-slate-200 dark:border-slate-700" />
+      </button>
+    )
+  }
+
   const url = useSignedUrl(path)
 
   if (!url) {
