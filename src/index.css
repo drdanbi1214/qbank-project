@@ -53,6 +53,14 @@
 @layer components {
   .rich-text {
     @apply text-[15px] leading-7 text-slate-800 dark:text-slate-100;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+
+  .rich-text img {
+    max-width: 100%;
+    height: auto;
   }
 
   .rich-text > * + * {

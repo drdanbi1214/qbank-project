@@ -132,7 +132,7 @@ export function DiscussionDetail({
     : null
 
   return (
-    <article>
+    <article className="min-w-0 max-w-full">
       {onBack && (
         <button
           type="button"
@@ -152,7 +152,7 @@ export function DiscussionDetail({
             {unitName && (
               <p className="text-xs text-slate-400 dark:text-slate-500">{unitName}</p>
             )}
-            <h1 className="text-lg font-bold">{discussion.title}</h1>
+            <h1 className="break-words text-lg font-bold">{discussion.title}</h1>
           </div>
 
           <div className="flex shrink-0 items-center gap-1">

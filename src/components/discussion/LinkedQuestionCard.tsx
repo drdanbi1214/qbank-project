@@ -20,7 +20,7 @@ export function LinkedQuestionCard({
   const unitName = unitId ? (taxonomy?.unitById.get(unitId)?.name ?? null) : null
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50/60 p-2 dark:border-brand-800 dark:bg-brand-900/20">
+    <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-brand-200 bg-brand-50/60 p-2 dark:border-brand-800 dark:bg-brand-900/20">
       <span className="shrink-0 rounded border border-brand-500 px-1.5 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
         문제
       </span>

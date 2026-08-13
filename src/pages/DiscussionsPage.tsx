@@ -253,12 +253,12 @@ export function DiscussionsPage() {
         숨겨진 쪽도 그대로 살아 있어서 글과 댓글을 두 번씩 불러왔다.
         웹에서는 좌우로 나란히, 모바일에서는 목록과 상세 중 하나만 보이게 한다.
       */}
-      <div className="lg:grid lg:grid-cols-[22rem_1fr] lg:gap-5">
-        <div className={cn(selectedId && 'hidden lg:block')}>{list}</div>
+      <div className="min-w-0 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:gap-5">
+        <div className={cn('min-w-0', selectedId && 'hidden lg:block')}>{list}</div>
 
-        <div className={cn(!selectedId && 'hidden lg:block')}>
+        <div className={cn('min-w-0', !selectedId && 'hidden lg:block')}>
           {selectedId ? (
-            <div className="lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:p-4 lg:dark:border-slate-700 lg:dark:bg-slate-900">
+            <div className="min-w-0 max-w-full lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:p-4 lg:dark:border-slate-700 lg:dark:bg-slate-900">
               <DiscussionDetail
                 key={selectedId}
                 discussionId={selectedId}
