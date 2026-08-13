@@ -49,6 +49,7 @@ export function SolutionCard({
   const [upvoted, setUpvoted] = useState(solution.upvoted)
   const [upvoteCount, setUpvoteCount] = useState(solution.upvoteCount)
   const [busy, setBusy] = useState(false)
+  const hasCommentThreads = comments.some((item) => item.parentId === null)
 
   // 인라인 코멘트와 내 형광펜을 한 목록으로 합쳐 본문에 그린다.
   const commentMarks: RenderMark[] = comments
@@ -151,7 +152,12 @@ export function SolutionCard({
         </div>
       </header>
 
-      <div className="gap-5 lg:grid lg:grid-cols-[1fr_16rem]">
+      <div
+        className={cn(
+          'gap-5',
+          hasCommentThreads && 'lg:grid lg:grid-cols-[1fr_16rem]',
+        )}
+      >
         <div className="min-w-0">
           <MarkableRegion
             onApply={apply}
@@ -218,16 +224,18 @@ export function SolutionCard({
           </div>
         </div>
 
-        <aside className="mt-5 border-t border-slate-200 pt-3 lg:mt-0 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0 dark:border-slate-700">
-          <InlineCommentPanel
-            solutionId={solution.id}
-            comments={comments}
-            isSolutionAuthor={isAuthor}
-            activeId={activeCommentId}
-            onActiveChange={setActiveCommentId}
-            onChanged={onCommentsChanged}
-          />
-        </aside>
+        {hasCommentThreads && (
+          <aside className="mt-5 border-t border-slate-200 pt-3 lg:mt-0 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0 dark:border-slate-700">
+            <InlineCommentPanel
+              solutionId={solution.id}
+              comments={comments}
+              isSolutionAuthor={isAuthor}
+              activeId={activeCommentId}
+              onActiveChange={setActiveCommentId}
+              onChanged={onCommentsChanged}
+            />
+          </aside>
+        )}
       </div>
 
       {showHistory && (
