@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       access_permissions: {
@@ -21,7 +46,6 @@ export type Database = {
           key: string
           name: string
           sort_order: number
-          source_key: string | null
         }
         Insert: {
           created_at?: string
@@ -29,7 +53,6 @@ export type Database = {
           key: string
           name: string
           sort_order?: number
-          source_key?: string | null
         }
         Update: {
           created_at?: string
@@ -37,7 +60,6 @@ export type Database = {
           key?: string
           name?: string
           sort_order?: number
-          source_key?: string | null
         }
         Relationships: []
       }
@@ -72,6 +94,13 @@ export type Database = {
             columns: ["question_id"]
             isOneToOne: true
             referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_solutions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "questions_solve"
             referencedColumns: ["id"]
           },
           {
@@ -903,6 +932,49 @@ export type Database = {
           },
         ]
       }
+      profile_permissions: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          permission_key: string
+          profile_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          permission_key: string
+          profile_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          permission_key?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_permissions_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "profile_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -947,49 +1019,6 @@ export type Database = {
           welcome_popup_dismissed?: boolean
         }
         Relationships: []
-      }
-      profile_permissions: {
-        Row: {
-          granted_at: string
-          granted_by: string | null
-          permission_key: string
-          profile_id: string
-        }
-        Insert: {
-          granted_at?: string
-          granted_by?: string | null
-          permission_key: string
-          profile_id: string
-        }
-        Update: {
-          granted_at?: string
-          granted_by?: string | null
-          permission_key?: string
-          profile_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profile_permissions_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "profile_permissions_permission_key_fkey"
-            columns: ["permission_key"]
-            isOneToOne: false
-            referencedRelation: "access_permissions"
-            referencedColumns: ["key"]
-          },
-          {
-            foreignKeyName: "profile_permissions_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       question_groups: {
         Row: {
@@ -1440,13 +1469,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "solutions_required_permission_fkey"
-            columns: ["required_permission"]
-            isOneToOne: false
-            referencedRelation: "access_permissions"
-            referencedColumns: ["key"]
-          },
-          {
             foreignKeyName: "solutions_question_id_fkey"
             columns: ["question_id"]
             isOneToOne: false
@@ -1459,6 +1481,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "questions_solve"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solutions_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
           },
         ]
       }
@@ -1545,83 +1574,6 @@ export type Database = {
         }
         Relationships: []
       }
-      theory_documents: {
-        Row: {
-          content: Json
-          created_at: string
-          created_by: string | null
-          id: string
-          is_published: boolean
-          has_content: boolean
-          parent_id: string | null
-          required_permission: string
-          sort_order: number
-          subject_id: string
-          title: string
-          unit_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          content: Json
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          is_published?: boolean
-          has_content?: boolean
-          parent_id?: string | null
-          required_permission?: string
-          sort_order?: number
-          subject_id: string
-          title: string
-          unit_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          content?: Json
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          is_published?: boolean
-          has_content?: boolean
-          parent_id?: string | null
-          required_permission?: string
-          sort_order?: number
-          subject_id?: string
-          title?: string
-          unit_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "theory_documents_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "theory_documents_required_permission_fkey"
-            columns: ["required_permission"]
-            isOneToOne: false
-            referencedRelation: "access_permissions"
-            referencedColumns: ["key"]
-          },
-          {
-            foreignKeyName: "theory_documents_subject_id_fkey"
-            columns: ["subject_id"]
-            isOneToOne: false
-            referencedRelation: "subjects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "theory_documents_unit_id_fkey"
-            columns: ["unit_id"]
-            isOneToOne: false
-            referencedRelation: "units"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       text_marks: {
         Row: {
           anchor_from: number
@@ -1662,6 +1614,93 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_documents: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          has_content: boolean
+          id: string
+          is_published: boolean
+          parent_id: string | null
+          required_permission: string
+          sort_order: number
+          source_key: string | null
+          subject_id: string
+          title: string
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          has_content?: boolean
+          id?: string
+          is_published?: boolean
+          parent_id?: string | null
+          required_permission?: string
+          sort_order?: number
+          source_key?: string | null
+          subject_id: string
+          title: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          has_content?: boolean
+          id?: string
+          is_published?: boolean
+          parent_id?: string | null
+          required_permission?: string
+          sort_order?: number
+          source_key?: string | null
+          subject_id?: string
+          title?: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_documents_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "theory_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_documents_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "theory_documents_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_documents_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -1927,7 +1966,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      dismiss_welcome_popup: { Args: never; Returns: boolean }
       admin_set_role: {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined
@@ -1950,6 +1988,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      dismiss_welcome_popup: { Args: never; Returns: boolean }
       effective_answer: {
         Args: { q: Database["public"]["Tables"]["questions"]["Row"] }
         Returns: number[]
@@ -2048,6 +2087,7 @@ export type Database = {
           wrong_count: number
         }[]
       }
+      has_permission: { Args: { p_permission_key: string }; Returns: boolean }
       increment_discussion_view: {
         Args: { p_discussion_id: string }
         Returns: undefined
@@ -2057,7 +2097,6 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
-      has_permission: { Args: { p_permission_key: string }; Returns: boolean }
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
       normalize_search_text: { Args: { input: string }; Returns: string }
       normalize_stem: { Args: { blocks: Json }; Returns: string }
@@ -2245,6 +2284,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

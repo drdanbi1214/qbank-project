@@ -27,6 +27,7 @@ export function TheoryIndexPage() {
   const counts = useMemo(() => {
     const result = new Map<string, number>()
     for (const document of documents ?? []) {
+      if (!document.hasContent) continue
       result.set(document.subjectId, (result.get(document.subjectId) ?? 0) + 1)
     }
     return result

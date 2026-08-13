@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
+import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
 import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
@@ -35,12 +36,29 @@ export function TheorySubjectPage() {
 
   const subject = taxonomy?.subjectById.get(subjectId)
   if (!subject) return <Navigate to="/theory" replace />
-  const compareTheory = (a: TheoryDocument, b: TheoryDocument) =>
-    a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko', { numeric: true })
+  const compareTheory = (a: TheoryDocument, b: TheoryDocument) => {
+    const aNumber = leadingNumber(a.title)
+    const bNumber = leadingNumber(b.title)
+    if (aNumber !== null && bNumber !== null && aNumber !== bNumber) return aNumber - bNumber
+    return a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko', { numeric: true })
+  }
   const topLevel = documents.filter((document) => document.parentId === null).sort(compareTheory)
   const childrenOf = (parentId: string) => documents.filter((document) => document.parentId === parentId).sort(compareTheory)
   const current = documents.find((item) => item.id === documentId) ?? null
   const selected = current?.hasContent ? current : null
+  const sectionRoots = topLevel.filter((document) => document.sourceKey?.startsWith('section:'))
+  const usesSectionLanding = ['내과', '외과'].includes(subject.name) && sectionRoots.length > 0
+  const activeSection = usesSectionLanding && current
+    ? findSectionRoot(current, documents, new Set(sectionRoots.map((document) => document.id)))
+    : null
+  const navigationRoots = activeSection ? childrenOf(activeSection.id) : topLevel
+  const visibleExpanded = new Set(expanded)
+  const documentById = new Map(documents.map((document) => [document.id, document]))
+  let selectedParentId = selected?.parentId
+  while (selectedParentId) {
+    visibleExpanded.add(selectedParentId)
+    selectedParentId = documentById.get(selectedParentId)?.parentId ?? null
+  }
   function toggleExpanded(id: string) {
     setExpanded((currentSet) => {
       const next = new Set(currentSet)
@@ -53,9 +71,12 @@ export function TheorySubjectPage() {
   return (
     <section>
       <header className="mb-4">
-        <Link to="/theory" className="text-xs text-slate-500 hover:underline dark:text-slate-400">이론 보기</Link>
+        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+          <Link to="/theory" className="hover:underline">이론 보기</Link>
+          {activeSection && <><span>/</span><Link to={`/theory/${subject.id}`} className="hover:underline">{subject.name}</Link></>}
+        </div>
         <div className="mt-0.5 flex items-center justify-between gap-3">
-          <h1 className="text-xl font-bold">{subject.name} 이론</h1>
+          <h1 className="text-xl font-bold">{activeSection?.title ?? `${subject.name} 이론`}</h1>
           <Link to={`/study/${subject.id}`} className="shrink-0 text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">문제 학습</Link>
         </div>
       </header>
@@ -66,10 +87,12 @@ export function TheorySubjectPage() {
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">아직 등록된 이론이 없습니다.</p>
         </div>
+      ) : usesSectionLanding && !activeSection ? (
+        <TheorySectionLanding subjectId={subject.id} subjectName={subject.name} sections={sectionRoots} documents={documents} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
-            {topLevel.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={selected?.id} childrenOf={childrenOf} expanded={expanded} onToggle={toggleExpanded} />)}
+            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={selected?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} />)}
           </nav>
 
           {selected && (
@@ -86,6 +109,68 @@ export function TheorySubjectPage() {
         </div>
       )}
     </section>
+  )
+}
+
+function leadingNumber(title: string): number | null {
+  const match = title.match(/^\s*(\d+)/)
+  return match ? Number(match[1]) : null
+}
+
+function findSectionRoot(document: TheoryDocument, documents: TheoryDocument[], sectionIds: Set<string>): TheoryDocument | null {
+  const byId = new Map(documents.map((item) => [item.id, item]))
+  let candidate: TheoryDocument | undefined = document
+  const visited = new Set<string>()
+  while (candidate && !visited.has(candidate.id)) {
+    if (sectionIds.has(candidate.id)) return candidate
+    visited.add(candidate.id)
+    candidate = candidate.parentId ? byId.get(candidate.parentId) : undefined
+  }
+  return null
+}
+
+function TheorySectionLanding({ subjectId, subjectName, sections, documents }: {
+  subjectId: string
+  subjectName: string
+  sections: TheoryDocument[]
+  documents: TheoryDocument[]
+}) {
+  const contentCounts = useMemo(() => {
+    const children = new Map<string, TheoryDocument[]>()
+    for (const document of documents) {
+      if (!document.parentId) continue
+      children.set(document.parentId, [...(children.get(document.parentId) ?? []), document])
+    }
+    const countContents = (id: string): number => (children.get(id) ?? []).reduce(
+      (count, document) => count + (document.hasContent ? 1 : 0) + countContents(document.id),
+      0,
+    )
+    return new Map(sections.map((section) => [section.id, countContents(section.id)]))
+  }, [documents, sections])
+
+  return (
+    <div>
+      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">확인할 {subjectName} 이론을 선택하세요.</p>
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {sections.map((section) => (
+          <li key={section.id}>
+            <Link
+              to={`/theory/${subjectId}/${section.id}`}
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
+                <Icon name="theory" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">{section.title}</span>
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">이론 {contentCounts.get(section.id) ?? 0}개</span>
+              </span>
+              <Icon name="chevron-right" size={18} className="text-slate-400" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
