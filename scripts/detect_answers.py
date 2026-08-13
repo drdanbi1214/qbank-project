@@ -58,9 +58,40 @@ def is_yellow(r: int, g: int, b: int) -> bool:
     return r > 180 and g > 160 and b < 150 and (r + g) / 2 - b > 60
 
 
+def increasing_question_markers(entries: list[tuple]) -> set[int]:
+    """검사수치의 ``9, Creatinine`` 같은 가짜 번호를 제외한다.
+
+    답지는 1번부터 끝 번호까지 증가하므로 후보 번호 중 가장 긴 증가 부분수열만
+    실제 문항 시작으로 사용한다.
+    """
+    candidates = [
+        (index, int(found.group(1)))
+        for index, (_bbox, text, _spans, _pixmap) in enumerate(entries)
+        if (found := QUESTION_START.match(text))
+    ]
+    if not candidates:
+        return set()
+
+    lengths = [1] * len(candidates)
+    previous = [-1] * len(candidates)
+    for i, (_entry_i, number_i) in enumerate(candidates):
+        for j in range(i):
+            if candidates[j][1] < number_i and lengths[j] + 1 > lengths[i]:
+                lengths[i] = lengths[j] + 1
+                previous[i] = j
+
+    cursor = max(range(len(candidates)), key=lengths.__getitem__)
+    accepted = set()
+    while cursor >= 0:
+        accepted.add(candidates[cursor][0])
+        cursor = previous[cursor]
+    return accepted
+
+
 def detect(pdf_path: str, mode: str, min_ratio: float) -> dict[int, list[int]]:
     doc = fitz.open(pdf_path)
     answers: dict[int, list[int]] = {}
+    all_entries = []
 
     for page in doc:
         mid_x = page.rect.width / 2
@@ -77,10 +108,14 @@ def detect(pdf_path: str, mode: str, min_ratio: float) -> dict[int, list[int]]:
         # 2단 편집이라 단 -> 세로 순으로 읽어야 문항과 보기가 어긋나지 않는다
         entries.sort(key=lambda e: (0 if e[0][0] < mid_x else 1, e[0][1]))
 
-        current = None
-        for bbox, text, spans in entries:
+        all_entries.extend((bbox, text, spans, pixmap) for bbox, text, spans in entries)
+
+    accepted_markers = increasing_question_markers(all_entries)
+    current = None
+    for entry_index, (bbox, text, spans, pixmap) in enumerate(all_entries):
+            # 증가 순서를 벗어난 번호 후보는 일반 본문으로 취급한다.
             found = QUESTION_START.match(text)
-            if found:
+            if found and entry_index in accepted_markers:
                 current = int(found.group(1))
                 continue
 

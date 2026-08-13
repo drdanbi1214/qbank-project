@@ -24,7 +24,9 @@ try:
 except ImportError:
     sys.exit("PyMuPDF 가 필요하다. pip install -r requirements.txt")
 
-QUESTION_START = re.compile(r"^(\d{1,3})\.\s*(.*)")
+# `7.26 mg/dL` 같은 검사수치를 문항번호로 오인하지 않는다. 쉼표 오타와
+# 번호만 단독 줄에 남는 PDF도 허용하되 구분자 바로 뒤 숫자는 제외한다.
+QUESTION_START = re.compile(r"^(\d{1,3})[.,](?!\d)(?:\s*(.*)|\s*$)")
 CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩"
 CHOICE_START = re.compile(rf"^\s*([{CIRCLED}]|\(?\d\))\s*(.*)")
 
@@ -60,6 +62,27 @@ def split_questions(lines: list[tuple[int, str]]) -> list[dict]:
     current: dict | None = None
     mode = "stem"
 
+    # 본문 속 검사수치(`9, Creatinine`)나 번호 목록도 문항 시작처럼 보일 수
+    # 있다. 문서 전체에서 문제번호가 증가하는 최장 부분열만 실제 경계로 쓴다.
+    markers = [
+        (index, int(found.group(1)))
+        for index, (_, text) in enumerate(lines)
+        if (found := QUESTION_START.match(text))
+    ]
+    lengths = [1] * len(markers)
+    previous = [-1] * len(markers)
+    for i in range(len(markers)):
+        for j in range(i):
+            if markers[j][1] < markers[i][1] and lengths[j] + 1 > lengths[i]:
+                lengths[i] = lengths[j] + 1
+                previous[i] = j
+    accepted_starts: set[int] = set()
+    if markers:
+        cursor = max(range(len(markers)), key=lambda i: lengths[i])
+        while cursor != -1:
+            accepted_starts.add(markers[cursor][0])
+            cursor = previous[cursor]
+
     def flush() -> None:
         if current is None:
             return
@@ -70,9 +93,9 @@ def split_questions(lines: list[tuple[int, str]]) -> list[dict]:
             current["completeness"] = "partial_choices"
         questions.append(current)
 
-    for page, text in lines:
+    for line_index, (page, text) in enumerate(lines):
         start = QUESTION_START.match(text)
-        if start:
+        if start and line_index in accepted_starts:
             flush()
             current = {
                 "question_number": int(start.group(1)),
