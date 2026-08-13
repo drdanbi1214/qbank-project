@@ -247,7 +247,7 @@ export function PrintPage() {
                             <p className="mb-1 text-xs text-slate-500">
                               풀이 by {solution.author.displayName}
                             </p>
-                            <RichTextViewer doc={solution.content} />
+                            <RichTextViewer doc={solution.content} className="solution-rich-text" />
                           </div>
                         ))}
                     </div>

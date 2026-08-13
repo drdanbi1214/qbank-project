@@ -159,6 +159,7 @@ export function SolutionCard({
           >
             <RichTextViewer
               doc={solution.content}
+              className="solution-rich-text"
               marks={[...myMarks, ...commentMarks]}
               activeMarkId={activeCommentId}
               onMarkClick={setActiveCommentId}

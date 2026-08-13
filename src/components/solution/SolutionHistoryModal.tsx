@@ -84,7 +84,7 @@ export function SolutionHistoryModal({
                   <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
                     이 시점 직전의 본문입니다.
                   </p>
-                  <RichTextViewer doc={selected.before} />
+                  <RichTextViewer doc={selected.before} className="solution-rich-text" />
                 </>
               ) : (
                 <p className="text-sm text-slate-500 dark:text-slate-400">

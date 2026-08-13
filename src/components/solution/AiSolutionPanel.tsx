@@ -65,7 +65,7 @@ export function AiSolutionPanel({ questionId }: Props) {
       <p className="mb-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
         AI 풀이
       </p>
-      <RichTextViewer doc={solution.content} />
+      <RichTextViewer doc={solution.content} className="solution-rich-text" />
     </div>
   )
 }

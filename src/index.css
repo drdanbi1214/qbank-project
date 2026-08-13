@@ -59,6 +59,15 @@
     @apply mt-3;
   }
 
+  /* 작성이 끝난 풀이를 읽을 때는 문제 본문/편집기보다 조금 촘촘하게 표시한다. */
+  .rich-text.solution-rich-text {
+    @apply leading-6;
+  }
+
+  .rich-text.solution-rich-text > * + * {
+    @apply mt-2;
+  }
+
   .rich-text h1 {
     @apply mt-5 text-lg font-bold;
   }
