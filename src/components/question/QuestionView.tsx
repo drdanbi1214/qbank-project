@@ -13,6 +13,7 @@ import { QuestionDiscussions } from '@/components/discussion/QuestionDiscussions
 import { AiSolutionPanel } from '@/components/solution/AiSolutionPanel'
 import { AllNotesPanel } from '@/components/solution/AllNotesPanel'
 import { PersonalNoteTab } from '@/components/solution/PersonalNoteTab'
+import { SeniorSolutionPanel } from '@/components/solution/SeniorSolutionPanel'
 import { SolutionList } from '@/components/solution/SolutionList'
 import { AssignmentEditor } from '@/components/assignments/AssignmentEditor'
 import {
@@ -86,6 +87,7 @@ export function QuestionView({
   const userId = session?.user.id ?? ''
   const canViewStudySolutions = hasPermission('study_hapbon3')
   const canViewAiSolution = hasPermission('ai_solution_view')
+  const canViewSeniorSolution = hasPermission('senior_solution_view')
 
   const [selected, setSelected] = useState<number[]>([])
   const [answer, setAnswer] = useState<AnswerPayload | null>(null)
@@ -101,9 +103,12 @@ export function QuestionView({
   const [graded, setGraded] = useState(false)
 
   // 권한이 없는 탭은 버튼뿐 아니라 데이터 조회 컴포넌트도 만들지 않는다.
-  const [tab, setTab] = useState<'solutions' | 'note' | 'ai'>(() =>
-    canViewStudySolutions ? 'solutions' : canViewAiSolution ? 'ai' : 'note',
-  )
+  const [tab, setTab] = useState<'solutions' | 'ai' | 'senior' | 'note'>(() => {
+    if (canViewStudySolutions) return 'solutions'
+    if (canViewAiSolution) return 'ai'
+    if (canViewSeniorSolution) return 'senior'
+    return 'note'
+  })
 
   // 형광펜. 문제 본문과 원본 해설은 같은 문제 id 를 쓰되 종류로 구분한다.
   const stemMarks = useTextMarks('question', question.id)
@@ -458,6 +463,11 @@ export function QuestionView({
                     AI 풀이
                   </TabButton>
                 )}
+                {canViewSeniorSolution && (
+                  <TabButton active={tab === 'senior'} onClick={() => setTab('senior')}>
+                    선배해설
+                  </TabButton>
+                )}
                 <TabButton active={tab === 'note'} onClick={() => setTab('note')}>
                   내 노트
                 </TabButton>
@@ -473,6 +483,9 @@ export function QuestionView({
               )}
               {tab === 'note' && <PersonalNoteTab questionId={question.id} groupId={question.groupId} />}
               {tab === 'ai' && canViewAiSolution && <AiSolutionPanel questionId={question.id} />}
+              {tab === 'senior' && canViewSeniorSolution && (
+                <SeniorSolutionPanel questionId={question.id} />
+              )}
             </div>
           )}
 

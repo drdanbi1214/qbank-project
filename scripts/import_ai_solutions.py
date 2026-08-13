@@ -1,4 +1,4 @@
-"""AI 풀이를 문제코드 CSV로 일괄 입력한다.
+"""AI 풀이 또는 선배해설을 문제코드 CSV로 일괄 입력한다.
 
 AI 풀이 탭 권한이 있는 사용자에게만 보이는 별도 트랙(ai_solutions 테이블)에
 넣는다. 권한 없는 사용자 화면에는 탭과 데이터가 모두 노출되지 않는다.
@@ -60,8 +60,20 @@ except ImportError:
 IMG_MARKER = re.compile(r"^\[\[img:(.+?)\]\]$")
 SPECIAL_BLOCK_START = re.compile(r"^<(제목|근거)>\s*(.*)$")
 SPECIAL_BLOCK_END = re.compile(r"^(.*?)\s*</(제목|근거)>$")
-BUCKET = "ai-solution-images"
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+TRACKS = {
+    "ai": {
+        "label": "AI 풀이",
+        "table": "ai_solutions",
+        "bucket": "ai-solution-images",
+    },
+    "senior": {
+        "label": "선배해설",
+        "table": "senior_solutions",
+        "bucket": "senior-solution-images",
+    },
+}
 
 
 def load_env() -> tuple[str, str]:
@@ -234,11 +246,18 @@ def resolve_images(doc: dict, uploaded: dict[str, str]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="AI 풀이 CSV 일괄 입력")
+    parser = argparse.ArgumentParser(description="AI 풀이/선배해설 CSV 일괄 입력")
     parser.add_argument("csv_path")
+    parser.add_argument(
+        "--kind",
+        choices=TRACKS,
+        default="ai",
+        help="입력할 해설 종류. 기본값은 ai, 선배해설은 senior",
+    )
     parser.add_argument("--images", default="", help="[[img:...]] 로 참조한 이미지 파일들이 있는 폴더")
     parser.add_argument("--apply", action="store_true", help="실제로 반영한다. 기본은 dry-run")
     args = parser.parse_args()
+    track = TRACKS[args.kind]
 
     base_url, key = load_env()
     client = Client(base_url, key)
@@ -327,18 +346,18 @@ def main() -> None:
             local_path = os.path.join(args.images, filename)
             content_type = mimetypes.guess_type(filename)[0] or "image/png"
             with open(local_path, "rb") as fh:
-                ok = client.upload_storage(BUCKET, f"{prefix}/{filename}", fh.read(), content_type)
+                ok = client.upload_storage(track["bucket"], f"{prefix}/{filename}", fh.read(), content_type)
             if not ok:
                 sys.exit(f"이미지 업로드 실패: {filename}")
-            uploaded[filename] = f"{BUCKET}/{prefix}/{filename}"
+            uploaded[filename] = f"{track['bucket']}/{prefix}/{filename}"
         print(f"이미지 {len(uploaded)}개 업로드 완료")
 
     for doc in docs.values():
         resolve_images(doc, uploaded)
 
     rows = [{"question_id": question_id, "content": doc} for question_id, doc in docs.items()]
-    client.upsert("ai_solutions", rows, on_conflict="question_id")
-    print(f"AI 풀이 {len(rows)}건 반영 완료")
+    client.upsert(track["table"], rows, on_conflict="question_id")
+    print(f"{track['label']} {len(rows)}건 반영 완료")
 
 
 if __name__ == "__main__":

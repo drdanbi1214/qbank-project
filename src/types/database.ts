@@ -1380,6 +1380,55 @@ export type Database = {
           },
         ]
       }
+      senior_solutions: {
+        Row: {
+          content: Json
+          created_at: string
+          id: string
+          question_id: string
+          required_permission: string
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          id?: string
+          question_id: string
+          required_permission?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          id?: string
+          question_id?: string
+          required_permission?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "senior_solutions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "senior_solutions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "questions_solve"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "senior_solutions_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       solution_upvotes: {
         Row: {
           created_at: string

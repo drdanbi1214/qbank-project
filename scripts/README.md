@@ -88,6 +88,14 @@ CSV의 이미지 표기는 실제 파일명과 대소문자까지 같아야 한�
 
 같은 문제코드로 다시 돌리면 그 문제의 AI 풀이를 덮어쓴다.
 
+같은 CSV 형식으로 선배해설을 넣을 때는 `--kind senior`를 붙인다. AI 풀이와
+선배해설은 별도 테이블과 별도 권한으로 관리되므로 같은 문제에 둘 다 넣을 수 있다.
+
+```bash
+python3 scripts/import_ai_solutions.py senior_solutions.csv --kind senior
+python3 scripts/import_ai_solutions.py senior_solutions.csv --kind senior --images ./senior_images --apply
+```
+
 ## 예전 방식 (1단계 로컬 파싱 파이프라인, 지금은 잘 안 씀)
 
 ## 준비

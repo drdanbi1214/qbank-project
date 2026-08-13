@@ -1,10 +1,15 @@
-export const PERMISSION_KEYS = ['study_hapbon3', 'ai_solution_view'] as const
+export const PERMISSION_KEYS = [
+  'study_hapbon3',
+  'ai_solution_view',
+  'senior_solution_view',
+] as const
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number]
 
 export const PERMISSION_LABEL: Record<PermissionKey, string> = {
   study_hapbon3: '합본3 스터디',
   ai_solution_view: 'AI 풀이 탭',
+  senior_solution_view: '선배해설',
 }
 
 export function isPermissionKey(value: string): value is PermissionKey {
