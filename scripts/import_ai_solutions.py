@@ -14,6 +14,14 @@ CSV 형식 (UTF-8, 헤더 필수):
   그대로 줄바꿈으로 남는다. CSV 셀 안에 실제 줄바꿈이 들어가야 하므로 반드시
   큰따옴표로 감싸야 한다 (엑셀/구글시트에서 내보내면 자동으로 그렇게 된다).
 
+AI 풀이 전용 서식:
+    <제목>핵심 포인트</제목>
+    <근거>2024 대한당뇨병학회 진료지침</근거>
+
+- `<제목>...</제목>` 은 굵은 제목으로, `<근거>...</근거>` 는 작은 회색
+  글씨로 표시한다. 각각 한 줄에 쓰거나, 시작/끝 태그 사이에 여러 줄을 써도
+  된다. 태그는 빈 줄로 다른 문단과 구분하는 것을 권장한다.
+
 이미지 넣는 법:
     본문 중 이미지가 들어갈 자리에 그 줄만 단독으로 아래처럼 적는다.
 
@@ -50,6 +58,8 @@ except ImportError:
     sys.exit("requests 가 필요하다. pip install -r requirements.txt")
 
 IMG_MARKER = re.compile(r"^\[\[img:(.+?)\]\]$")
+SPECIAL_BLOCK_START = re.compile(r"^<(제목|근거)>\s*(.*)$")
+SPECIAL_BLOCK_END = re.compile(r"^(.*?)\s*</(제목|근거)>$")
 BUCKET = "ai-solution-images"
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
@@ -125,6 +135,8 @@ def text_to_doc(text: str) -> dict:
     """
     blocks: list[dict] = []
     paragraph_lines: list[str] = []
+    special_type: str | None = None
+    special_lines: list[str] = []
 
     def flush_paragraph() -> None:
         if not paragraph_lines:
@@ -138,8 +150,48 @@ def text_to_doc(text: str) -> dict:
         blocks.append({"type": "paragraph", "content": content} if content else {"type": "paragraph"})
         paragraph_lines.clear()
 
+    def flush_special() -> None:
+        nonlocal special_type
+        content: list[dict] = []
+        for i, line in enumerate(special_lines):
+            if i > 0:
+                content.append({"type": "hardBreak"})
+            if line:
+                content.append({"type": "text", "text": line})
+        blocks.append({"type": "aiTitle" if special_type == "제목" else "aiEvidence", "content": content})
+        special_lines.clear()
+        special_type = None
+
     for line in text.strip().split("\n"):
         stripped = line.strip()
+
+        if special_type is not None:
+            end_match = SPECIAL_BLOCK_END.fullmatch(stripped)
+            if end_match and end_match.group(2) == special_type:
+                if end_match.group(1):
+                    special_lines.append(end_match.group(1))
+                flush_special()
+            else:
+                special_lines.append(line)
+            continue
+
+        start_match = SPECIAL_BLOCK_START.fullmatch(stripped)
+        if start_match:
+            tag_name, remaining = start_match.groups()
+            inline_end = re.fullmatch(r"(.*?)\s*</(제목|근거)>", remaining)
+            if inline_end and inline_end.group(2) == tag_name:
+                flush_paragraph()
+                special_type = tag_name
+                if inline_end.group(1):
+                    special_lines.append(inline_end.group(1))
+                flush_special()
+                continue
+            flush_paragraph()
+            special_type = tag_name
+            if remaining:
+                special_lines.append(remaining)
+            continue
+
         img_match = IMG_MARKER.fullmatch(stripped)
         if img_match:
             flush_paragraph()
@@ -151,6 +203,8 @@ def text_to_doc(text: str) -> dict:
         paragraph_lines.append(line)
 
     flush_paragraph()
+    if special_type is not None:
+        raise ValueError(f"<{special_type}> 태그의 닫는 태그가 없다")
     if not blocks:
         blocks = [{"type": "paragraph"}]
     return {"type": "doc", "content": blocks}
@@ -224,7 +278,10 @@ def main() -> None:
             missing_codes.append(code)
             continue
 
-        docs[question_id] = text_to_doc(content)
+        try:
+            docs[question_id] = text_to_doc(content)
+        except ValueError as error:
+            sys.exit(f"문제코드 {code}: {error}")
 
     if missing_codes:
         sys.exit(f"DB 에 없는 문제코드 {len(missing_codes)}개: {', '.join(missing_codes)}")

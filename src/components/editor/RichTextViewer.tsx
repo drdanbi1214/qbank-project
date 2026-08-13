@@ -88,6 +88,10 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext): Rea
   switch (node.type) {
     case 'paragraph':
       return <p>{children.length > 0 ? children : <br />}</p>
+    case 'aiTitle':
+      return <p className="mb-1 mt-4 font-bold text-slate-900 dark:text-slate-100">{children}</p>
+    case 'aiEvidence':
+      return <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{children}</p>
     case 'heading': {
       const level = typeof node.attrs?.level === 'number' ? node.attrs.level : 3
       if (level <= 2) return <h2>{children}</h2>
