@@ -1847,6 +1847,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      dismiss_welcome_popup: { Args: never; Returns: boolean }
       admin_set_role: {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined

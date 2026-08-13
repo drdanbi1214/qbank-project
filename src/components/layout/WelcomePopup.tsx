@@ -16,9 +16,10 @@ export function WelcomePopup() {
 }
 
 function WelcomePopupModal({ onClose }: { onClose: () => void }) {
-  const { updateProfile } = useAuth()
+  const { dismissWelcomePopup } = useAuth()
   const [dontShowAgain, setDontShowAgain] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function close() {
     if (!dontShowAgain) {
@@ -26,10 +27,14 @@ function WelcomePopupModal({ onClose }: { onClose: () => void }) {
       return
     }
     setBusy(true)
+    setError(null)
     try {
-      await updateProfile({ welcome_popup_dismissed: true })
-    } finally {
+      await dismissWelcomePopup()
       onClose()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '설정을 저장하지 못했습니다.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -51,6 +56,12 @@ function WelcomePopupModal({ onClose }: { onClose: () => void }) {
           />
           다시는 보지 않기
         </label>
+
+        {error && (
+          <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+            {error}
+          </p>
+        )}
 
         <Button className="mt-3 w-full" onClick={() => void close()} disabled={busy}>
           닫기
