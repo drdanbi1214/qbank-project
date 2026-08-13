@@ -101,7 +101,9 @@ class Client:
             headers={**self.headers, "Content-Type": content_type, "x-upsert": "true"},
             timeout=120,
         )
-        return r.status_code == 200
+        # Storage 신규 업로드는 환경에 따라 200 또는 201을 돌려준다.
+        # 201도 정상 생성 성공인데 200만 받으면 PDF 연결 단계가 실패로 처리된다.
+        return r.status_code in (200, 201)
 
 
 def resolve_subject(client: Client, name: str) -> dict:
@@ -267,7 +269,11 @@ def main() -> None:
     skipped_reviewed: list[int] = []
     upload_log: list[str] = []
 
-    storage_prefix = re.sub(r"\s+", "_", f"{cohort}_{subject_name}")
+    # Storage 오브젝트 경로는 한글/공백을 피한다. 일부 Storage 엔드포인트가
+    # URL 인코딩된 한글 경로를 정상 처리하지 않아 원본 PDF 연결이 실패한다.
+    cohort_code = re.sub(r"[^A-Za-z0-9]+", "", cohort) or "cohort"
+    subject_code = re.sub(r"[^A-Za-z0-9]+", "", subject.get("code", "")) or "subject"
+    storage_prefix = f"{cohort_code}_{subject_code}"
     image_files_by_q = load_images(args.images)
 
     for q in sorted(questions, key=lambda x: x["question_number"]):
