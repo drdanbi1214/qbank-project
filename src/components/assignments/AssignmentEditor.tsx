@@ -353,7 +353,7 @@ export function AssignmentEditor({
       />
 
       <div className="mt-3">
-        <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} />
+        <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} userId={userId} />
       </div>
 
       {error && (

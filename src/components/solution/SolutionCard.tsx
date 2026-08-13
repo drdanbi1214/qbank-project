@@ -8,6 +8,7 @@ import { SolutionHistoryModal } from '@/components/solution/SolutionHistoryModal
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/lib/auth'
+import { useSignedUrl } from '@/lib/storage'
 import {
   createInlineComment,
   deleteSolution,
@@ -170,11 +171,7 @@ export function SolutionCard({
             <div className="mt-4 border-t border-slate-200 pt-3 text-sm dark:border-slate-700">
               <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">관련 단원 · 알렌</p>
               <div className="flex flex-wrap gap-1.5">
-                {solution.references.map((reference) => reference.url && (
-                  <a key={reference.url} href={reference.url} className="rounded-lg bg-brand-50 px-2 py-1 text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200">
-                    {reference.label}
-                  </a>
-                ))}
+                {solution.references.map((reference) => reference.url && <SolutionReferenceLink key={reference.url} reference={reference} />)}
               </div>
             </div>
           )}
@@ -238,4 +235,10 @@ export function SolutionCard({
       )}
     </article>
   )
+}
+
+function SolutionReferenceLink({ reference }: { reference: Solution['references'][number] }) {
+  const signedUrl = useSignedUrl(reference.kind === 'lecture' ? reference.url : null)
+  const href = reference.kind === 'lecture' ? signedUrl : reference.url
+  return href ? <a href={href} target="_blank" rel="noreferrer" className="rounded-lg bg-brand-50 px-2 py-1 text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200">{reference.kind === 'lecture' ? '강의록 · ' : ''}{reference.label}</a> : null
 }

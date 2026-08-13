@@ -27,6 +27,7 @@ import {
   type SolveQuestion,
 } from '@/lib/queries/questions'
 import { useAuth } from '@/lib/auth'
+import { useData } from '@/lib/data'
 import {
   COMPLETENESS_LABEL,
   effectiveAnswer,
@@ -80,6 +81,7 @@ export function QuestionView({
   autoReveal = false,
   autoWrite = false,
 }: Props) {
+  const { taxonomy } = useData()
   const { session, isAdmin, hasPermission } = useAuth()
   const userId = session?.user.id ?? ''
   const canViewStudySolutions = hasPermission('study_hapbon3')
@@ -466,6 +468,7 @@ export function QuestionView({
                   questionId={question.id}
                   groupId={question.groupId}
                   choiceCount={question.choices.length}
+                  subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
                 />
               )}
               {tab === 'note' && <PersonalNoteTab questionId={question.id} groupId={question.groupId} />}

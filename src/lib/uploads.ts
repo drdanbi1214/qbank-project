@@ -40,6 +40,15 @@ export async function uploadImage(file: File, userId: string): Promise<string> {
   return `${BUCKET}/${path}`
 }
 
+export async function uploadLectureFile(file: File, userId: string): Promise<string> {
+  if (file.size > 50 * 1024 * 1024) throw new Error('강의록 파일은 50MB 까지 가능합니다.')
+  const extension = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'file'
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`
+  const { error } = await supabase.storage.from('solution-lecture-files').upload(path, file, { cacheControl: '3600', contentType: file.type || 'application/octet-stream' })
+  if (error) throw error
+  return `solution-lecture-files/${path}`
+}
+
 /**
  * 프로필 사진 업로드.
  * 경로 앞자리가 본인 id 여야 Storage 정책을 통과한다.

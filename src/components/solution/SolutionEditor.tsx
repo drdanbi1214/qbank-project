@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -20,9 +21,10 @@ type Props = {
   choiceCount: number
   onSaved: () => void
   onCancel: () => void
+  subjectId: string | null
 }
 
-export function SolutionEditor({ target, userId, existing, choiceCount, onSaved, onCancel }: Props) {
+export function SolutionEditor({ target, userId, existing, choiceCount, onSaved, onCancel, subjectId }: Props) {
   const isNew = !existing
   // 그룹이 있으면 그룹 단위로 임시저장한다. 같은 문제의 다른 학번에서 이어 쓸 수 있다.
   const draftKey = target.groupId ?? target.questionId
@@ -42,6 +44,7 @@ export function SolutionEditor({ target, userId, existing, choiceCount, onSaved,
   const [draftDismissed, setDraftDismissed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [references, setReferences] = useState(existing?.references ?? [])
 
   const doc = useRef<RichDoc>(seed.doc)
 
@@ -63,13 +66,13 @@ export function SolutionEditor({ target, userId, existing, choiceCount, onSaved,
     setError(null)
     try {
       if (existing) {
-        await updateSolution({ id: existing.id, content: doc.current, references: [] })
+        await updateSolution({ id: existing.id, content: doc.current, references })
       } else {
         await createSolution({
           target,
           authorId: userId,
           content: doc.current,
-          references: [],
+          references,
         })
         await discard()
       }
@@ -125,6 +128,7 @@ export function SolutionEditor({ target, userId, existing, choiceCount, onSaved,
         minHeight="18rem"
         onUploadError={setError}
       />
+      <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} userId={userId} />
 
       {error && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">

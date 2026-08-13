@@ -20,6 +20,7 @@ export type Author = {
 export type SolutionReference = {
   label: string
   url: string | null
+  kind?: 'theory' | 'lecture'
 }
 
 export type Solution = {
@@ -74,7 +75,8 @@ export function parseReferences(value: unknown): SolutionReference[] {
     const label = typeof record.label === 'string' ? record.label.trim() : ''
     if (label === '') return []
     const url = typeof record.url === 'string' && record.url.trim() !== '' ? record.url.trim() : null
-    return [{ label, url }]
+    const kind = record.kind === 'lecture' ? 'lecture' as const : 'theory' as const
+    return [{ label, url, kind }]
   })
 }
 
