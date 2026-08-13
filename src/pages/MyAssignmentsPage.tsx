@@ -122,8 +122,14 @@ export function MyAssignmentsPage() {
                   return (
                     <li key={row.assignmentId}>
                       <Link
-                        // 배정받은 문항은 풀이를 쓰러 오는 것이므로 정답과 작성창을 바로 연다.
-                        to={`/solve?question=${row.questionId}&reveal=1&write=1`}
+                        // 미작성 문항만 작성창을 연다. 이미 저장한 문항을 write=1로
+                        // 다시 열면 빈 새 작성창이 보여 저장이 안 된 것으로 오해하고
+                        // 같은 풀이를 중복 등록할 수 있다.
+                        to={
+                          row.hasMySolution
+                            ? `/solve?question=${row.questionId}&reveal=1`
+                            : `/solve?question=${row.questionId}&reveal=1&write=1`
+                        }
                         className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <span
