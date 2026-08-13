@@ -113,6 +113,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // 그 사이 사용자가 바뀌었으면 낡은 응답은 버린다.
       if (!active || profileRequest.current !== request) return
+      // 이 ref는 getSession과 최초 auth 이벤트가 동시에 요청하는 경우만 합치기
+      // 위한 것이다. 완료된 응답을 계속 보관하면 TOKEN_REFRESHED 같은 이후
+      // 인증 이벤트에서 로그인 당시의 오래된 테마/글자 크기를 다시 적용한다.
+      profileRequest.current = null
       setProfile(loaded.profile)
       setPermissions(loaded.permissions)
       setLoading(false)
@@ -175,11 +179,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!userId) return
       // 낙관적 반영 후 저장
       setProfile((prev) => (prev ? { ...prev, ...patch } : prev))
-      const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
+      // UPDATE가 RLS에서 0행으로 끝난 경우도 성공처럼 보이지 않도록 갱신된
+      // 프로필 한 행을 반드시 돌려받아 저장 여부를 확인한다.
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(patch)
+        .eq('id', userId)
+        .select('*')
+        .single()
       if (error) {
         await refreshProfile()
         throw error
       }
+      setProfile(data)
     },
     [session?.user.id, refreshProfile],
   )
