@@ -52,7 +52,7 @@ export function LoginPage() {
 
         await signUp(email.trim(), password, nickname)
         setNotice(
-          '가입 요청이 접수되었습니다. 이메일 인증 후 관리자 승인이 완료되면 이용할 수 있습니다.',
+          '가입 요청이 접수되었습니다. 관리자 승인이 완료되면 이용할 수 있습니다.',
         )
         setMode('signin')
       }
