@@ -170,7 +170,10 @@ def main() -> None:
         depth = len(relative.parts) - 1
         if depth > 1: continue
         entries.append((path, text, depth, clean_title(path)))
-    entries.sort(key=lambda row: (row[2], row[0]))
+    # '10'을 '2' 앞에 두지 않도록 파일 경로의 숫자를 자연 정렬한다.
+    def natural_key(value: str) -> list[object]:
+        return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", value)]
+    entries.sort(key=lambda row: (row[2], natural_key(row[0])))
     top = [(path, text, title) for path, text, depth, title in entries if depth == 0]
     children = [(path, text, title) for path, text, depth, title in entries if depth == 1]
     section_label = f" > {args.section}" if args.section else ""
