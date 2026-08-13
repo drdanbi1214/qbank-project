@@ -3,11 +3,14 @@ import { Icon } from '@/components/ui/Icon'
 import { MOBILE_NAV } from '@/lib/navigation'
 import { useUnreadCount } from '@/lib/notifications'
 import { useData } from '@/lib/data'
+import { useAuth } from '@/lib/auth'
 import { cn } from '@/utils/cn'
 
 export function MobileTabBar() {
   const unread = useUnreadCount()
   const { openAssignments } = useData()
+  const { hasPermission } = useAuth()
+  const items = MOBILE_NAV.filter((item) => !item.permission || hasPermission(item.permission))
 
   return (
     <nav
@@ -15,7 +18,7 @@ export function MobileTabBar() {
       style={{ paddingBottom: 'var(--safe-bottom)' }}
     >
       <ul className="flex">
-        {MOBILE_NAV.map((item) => (
+        {items.map((item) => (
           <li key={item.to} className="flex-1">
             <NavLink
               to={item.to}

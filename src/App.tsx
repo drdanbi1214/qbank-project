@@ -33,6 +33,8 @@ import { SearchPage } from '@/pages/SearchPage'
 import { SolvePage } from '@/pages/SolvePage'
 import { StudyHomePage } from '@/pages/StudyHomePage'
 import { SubjectPage } from '@/pages/SubjectPage'
+import { TheoryIndexPage } from '@/pages/TheoryIndexPage'
+import { TheorySubjectPage } from '@/pages/TheorySubjectPage'
 import { UnitQuestionsPage } from '@/pages/UnitQuestionsPage'
 import { WrongNotesPage } from '@/pages/WrongNotesPage'
 import { NotFoundPage } from '@/pages/placeholders'
@@ -70,6 +72,9 @@ export default function App() {
                         <Route element={<AppLayout />}>
                           <Route index element={<Navigate to="/study" replace />} />
                           <Route path="/exams" element={<ExamsPage />} />
+                          <Route path="/theory" element={<TheoryIndexPage />} />
+                          <Route path="/theory/:subjectId" element={<TheorySubjectPage />} />
+                          <Route path="/theory/:subjectId/:documentId" element={<TheorySubjectPage />} />
                           <Route path="/exams/:examId" element={<ExamDetailPage />} />
                           <Route path="/assignments" element={<MyAssignmentsPage />} />
                           <Route path="/wrong-notes" element={<WrongNotesPage />} />

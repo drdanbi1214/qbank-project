@@ -1542,6 +1542,77 @@ export type Database = {
         }
         Relationships: []
       }
+      theory_documents: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_published: boolean
+          required_permission: string
+          sort_order: number
+          subject_id: string
+          title: string
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          required_permission?: string
+          sort_order?: number
+          subject_id: string
+          title: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          required_permission?: string
+          sort_order?: number
+          subject_id?: string
+          title?: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_documents_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "theory_documents_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_documents_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       text_marks: {
         Row: {
           anchor_from: number

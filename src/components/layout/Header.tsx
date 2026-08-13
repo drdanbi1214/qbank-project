@@ -16,12 +16,14 @@ type HeaderProps = {
 }
 
 export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) {
-  const { profile, isAdmin, signOut } = useAuth()
+  const { profile, isAdmin, hasPermission, signOut } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const { openAssignments } = useData()
 
-  const items = MAIN_NAV.filter((item) => !item.adminOnly || isAdmin)
+  const items = MAIN_NAV.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.permission || hasPermission(item.permission)),
+  )
 
   async function handleSignOut() {
     setMenuOpen(false)
