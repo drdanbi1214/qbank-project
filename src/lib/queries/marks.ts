@@ -1,7 +1,12 @@
 import { supabase } from '@/lib/supabase'
 import type { MarkStyle } from '@/components/marking/marks'
 
-export type MarkTargetType = 'question' | 'explanation' | 'solution'
+export type MarkTargetType =
+  | 'question'
+  | 'explanation'
+  | 'solution'
+  | 'ai_solution'
+  | 'senior_solution'
 
 export type TextMarkRow = {
   id: string

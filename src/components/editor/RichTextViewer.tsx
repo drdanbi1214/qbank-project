@@ -268,7 +268,11 @@ function applyMarks(children: ReactNode, marks: RichMark[]): ReactNode {
       case 'code':
         return <code>{acc}</code>
       case 'highlight':
-        return <mark>{acc}</mark>
+        return <mark style={{ backgroundColor: safeHighlightColor(mark.attrs?.color) }}>{acc}</mark>
+      case 'textStyle': {
+        const color = safeTextColor(mark.attrs?.color)
+        return color ? <span style={{ color }}>{acc}</span> : acc
+      }
       case 'link': {
         const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : null
         return href ? (
@@ -283,4 +287,19 @@ function applyMarks(children: ReactNode, marks: RichMark[]): ReactNode {
         return acc
     }
   }, children)
+}
+
+/** 저장된 문서 JSON이 임의 CSS를 주입하지 못하도록 편집기에서 쓰는 색만 허용한다. */
+function safeTextColor(value: unknown): string | undefined {
+  return value === '#cc1616' ? value : undefined
+}
+
+function safeHighlightColor(value: unknown): string | undefined {
+  const allowed = new Set([
+    'rgba(253, 224, 71, 0.55)',
+    'rgba(110, 231, 183, 0.55)',
+    'rgba(125, 211, 252, 0.55)',
+    'rgba(249, 168, 212, 0.55)',
+  ])
+  return typeof value === 'string' && allowed.has(value) ? value : undefined
 }

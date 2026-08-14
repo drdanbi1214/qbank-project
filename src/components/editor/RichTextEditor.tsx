@@ -3,6 +3,7 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
+import { Color, TextStyle } from '@tiptap/extension-text-style'
 import { TableKit } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
@@ -79,7 +80,9 @@ export function RichTextEditor({
         heading: { levels: [2, 3, 4] },
         link: { openOnClick: false, autolink: true },
       }),
-      Highlight,
+      Highlight.configure({ multicolor: true }),
+      TextStyle,
+      Color,
       TableKit.configure({ table: { resizable: false } }),
       StoredImage,
       MathInline,
@@ -211,12 +214,28 @@ function Toolbar({
       >
         <span className="font-serif italic">I</span>
       </ToolButton>
+      {NOTE_HIGHLIGHTS.map(({ label, color, className }) => (
+        <ToolButton
+          key={color}
+          label={label}
+          active={editor.isActive('highlight', { color })}
+          onClick={() => editor.chain().focus().toggleHighlight({ color }).run()}
+        >
+          <span className={cn('h-4 w-4 rounded border border-black/10', className)} />
+        </ToolButton>
+      ))}
       <ToolButton
-        label="형광펜"
-        active={editor.isActive('highlight')}
-        onClick={() => editor.chain().focus().toggleHighlight().run()}
+        label="빨간 글씨"
+        active={editor.isActive('textStyle', { color: NOTE_TEXT_RED })}
+        onClick={() => {
+          if (editor.isActive('textStyle', { color: NOTE_TEXT_RED })) {
+            editor.chain().focus().unsetColor().run()
+          } else {
+            editor.chain().focus().setColor(NOTE_TEXT_RED).run()
+          }
+        }}
       >
-        <span className="rounded bg-amber-200 px-1 dark:bg-amber-500/50">H</span>
+        <span className="font-semibold text-marker-red">A</span>
       </ToolButton>
 
       {!compact && (
@@ -332,6 +351,15 @@ function Toolbar({
     </div>
   )
 }
+
+const NOTE_TEXT_RED = '#cc1616'
+
+const NOTE_HIGHLIGHTS = [
+  { label: '노랑 형광펜', color: 'rgba(253, 224, 71, 0.55)', className: 'bg-amber-300' },
+  { label: '초록 형광펜', color: 'rgba(110, 231, 183, 0.55)', className: 'bg-emerald-300' },
+  { label: '하늘 형광펜', color: 'rgba(125, 211, 252, 0.55)', className: 'bg-sky-300' },
+  { label: '분홍 형광펜', color: 'rgba(249, 168, 212, 0.55)', className: 'bg-pink-300' },
+] as const
 
 function Divider() {
   return <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />

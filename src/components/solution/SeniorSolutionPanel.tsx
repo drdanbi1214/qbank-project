@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
+import { MarkableRegion } from '@/components/marking/MarkableRegion'
+import { useTextMarks } from '@/components/marking/useTextMarks'
 import { Spinner } from '@/components/ui/Spinner'
 import {
   fetchSeniorSolution,
@@ -39,6 +41,7 @@ export function SeniorSolutionPanel({ questionId }: Props) {
   const loading = loaded?.key !== questionId
   const solution = loading ? null : loaded.solution
   const error = loading ? null : loaded.error
+  const textMarks = useTextMarks('senior_solution', solution?.id ?? '')
 
   if (loading) {
     return <div className="flex justify-center py-8"><Spinner className="h-5 w-5" /></div>
@@ -57,7 +60,13 @@ export function SeniorSolutionPanel({ questionId }: Props) {
       <p className="mb-2 inline-flex items-center rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
         선배해설
       </p>
-      <RichTextViewer doc={solution.content} className="solution-rich-text" />
+      <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
+        <RichTextViewer
+          doc={solution.content}
+          className="solution-rich-text"
+          marks={textMarks.marks}
+        />
+      </MarkableRegion>
     </div>
   )
 }

@@ -125,6 +125,19 @@ export async function fetchSolutions(
   return rows.map((row) => toSolution(row, upvoted))
 }
 
+/** 정답 공개 직후 비어 있지 않은 탭을 고를 때 쓰는 가벼운 존재 여부 조회. */
+export async function hasSolutions(target: SolutionTarget): Promise<boolean> {
+  let query = supabase.from('solutions').select('id').limit(1)
+
+  query = target.groupId
+    ? query.or(`group_id.eq.${target.groupId},question_id.eq.${target.questionId}`)
+    : query.eq('question_id', target.questionId)
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data?.length ?? 0) > 0
+}
+
 /**
  * 인쇄용. 여러 문제에 달린 풀이를 한 번에 받아 문제 id 별로 묶는다.
  * 그룹에 달린 풀이는 그 그룹에 속한 모든 문제에 붙여준다.

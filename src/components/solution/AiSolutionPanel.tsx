@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
+import { MarkableRegion } from '@/components/marking/MarkableRegion'
+import { useTextMarks } from '@/components/marking/useTextMarks'
 import { Spinner } from '@/components/ui/Spinner'
 import { fetchAiSolution, type AiSolution } from '@/lib/queries/aiSolutions'
 
@@ -39,6 +41,7 @@ export function AiSolutionPanel({ questionId }: Props) {
   const loading = loaded?.key !== questionId
   const solution = loading ? null : loaded.solution
   const error = loading ? null : loaded.error
+  const textMarks = useTextMarks('ai_solution', solution?.id ?? '')
 
   if (loading) {
     return (
@@ -62,10 +65,21 @@ export function AiSolutionPanel({ questionId }: Props) {
 
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-      <p className="mb-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-        AI 풀이
-      </p>
-      <RichTextViewer doc={solution.content} className="solution-rich-text" />
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <p className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+          AI 풀이
+        </p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          AI가 생성한 풀이로 참고만 하세요
+        </p>
+      </div>
+      <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
+        <RichTextViewer
+          doc={solution.content}
+          className="solution-rich-text"
+          marks={textMarks.marks}
+        />
+      </MarkableRegion>
     </div>
   )
 }

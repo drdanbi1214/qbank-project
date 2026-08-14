@@ -28,3 +28,4 @@ dist-ssr
 *.pdf
 scripts/data/
 convert_file/
+.vercel

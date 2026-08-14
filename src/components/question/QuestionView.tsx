@@ -15,6 +15,9 @@ import { AllNotesPanel } from '@/components/solution/AllNotesPanel'
 import { PersonalNoteTab } from '@/components/solution/PersonalNoteTab'
 import { SeniorSolutionPanel } from '@/components/solution/SeniorSolutionPanel'
 import { SolutionList } from '@/components/solution/SolutionList'
+import { hasAiSolution } from '@/lib/queries/aiSolutions'
+import { hasSeniorSolution } from '@/lib/queries/seniorSolutions'
+import { hasSolutions } from '@/lib/queries/solutions'
 import { AssignmentEditor } from '@/components/assignments/AssignmentEditor'
 import {
   fetchDiscussionCount,
@@ -64,6 +67,8 @@ type Props = {
   autoWrite?: boolean
 }
 
+type SolutionTab = 'solutions' | 'ai' | 'senior' | 'note'
+
 export function QuestionView({
   question,
   questionSet,
@@ -103,12 +108,7 @@ export function QuestionView({
   const [graded, setGraded] = useState(false)
 
   // 권한이 없는 탭은 버튼뿐 아니라 데이터 조회 컴포넌트도 만들지 않는다.
-  const [tab, setTab] = useState<'solutions' | 'ai' | 'senior' | 'note'>(() => {
-    if (canViewStudySolutions) return 'solutions'
-    if (canViewAiSolution) return 'ai'
-    if (canViewSeniorSolution) return 'senior'
-    return 'note'
-  })
+  const [tab, setTab] = useState<SolutionTab>('note')
 
   // 형광펜. 문제 본문과 원본 해설은 같은 문제 id 를 쓰되 종류로 구분한다.
   const stemMarks = useTextMarks('question', question.id)
@@ -150,17 +150,64 @@ export function QuestionView({
     [],
   )
 
+  /**
+   * 정답 공개 시 내용이 있는 첫 탭을 고른다. 여러 탭에 내용이 있거나 전부
+   * 비었으면 풀이 → 선배해설 → AI 풀이 순서를 따른다.
+   */
+  const findPreferredSolutionTab = useCallback(async (): Promise<SolutionTab> => {
+    if (autoWrite) return 'note'
+
+    const candidates: { tab: SolutionTab; check: () => Promise<boolean> }[] = []
+    if (canViewStudySolutions) {
+      candidates.push({
+        tab: 'solutions',
+        check: () => hasSolutions({ questionId: question.id, groupId: question.groupId }),
+      })
+    }
+    if (canViewSeniorSolution) {
+      candidates.push({ tab: 'senior', check: () => hasSeniorSolution(question.id) })
+    }
+    if (canViewAiSolution) {
+      candidates.push({ tab: 'ai', check: () => hasAiSolution(question.id) })
+    }
+    if (candidates.length === 0) return 'note'
+
+    const hasContent = await Promise.all(
+      candidates.map(async ({ check }) => {
+        try {
+          return await check()
+        } catch (caught) {
+          console.error('풀이 탭의 내용 여부를 확인하지 못했습니다.', caught)
+          return false
+        }
+      }),
+    )
+    const firstWithContent = hasContent.findIndex(Boolean)
+    return candidates[firstWithContent >= 0 ? firstWithContent : 0].tab
+  }, [
+    autoWrite,
+    canViewAiSolution,
+    canViewSeniorSolution,
+    canViewStudySolutions,
+    question.groupId,
+    question.id,
+  ])
+
   const handleSubmit = useCallback(async () => {
     if (selected.length === 0 || busy) return
     setBusy(true)
     setError(null)
     const spent = elapsedSec()
     try {
-      const result = await submitAttempt({
-        questionId: question.id,
-        selected,
-        timeSpentSec: spent,
-      })
+      const [result, nextTab] = await Promise.all([
+        submitAttempt({
+          questionId: question.id,
+          selected,
+          timeSpentSec: spent,
+        }),
+        findPreferredSolutionTab(),
+      ])
+      setTab(nextTab)
       setAnswer(result.answer)
       setStats(result.stats)
       setIsCorrect(result.isCorrect)
@@ -170,7 +217,7 @@ export function QuestionView({
     } finally {
       setBusy(false)
     }
-  }, [selected, busy, elapsedSec, question.id, onAnswered])
+  }, [selected, busy, elapsedSec, question.id, onAnswered, findPreferredSolutionTab])
 
   /** 스킵은 기록을 남기지 않고 정답만 공개한다. */
   const handleSkip = useCallback(async () => {
@@ -178,10 +225,12 @@ export function QuestionView({
     setBusy(true)
     setError(null)
     try {
-      const [revealed, loaded] = await Promise.all([
+      const [revealed, loaded, nextTab] = await Promise.all([
         revealAnswer(question.id),
         fetchStats(question.id),
+        findPreferredSolutionTab(),
       ])
+      setTab(nextTab)
       setAnswer(revealed)
       setStats(loaded)
     } catch (caught) {
@@ -189,7 +238,7 @@ export function QuestionView({
     } finally {
       setBusy(false)
     }
-  }, [busy, question.id])
+  }, [busy, question.id, findPreferredSolutionTab])
 
   /**
    * 배정 화면에서 들어온 경우 정답을 자동으로 연다.
@@ -203,9 +252,14 @@ export function QuestionView({
     if (!autoReveal) return
     let active = true
 
-    void Promise.all([revealAnswer(question.id), fetchStats(question.id)])
-      .then(([revealed, loaded]) => {
+    void Promise.all([
+      revealAnswer(question.id),
+      fetchStats(question.id),
+      findPreferredSolutionTab(),
+    ])
+      .then(([revealed, loaded, nextTab]) => {
         if (!active) return
+        setTab(nextTab)
         setAnswer(revealed)
         setStats(loaded)
       })
@@ -214,7 +268,7 @@ export function QuestionView({
     return () => {
       active = false
     }
-  }, [autoReveal, question.id])
+  }, [autoReveal, question.id, findPreferredSolutionTab])
 
   const handleSelfGrade = useCallback(
     async (grade: 'correct' | 'partial' | 'wrong') => {
@@ -438,7 +492,7 @@ export function QuestionView({
           )}
 
           {/* 배정 화면에서 들어온 경우 편집자답 체크 + 풀이 작성이 결합된 전용 폼을 연다. */}
-          {autoWrite ? (
+          {autoWrite && (
             <AssignmentEditor
               questionId={question.id}
               examId={question.examId}
@@ -450,47 +504,59 @@ export function QuestionView({
               currentUnitSource={question.unitSource}
               userId={userId}
             />
-          ) : (
-            <div>
-              <div className="mb-3 flex gap-1 border-b border-slate-200 dark:border-slate-800">
-                {canViewStudySolutions && (
-                  <TabButton active={tab === 'solutions'} onClick={() => setTab('solutions')}>
-                    풀이
-                  </TabButton>
-                )}
-                {canViewAiSolution && (
-                  <TabButton active={tab === 'ai'} onClick={() => setTab('ai')}>
-                    AI 풀이
-                  </TabButton>
-                )}
-                {canViewSeniorSolution && (
-                  <TabButton active={tab === 'senior'} onClick={() => setTab('senior')}>
-                    선배해설
-                  </TabButton>
-                )}
-                <TabButton active={tab === 'note'} onClick={() => setTab('note')}>
-                  내 노트
-                </TabButton>
-              </div>
-
-              {tab === 'solutions' && canViewStudySolutions && (
-                <SolutionList
-                  questionId={question.id}
-                  groupId={question.groupId}
-                  choiceCount={question.choices.length}
-                  subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
-                  unitId={question.unitId}
-                  unitSource={question.unitSource}
-                />
-              )}
-              {tab === 'note' && <PersonalNoteTab questionId={question.id} groupId={question.groupId} />}
-              {tab === 'ai' && canViewAiSolution && <AiSolutionPanel questionId={question.id} />}
-              {tab === 'senior' && canViewSeniorSolution && (
-                <SeniorSolutionPanel questionId={question.id} />
-              )}
-            </div>
           )}
+        </div>
+      )}
 
+      {/* 내 노트는 정답 공개 전부터 열 수 있다. 공개 후에도 같은 위치와 컴포넌트를
+          유지해 저장 전 작성 내용이 사라지지 않게 한다. */}
+      {!autoWrite && (
+        <div className="mt-5">
+          <div className="mb-3 flex gap-1 border-b border-slate-200 dark:border-slate-800">
+            {revealed && canViewStudySolutions && (
+              <TabButton active={tab === 'solutions'} onClick={() => setTab('solutions')}>
+                풀이
+              </TabButton>
+            )}
+            {revealed && canViewAiSolution && (
+              <TabButton active={tab === 'ai'} onClick={() => setTab('ai')}>
+                AI 풀이
+              </TabButton>
+            )}
+            {revealed && canViewSeniorSolution && (
+              <TabButton active={tab === 'senior'} onClick={() => setTab('senior')}>
+                선배해설
+              </TabButton>
+            )}
+            <TabButton active={tab === 'note'} onClick={() => setTab('note')}>
+              내 노트
+            </TabButton>
+          </div>
+
+          {revealed && tab === 'solutions' && canViewStudySolutions && (
+            <SolutionList
+              questionId={question.id}
+              groupId={question.groupId}
+              choiceCount={question.choices.length}
+              subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
+              unitId={question.unitId}
+              unitSource={question.unitSource}
+            />
+          )}
+          <div className={tab === 'note' ? undefined : 'hidden'} aria-hidden={tab !== 'note'}>
+            <PersonalNoteTab questionId={question.id} groupId={question.groupId} />
+          </div>
+          {revealed && tab === 'ai' && canViewAiSolution && (
+            <AiSolutionPanel questionId={question.id} />
+          )}
+          {revealed && tab === 'senior' && canViewSeniorSolution && (
+            <SeniorSolutionPanel questionId={question.id} />
+          )}
+        </div>
+      )}
+
+      {revealed && (
+        <div className="mt-4 space-y-4">
           {/* 탭과 무관하게 항상 보이는 게시판 영역 */}
           <QuestionDiscussions
             questionId={question.id}

@@ -36,3 +36,13 @@ export async function fetchSeniorSolution(questionId: string): Promise<SeniorSol
     updatedAt: row.updated_at,
   }
 }
+
+export async function hasSeniorSolution(questionId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('senior_solutions')
+    .select('id')
+    .eq('question_id', questionId)
+    .limit(1)
+  if (error) throw error
+  return (data?.length ?? 0) > 0
+}
