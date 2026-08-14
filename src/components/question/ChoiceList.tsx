@@ -92,7 +92,9 @@ export function ChoiceList({ choices, selected, onChange, revealed, disabled = f
                     {choice.text}
                   </span>
                 )}
-                {choice.imageUrl && <ChoiceImage url={choice.imageUrl} no={choice.no} />}
+                {choice.imageUrl && choice.imageUrl !== 'PLACEHOLDER' && (
+                  <ChoiceImage url={choice.imageUrl} no={choice.no} />
+                )}
               </span>
 
               {/* 정답 표시는 오른쪽 끝에 세운다. */}

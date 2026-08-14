@@ -122,6 +122,9 @@ export function StemBlocks({
             )
 
           case 'image':
+            // 이미지를 아직 못 넣은 자리 표시자. 실제 파일이 없으니 자리를
+            // 차지하는 로딩 박스를 영영 띄우지 말고 그냥 건너뛴다.
+            if (block.url === 'PLACEHOLDER') return null
             return (
               <StemImage
                 key={index}
