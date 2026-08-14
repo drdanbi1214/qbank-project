@@ -125,8 +125,11 @@ export function AdminQuestionsPage() {
     [taxonomy, subjectId],
   )
 
-  const ready = loaded?.key === requestKey
-  const rows = ready ? loaded.rows : []
+  // 저장 후 재조회 중에도 기존 목록을 그대로 보여준다. key 를 엄격히
+  // 맞춰 목록을 스피너로 비웠다가 다시 그리면 스크롤 위치가 매번 맨 위로
+  // 돌아가 버린다.
+  const ready = loaded !== null
+  const rows = loaded?.rows ?? []
 
   const loadingDraft = Boolean(editingId) && editingId !== 'new' && draft?.key !== editingId
   const activeDraft: QuestionDraft | null =
