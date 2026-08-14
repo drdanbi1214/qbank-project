@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
+import { parsePastedQuestionText } from '@/components/admin/parsePastedQuestion'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { Button } from '@/components/ui/Button'
 import {
@@ -20,9 +21,16 @@ type Props = {
   onChange: (next: StemBlock[]) => void
   userId: string
   label?: string
+  onPastedChoices?: (choices: string[]) => void
 }
 
-export function StemBlockEditor({ blocks, onChange, userId, label = '본문' }: Props) {
+export function StemBlockEditor({
+  blocks,
+  onChange,
+  userId,
+  label = '본문',
+  onPastedChoices,
+}: Props) {
   const [preview, setPreview] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pastingImages, setPastingImages] = useState(0)
@@ -164,6 +172,7 @@ export function StemBlockEditor({ blocks, onChange, userId, label = '본문' }: 
                 userId={userId}
                 onChange={(next) => update(index, next)}
                 onError={setError}
+                onPastedChoices={onPastedChoices}
               />
             </div>
           ))}
@@ -202,11 +211,13 @@ function BlockFields({
   userId,
   onChange,
   onError,
+  onPastedChoices,
 }: {
   block: StemBlock
   userId: string
   onChange: (next: StemBlock) => void
   onError: (message: string | null) => void
+  onPastedChoices?: (choices: string[]) => void
 }) {
   switch (block.type) {
     case 'text':
@@ -215,6 +226,28 @@ function BlockFields({
           <textarea
             value={block.content}
             onChange={(event) => onChange({ ...block, content: event.target.value })}
+            onPaste={(event) => {
+              if (!onPastedChoices || clipboardHasImage(event.clipboardData)) return
+              const pasted = event.clipboardData.getData('text/plain')
+              if (!pasted || (!/[\r\n]/.test(pasted) && !CIRCLED_NUMBER_PATTERN.test(pasted))) {
+                return
+              }
+
+              event.preventDefault()
+              const parsed = parsePastedQuestionText(pasted)
+              const input = event.currentTarget
+              const from = input.selectionStart ?? block.content.length
+              const to = input.selectionEnd ?? from
+              const before = block.content.slice(0, from)
+              const after = block.content.slice(to)
+              const separatorBefore = before && parsed.stem ? ' ' : ''
+              const separatorAfter = after && parsed.stem ? ' ' : ''
+              onChange({
+                ...block,
+                content: `${before}${separatorBefore}${parsed.stem}${separatorAfter}${after}`.trim(),
+              })
+              if (parsed.choices.length > 0) onPastedChoices(parsed.choices)
+            }}
             rows={4}
             placeholder="문제 본문"
             className={inputClass}
@@ -299,6 +332,8 @@ function BlockFields({
       return null
   }
 }
+
+const CIRCLED_NUMBER_PATTERN = /[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/
 
 function TableFields({
   block,

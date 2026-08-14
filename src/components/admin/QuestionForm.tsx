@@ -176,6 +176,18 @@ export function QuestionForm({ draft: initial, userId, onSaved, onCancel, compac
         blocks={draft.stemBlocks}
         onChange={(next) => patch({ stemBlocks: next })}
         userId={userId}
+        onPastedChoices={(pastedChoices) =>
+          patch({
+            choices: pastedChoices.map((text, index) => ({
+              no: index + 1,
+              text,
+              imageUrl: null,
+            })),
+            editorAnswer: [],
+            yamaAnswer: null,
+            answerCount: 1,
+          })
+        }
       />
 
       {/* 보기와 정답 */}
