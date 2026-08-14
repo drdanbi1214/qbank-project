@@ -17,7 +17,7 @@ import { cn } from '@/utils/cn'
 type Props = {
   draft: QuestionDraft
   userId: string
-  onSaved: (id: string) => void
+  onSaved: (id: string, savedDraft: QuestionDraft) => void
   onCancel: () => void
   /** PDF 검수 화면처럼 좁은 칸에 넣을 때 여백을 줄인다 */
   compact?: boolean
@@ -86,8 +86,9 @@ export function QuestionForm({ draft: initial, userId, onSaved, onCancel, compac
     try {
       // 정답 개수는 편집자답 길이와 맞춰둔다. 화면에서 라디오와 체크박스를 가르는 기준이다.
       const answerCount = Math.max(1, draft.editorAnswer.length || draft.answerCount)
-      const id = await saveQuestion({ ...draft, answerCount })
-      onSaved(id)
+      const savedDraft = { ...draft, answerCount }
+      const id = await saveQuestion(savedDraft)
+      onSaved(id, savedDraft)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '저장하지 못했습니다.')
     } finally {

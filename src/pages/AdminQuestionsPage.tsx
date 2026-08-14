@@ -325,17 +325,17 @@ export function AdminQuestionsPage() {
                   key={`${editingId}:${formVersion}`}
                   draft={activeDraft}
                   userId={userId}
-                  onSaved={() => {
+                  onSaved={(_id, savedDraft) => {
                     setReloadKey((value) => value + 1)
                     refreshAll()
                     if (editingId === 'new') {
-                      const next = emptyDraft(activeDraft.examId)
-                      next.unitId = activeDraft.unitId
-                      next.questionNumber = activeDraft.questionNumber + 1
+                      const next = emptyDraft(savedDraft.examId)
+                      next.unitId = savedDraft.unitId
+                      next.questionNumber = savedDraft.questionNumber + 1
                       setDraft({ key: 'new', value: next })
                       setFormVersion((value) => value + 1)
                       setNotice(
-                        `${activeDraft.questionNumber}번을 등록했습니다. ${next.questionNumber}번을 이어서 입력하세요.`,
+                        `${savedDraft.questionNumber}번을 등록했습니다. ${next.questionNumber}번을 이어서 입력하세요.`,
                       )
                       return
                     }
