@@ -3,6 +3,12 @@
 AI 풀이 탭 권한이 있는 사용자에게만 보이는 별도 트랙(ai_solutions 테이블)에
 넣는다. 권한 없는 사용자 화면에는 탭과 데이터가 모두 노출되지 않는다.
 
+선배해설(--kind senior)은 문제코드가 DB에 아직 없어도(예: 문제를 나중에
+입력할 학번) 실패하지 않는다. senior_solutions_pending 에 문제코드로
+대기시켜두고, 나중에 그 코드의 문제가 questions 에 들어오는 순간 DB
+트리거가 자동으로 senior_solutions 로 옮긴다. AI 풀이(--kind ai)는 대기
+테이블이 없으므로 지금처럼 매칭 안 되면 실패한다.
+
 CSV 형식 (UTF-8, 헤더 필수):
     question_code,content
     2607044,"...풀이 본문..."
@@ -67,11 +73,13 @@ TRACKS = {
         "label": "AI 풀이",
         "table": "ai_solutions",
         "bucket": "ai-solution-images",
+        "pending_table": None,
     },
     "senior": {
         "label": "선배해설",
         "table": "senior_solutions",
         "bucket": "senior-solution-images",
+        "pending_table": "senior_solutions_pending",
     },
 }
 
@@ -277,7 +285,8 @@ def main() -> None:
     code_to_id = {row["question_code"]: row["id"] for row in client.get("questions_solve", {"select": "id,question_code"})}
 
     seen_codes: set[str] = set()
-    docs: dict[str, dict] = {}  # question_id -> doc
+    docs: dict[str, dict] = {}  # question_id -> doc (매칭된 것)
+    pending_docs: dict[str, dict] = {}  # question_code -> doc (대기, senior 전용)
     missing_codes: list[str] = []
     dup_codes: list[str] = []
 
@@ -295,6 +304,12 @@ def main() -> None:
         question_id = code_to_id.get(code)
         if question_id is None:
             missing_codes.append(code)
+            if track["pending_table"] is None:
+                continue
+            try:
+                pending_docs[code] = text_to_doc(content)
+            except ValueError as error:
+                sys.exit(f"문제코드 {code}: {error}")
             continue
 
         try:
@@ -302,14 +317,16 @@ def main() -> None:
         except ValueError as error:
             sys.exit(f"문제코드 {code}: {error}")
 
-    if missing_codes:
+    if missing_codes and track["pending_table"] is None:
         sys.exit(f"DB 에 없는 문제코드 {len(missing_codes)}개: {', '.join(missing_codes)}")
     if dup_codes:
         sys.exit(f"CSV 안에서 문제코드가 중복됐다: {', '.join(dup_codes)}")
 
-    # 이미지 파일 확인
+    # 이미지 파일 확인 (매칭된 것 + 대기 중인 것 모두)
     needed_images: set[str] = set()
     for doc in docs.values():
+        needed_images |= collect_image_filenames(doc)
+    for doc in pending_docs.values():
         needed_images |= collect_image_filenames(doc)
 
     invalid_images = {
@@ -333,6 +350,8 @@ def main() -> None:
         sys.exit(f"--images 폴더에 없는 파일: {sorted(missing_files)}")
 
     print(f"문제코드 매칭 {len(docs)}건, 이미지 참조 {len(needed_images)}개")
+    if pending_docs:
+        print(f"DB 에 아직 없는 문제코드 {len(pending_docs)}건 -> 대기열에 저장 후 문제 입력 시 자동 반영")
 
     if not args.apply:
         print("dry-run 이다. --apply 를 붙이면 실제로 반영한다.")
@@ -354,10 +373,18 @@ def main() -> None:
 
     for doc in docs.values():
         resolve_images(doc, uploaded)
+    for doc in pending_docs.values():
+        resolve_images(doc, uploaded)
 
-    rows = [{"question_id": question_id, "content": doc} for question_id, doc in docs.items()]
-    client.upsert(track["table"], rows, on_conflict="question_id")
-    print(f"{track['label']} {len(rows)}건 반영 완료")
+    if docs:
+        rows = [{"question_id": question_id, "content": doc} for question_id, doc in docs.items()]
+        client.upsert(track["table"], rows, on_conflict="question_id")
+        print(f"{track['label']} {len(rows)}건 반영 완료")
+
+    if pending_docs:
+        pending_rows = [{"question_code": code, "content": doc} for code, doc in pending_docs.items()]
+        client.upsert(track["pending_table"], pending_rows, on_conflict="question_code")
+        print(f"{track['label']} 대기열 {len(pending_rows)}건 저장 완료")
 
 
 if __name__ == "__main__":
