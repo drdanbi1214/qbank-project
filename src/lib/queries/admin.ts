@@ -182,6 +182,7 @@ export type AdminQuestionRow = {
   completeness: string
   status: string
   groupId: string | null
+  questionCode: string | null
 }
 
 export type AdminQuestionFilter = {
@@ -199,7 +200,7 @@ export async function fetchAdminQuestions(
   let query = supabase
     .from('questions_solve')
     .select(
-      'id, exam_id, unit_id, question_number, question_type, stem_text, answer_status, completeness, status, group_id',
+      'id, exam_id, unit_id, question_number, question_type, stem_text, answer_status, completeness, status, group_id, question_code',
     )
 
   if (filter.examId) query = query.eq('exam_id', filter.examId)
@@ -242,6 +243,7 @@ export async function fetchAdminQuestions(
             completeness: row.completeness ?? 'complete',
             status: row.status ?? 'published',
             groupId: row.group_id,
+            questionCode: row.question_code,
           },
         ]
       : [],

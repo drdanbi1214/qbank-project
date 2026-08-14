@@ -44,6 +44,8 @@ export function AdminQuestionsPage() {
 
   const [input, setInput] = useState(search)
   const [reloadKey, setReloadKey] = useState(0)
+  const [formVersion, setFormVersion] = useState(0)
+  const [notice, setNotice] = useState<string | null>(null)
   const [loaded, setLoaded] = useState<{ key: string; rows: AdminQuestionRow[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   // 편집 대상과 함께 저장해 로딩 여부를 파생시킨다. 효과 안에서 상태를 미리 바꾸지 않는다.
@@ -161,6 +163,8 @@ export function AdminQuestionsPage() {
           <Button
             onClick={() => {
               setDraft({ key: 'new', value: emptyDraft(examId ?? '') })
+              setFormVersion((value) => value + 1)
+              setNotice(null)
               update({ edit: 'new' })
             }}
           >
@@ -253,7 +257,10 @@ export function AdminQuestionsPage() {
                     <li key={row.id}>
                       <button
                         type="button"
-                        onClick={() => update({ edit: row.id })}
+                        onClick={() => {
+                          setNotice(null)
+                          update({ edit: row.id })
+                        }}
                         className={cn(
                           'block w-full px-3 py-2 text-left transition-colors',
                           editingId === row.id
@@ -265,6 +272,9 @@ export function AdminQuestionsPage() {
                           <span className="font-semibold text-brand-600 dark:text-brand-300">
                             {examLabelOf(row.examId)} {row.questionNumber}번
                           </span>
+                          {row.questionCode && (
+                            <Tag tone="muted">{`코드 ${row.questionCode}`}</Tag>
+                          )}
                           {row.unitId === null && <Tag tone="warn">미분류</Tag>}
                           {row.answerStatus !== 'confirmed' && (
                             <Tag tone="warn">{ANSWER_LABEL[row.answerStatus]}</Tag>
@@ -305,19 +315,37 @@ export function AdminQuestionsPage() {
                   )}
                 </div>
 
+                {notice && editingId === 'new' && (
+                  <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    {notice}
+                  </p>
+                )}
+
                 <QuestionForm
-                  key={editingId}
+                  key={`${editingId}:${formVersion}`}
                   draft={activeDraft}
                   userId={userId}
                   onSaved={() => {
                     setReloadKey((value) => value + 1)
                     refreshAll()
+                    if (editingId === 'new') {
+                      const next = emptyDraft(activeDraft.examId)
+                      next.unitId = activeDraft.unitId
+                      next.questionNumber = activeDraft.questionNumber + 1
+                      setDraft({ key: 'new', value: next })
+                      setFormVersion((value) => value + 1)
+                      setNotice(
+                        `${activeDraft.questionNumber}번을 등록했습니다. ${next.questionNumber}번을 이어서 입력하세요.`,
+                      )
+                      return
+                    }
                     update({ edit: null })
                     setDraft(null)
                   }}
                   onCancel={() => {
                     update({ edit: null })
                     setDraft(null)
+                    setNotice(null)
                   }}
                 />
               </div>

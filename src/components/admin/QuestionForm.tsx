@@ -3,7 +3,7 @@ import { StemBlockEditor } from '@/components/admin/StemBlockEditor'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
-import { examShortLabel } from '@/lib/queries/taxonomy'
+import { examShortLabel, questionCodePreview } from '@/lib/queries/taxonomy'
 import { saveQuestion, type QuestionDraft } from '@/lib/queries/admin'
 import { circled, type Choice } from '@/types/question'
 import { cn } from '@/utils/cn'
@@ -34,6 +34,12 @@ export function QuestionForm({ draft: initial, userId, onSaved, onCancel, compac
     if (!exam) return taxonomy?.units ?? []
     return (taxonomy?.units ?? []).filter((unit) => unit.subjectId === exam.subjectId)
   }, [taxonomy, draft.examId])
+
+  const questionCode = useMemo(() => {
+    const exam = taxonomy?.examById.get(draft.examId)
+    const subject = exam ? taxonomy?.subjectById.get(exam.subjectId) : undefined
+    return questionCodePreview(exam, subject, draft.questionNumber)
+  }, [taxonomy, draft.examId, draft.questionNumber])
 
   function patch(next: Partial<QuestionDraft>) {
     setDraft((prev) => ({ ...prev, ...next }))
@@ -150,6 +156,19 @@ export function QuestionForm({ draft: initial, userId, onSaved, onCancel, compac
             <option value="essay">서술형</option>
           </select>
         </Field>
+
+        <div className="sm:col-span-2">
+          <Field label="7자리 문제 코드 (자동 라벨링)">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <span className="font-mono text-sm font-bold tracking-wider text-brand-700 dark:text-brand-300">
+                {questionCode ?? '시험과 문항 번호를 선택해주세요'}
+              </span>
+              {questionCode && (
+                <span className="ml-auto text-xs text-slate-400">저장 시 자동 부여</span>
+              )}
+            </div>
+          </Field>
+        </div>
       </section>
 
       <StemBlockEditor

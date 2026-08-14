@@ -1,7 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { Button } from '@/components/ui/Button'
-import { uploadQuestionImage } from '@/lib/uploads'
+import {
+  clipboardHasImage,
+  imageFilesFromClipboard,
+  uploadQuestionImage,
+} from '@/lib/uploads'
 import type { StemBlock } from '@/types/question'
 import { cn } from '@/utils/cn'
 
@@ -21,6 +25,12 @@ type Props = {
 export function StemBlockEditor({ blocks, onChange, userId, label = '본문' }: Props) {
   const [preview, setPreview] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pastingImages, setPastingImages] = useState(0)
+  const blocksRef = useRef(blocks)
+
+  useEffect(() => {
+    blocksRef.current = blocks
+  }, [blocks])
 
   function update(index: number, next: StemBlock) {
     onChange(blocks.map((block, i) => (i === index ? next : block)))
@@ -53,8 +63,49 @@ export function StemBlockEditor({ blocks, onChange, userId, label = '본문' }: 
     onChange([...blocks, created])
   }
 
+  async function pasteImages(afterIndex: number, files: File[]) {
+    setPastingImages((count) => count + files.length)
+    setError(null)
+    try {
+      const paths = await Promise.all(files.map((file) => uploadQuestionImage(file, userId)))
+      const current = blocksRef.current
+      const insertionIndex = Math.min(afterIndex + 1, current.length)
+      const imageBlocks: StemBlock[] = paths.map((url) => ({
+        type: 'image',
+        url,
+        caption: null,
+      }))
+      onChange([
+        ...current.slice(0, insertionIndex),
+        ...imageBlocks,
+        ...current.slice(insertionIndex),
+      ])
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '붙여넣은 이미지를 올리지 못했습니다.')
+    } finally {
+      setPastingImages((count) => Math.max(0, count - files.length))
+    }
+  }
+
+  async function handlePaste(event: ClipboardEvent<HTMLElement>) {
+    if (!clipboardHasImage(event.clipboardData)) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    const target = event.target instanceof Element ? event.target : null
+    const rawIndex = target?.closest<HTMLElement>('[data-stem-block-index]')?.dataset
+      .stemBlockIndex
+    const afterIndex = rawIndex === undefined ? Math.max(0, blocks.length - 1) : Number(rawIndex)
+    const files = await imageFilesFromClipboard(event.clipboardData)
+    if (files.length === 0) {
+      setError('클립보드 이미지를 읽지 못했습니다. PNG 또는 JPG 파일로 다시 붙여넣어주세요.')
+      return
+    }
+    await pasteImages(afterIndex, files)
+  }
+
   return (
-    <section>
+    <section onPasteCapture={(event) => void handlePaste(event)}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-bold">{label}</h3>
         <span className="text-xs text-slate-400">{blocks.length}개 블록</span>
@@ -84,6 +135,7 @@ export function StemBlockEditor({ blocks, onChange, userId, label = '본문' }: 
           {blocks.map((block, index) => (
             <div
               key={index}
+              data-stem-block-index={index}
               className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
             >
               <div className="mb-2 flex items-center gap-1">
@@ -123,6 +175,11 @@ export function StemBlockEditor({ blocks, onChange, userId, label = '본문' }: 
               </Button>
             ))}
           </div>
+          {pastingImages > 0 && (
+            <p className="text-xs font-medium text-brand-600 dark:text-brand-300">
+              붙여넣은 이미지 {pastingImages}개를 올리는 중입니다…
+            </p>
+          )}
         </div>
       )}
     </section>
@@ -154,13 +211,18 @@ function BlockFields({
   switch (block.type) {
     case 'text':
       return (
-        <textarea
-          value={block.content}
-          onChange={(event) => onChange({ ...block, content: event.target.value })}
-          rows={4}
-          placeholder="문제 본문"
-          className={inputClass}
-        />
+        <div className="space-y-1">
+          <textarea
+            value={block.content}
+            onChange={(event) => onChange({ ...block, content: event.target.value })}
+            rows={4}
+            placeholder="문제 본문"
+            className={inputClass}
+          />
+          <p className="text-xs text-slate-400">
+            텍스트뿐 아니라 복사한 이미지도 이 칸에 바로 붙여넣을 수 있습니다.
+          </p>
+        </div>
       )
 
     case 'formula':

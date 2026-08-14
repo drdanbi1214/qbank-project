@@ -115,5 +115,47 @@ export async function uploadTheoryImage(file: File, userId: string): Promise<str
 /** 붙여넣기, 드롭 이벤트에서 이미지 파일만 골라낸다. */
 export function imageFilesFrom(data: DataTransfer | null): File[] {
   if (!data) return []
-  return Array.from(data.files).filter(isUploadableImage)
+  const files = Array.from(data.files).filter(isUploadableImage)
+  if (files.length > 0) return files
+
+  // 일부 브라우저는 붙여넣기 이미지가 files가 아니라 items에만 들어온다.
+  return Array.from(data.items)
+    .filter((item) => item.kind === 'file' && ALLOWED.has(item.type))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+}
+
+/** 클립보드가 실제 파일 대신 HTML의 img 태그로 이미지를 전달하는 경우까지 감지한다. */
+export function clipboardHasImage(data: DataTransfer | null): boolean {
+  if (!data) return false
+  if (imageFilesFrom(data).length > 0) return true
+  if (Array.from(data.items).some((item) => item.type.startsWith('image/'))) return true
+  return /<img\b/i.test(data.getData('text/html'))
+}
+
+/** 붙여넣기 이미지를 업로드 가능한 File 배열로 정규화한다. */
+export async function imageFilesFromClipboard(data: DataTransfer | null): Promise<File[]> {
+  if (!data) return []
+  const direct = imageFilesFrom(data)
+  if (direct.length > 0) return direct
+
+  const html = data.getData('text/html')
+  if (!html) return []
+
+  const document = new DOMParser().parseFromString(html, 'text/html')
+  const sources = Array.from(new Set(Array.from(document.images, (image) => image.src))).filter(
+    Boolean,
+  )
+  const converted = await Promise.allSettled(
+    sources.map(async (source, index) => {
+      const response = await fetch(source)
+      if (!response.ok) throw new Error('클립보드 이미지를 읽지 못했습니다.')
+      const blob = await response.blob()
+      if (!ALLOWED.has(blob.type)) throw new Error('지원하지 않는 이미지 형식입니다.')
+      const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]
+      return new File([blob], `pasted-image-${index + 1}.${extension}`, { type: blob.type })
+    }),
+  )
+
+  return converted.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
 }

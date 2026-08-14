@@ -138,3 +138,17 @@ export function examYearLabel(exam: Exam | undefined): string {
   const year = match ? `20${match[1]}` : exam.cohort
   return `${year} ${exam.examName}`.trim()
 }
+
+/** 등록 화면에서 DB와 같은 규칙으로 7자리 문제 코드를 미리 보여준다. */
+export function questionCodePreview(
+  exam: Exam | undefined,
+  subject: Subject | undefined,
+  questionNumber: number,
+): string | null {
+  const cohortCode = exam?.cohort.match(/\d+/)?.[0]
+  if (!cohortCode || cohortCode.length !== 2 || !subject?.code || subject.code.length !== 2) {
+    return null
+  }
+  if (!Number.isInteger(questionNumber) || questionNumber < 1 || questionNumber > 999) return null
+  return `${cohortCode}${subject.code}${String(questionNumber).padStart(3, '0')}`
+}
