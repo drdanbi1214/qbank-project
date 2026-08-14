@@ -2,13 +2,13 @@ import { useNavigate } from 'react-router-dom'
 import { useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
+import { UnitPicker } from '@/components/question/UnitPicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { createSolution, type SolutionReference } from '@/lib/queries/solutions'
 import { setEditorAnswer } from '@/lib/queries/questions'
 import { assignUnit } from '@/lib/queries/admin'
-import { createUnit, type Unit } from '@/lib/queries/taxonomy'
 import { useData } from '@/lib/data'
 import { circled, type Choice } from '@/types/question'
 import { isEmptyDoc, solutionTemplateDoc, type RichDoc } from '@/types/richtext'
@@ -54,7 +54,7 @@ export function AssignmentEditor({
   userId,
 }: Props) {
   const navigate = useNavigate()
-  const { taxonomy, refreshAll } = useData()
+  const { taxonomy } = useData()
   // 편집자답이 아직 없으면 야마답으로 미리 채워, 편집자가 다시 고를 필요 없이
   // 다르다고 판단할 때만 바꾸도록 한다.
   const initialSelection = currentEditorAnswer.length > 0 ? currentEditorAnswer : (yamaAnswer ?? [])
@@ -66,22 +66,7 @@ export function AssignmentEditor({
   const [references, setReferences] = useState<SolutionReference[]>([])
 
   const subjectId = taxonomy?.examById.get(examId)?.subjectId ?? null
-  // 화면에서 방금 만든 단원은 다음 taxonomy 새로고침 전까지 여기 따로 들고 있는다.
-  const [newUnits, setNewUnits] = useState<Unit[]>([])
-  const subjectUnits = subjectId
-    ? [...taxonomy!.units.filter((unit) => unit.subjectId === subjectId), ...newUnits]
-    : []
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
-  const [unitPickerOpen, setUnitPickerOpen] = useState(false)
-  const [addingUnit, setAddingUnit] = useState(false)
-  const [newUnitName, setNewUnitName] = useState('')
-  const [creatingUnit, setCreatingUnit] = useState(false)
-  const [unitError, setUnitError] = useState<string | null>(null)
-  const unitName = unitId
-    ? (subjectUnits.find((unit) => unit.id === unitId)?.name ??
-      taxonomy?.unitById.get(unitId)?.name ??
-      '알 수 없는 단원')
-    : '미분류'
   // 아직 아무도 안 건드린 AI 1차 분류일 때만 안내를 보여준다. 여기서 바꾸면
   // 저장 시 human_confirmed 로 바뀌므로 다음에 들어오면 안 뜬다.
   const isUnconfirmedAiSuggestion = unitId === currentUnitId && currentUnitSource === 'ai_suggested'
@@ -101,39 +86,6 @@ export function AssignmentEditor({
   function handleChange(next: RichDoc) {
     doc.current = next
     schedule(next)
-  }
-
-  async function handleCreateUnit() {
-    if (!subjectId) return
-    const trimmed = newUnitName.trim()
-    if (!trimmed) return
-
-    // DB 유니크 제약이 이름 중복을 막아주긴 하지만, 이미 있는 이름이면 굳이
-    // 새로 만들지 않고 그 단원을 바로 선택해준다.
-    const existing = subjectUnits.find((unit) => unit.name.trim().toLowerCase() === trimmed.toLowerCase())
-    if (existing) {
-      setUnitId(existing.id)
-      setUnitPickerOpen(false)
-      setAddingUnit(false)
-      setNewUnitName('')
-      return
-    }
-
-    setCreatingUnit(true)
-    setUnitError(null)
-    try {
-      const created = await createUnit(subjectId, trimmed, subjectUnits)
-      setNewUnits((prev) => [...prev, created])
-      setUnitId(created.id)
-      setUnitPickerOpen(false)
-      setAddingUnit(false)
-      setNewUnitName('')
-      refreshAll()
-    } catch (caught) {
-      setUnitError(caught instanceof Error ? caught.message : '단원을 추가하지 못했습니다.')
-    } finally {
-      setCreatingUnit(false)
-    }
   }
 
   function toggleChoice(no: number) {
@@ -177,89 +129,12 @@ export function AssignmentEditor({
     <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <h3 className="mb-3 text-sm font-bold">풀이 작성</h3>
 
-      {subjectId !== null && (
-        <div className="mb-4">
-          <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-            단원을 선택해주세요
-          </p>
-          {!unitPickerOpen ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Button size="sm" variant="secondary" onClick={() => setUnitPickerOpen(true)}>
-                {unitName}
-              </Button>
-              {isUnconfirmedAiSuggestion && (
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                  AI 1차 분류 · 확인 필요
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-1">
-              {subjectUnits.map((unit) => (
-                <button
-                  key={unit.id}
-                  type="button"
-                  onClick={() => {
-                    setUnitId(unit.id)
-                    setUnitPickerOpen(false)
-                  }}
-                  className={cn(
-                    'rounded-lg px-2.5 py-1.5 text-sm transition-colors',
-                    unitId === unit.id
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
-                  )}
-                >
-                  {unit.name}
-                </button>
-              ))}
-              {!addingUnit ? (
-                <button
-                  type="button"
-                  onClick={() => setAddingUnit(true)}
-                  className="rounded-lg border border-dashed border-slate-300 px-2.5 py-1.5 text-sm text-slate-500 transition-colors hover:border-brand-400 hover:text-brand-600 dark:border-slate-600 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:text-brand-400"
-                >
-                  + 새 단원
-                </button>
-              ) : (
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    void handleCreateUnit()
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newUnitName}
-                    onChange={(event) => setNewUnitName(event.target.value)}
-                    placeholder="단원 이름"
-                    disabled={creatingUnit}
-                    className="w-32 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950"
-                  />
-                  <Button type="submit" size="sm" disabled={creatingUnit || newUnitName.trim().length === 0}>
-                    추가
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setAddingUnit(false)
-                      setNewUnitName('')
-                      setUnitError(null)
-                    }}
-                  >
-                    취소
-                  </Button>
-                </form>
-              )}
-            </div>
-          )}
-          {unitError && <p className="mt-1 text-xs text-marker-red">{unitError}</p>}
-        </div>
-      )}
+      <UnitPicker
+        subjectId={subjectId}
+        unitId={unitId}
+        onChange={setUnitId}
+        unconfirmedAiSuggestion={isUnconfirmedAiSuggestion}
+      />
 
       {choices.length > 0 && (
         <div className="mb-4">

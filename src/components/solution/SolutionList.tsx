@@ -19,11 +19,15 @@ export function SolutionList({
   groupId,
   choiceCount,
   subjectId,
+  unitId,
+  unitSource,
 }: {
   questionId: string
   groupId: string | null
   choiceCount: number
   subjectId: string | null
+  unitId: string | null
+  unitSource: 'ai_suggested' | 'human_confirmed' | null
 }) {
   const { session } = useAuth()
   const userId = session?.user.id ?? ''
@@ -82,6 +86,8 @@ export function SolutionList({
         existing={editingSolution}
         choiceCount={choiceCount}
         subjectId={subjectId}
+        currentUnitId={unitId}
+        currentUnitSource={unitSource}
         onSaved={() => {
           setEditing(null)
           reload()

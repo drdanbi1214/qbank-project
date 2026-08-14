@@ -479,6 +479,8 @@ export function QuestionView({
                   groupId={question.groupId}
                   choiceCount={question.choices.length}
                   subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
+                  unitId={question.unitId}
+                  unitSource={question.unitSource}
                 />
               )}
               {tab === 'note' && <PersonalNoteTab questionId={question.id} groupId={question.groupId} />}

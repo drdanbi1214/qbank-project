@@ -1,9 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
+import { UnitPicker } from '@/components/question/UnitPicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { assignUnit } from '@/lib/queries/admin'
 import {
   createSolution,
   updateSolution,
@@ -22,10 +24,26 @@ type Props = {
   onSaved: () => void
   onCancel: () => void
   subjectId: string | null
+  /** 현재 분류된 단원. 없으면 미분류 문항이다. */
+  currentUnitId: string | null
+  /** 'ai_suggested' 면 사람이 아직 확인 안 한 AI 1차 분류라 검토가 필요하다 */
+  currentUnitSource: 'ai_suggested' | 'human_confirmed' | null
 }
 
-export function SolutionEditor({ target, userId, existing, choiceCount, onSaved, onCancel, subjectId }: Props) {
+export function SolutionEditor({
+  target,
+  userId,
+  existing,
+  choiceCount,
+  onSaved,
+  onCancel,
+  subjectId,
+  currentUnitId,
+  currentUnitSource,
+}: Props) {
   const isNew = !existing
+  const [unitId, setUnitId] = useState<string | null>(currentUnitId)
+  const isUnconfirmedAiSuggestion = unitId === currentUnitId && currentUnitSource === 'ai_suggested'
   // 그룹이 있으면 그룹 단위로 임시저장한다. 같은 문제의 다른 학번에서 이어 쓸 수 있다.
   const draftKey = target.groupId ?? target.questionId
 
@@ -65,6 +83,7 @@ export function SolutionEditor({ target, userId, existing, choiceCount, onSaved,
     setBusy(true)
     setError(null)
     try {
+      if (unitId !== currentUnitId) await assignUnit([target.questionId], unitId)
       if (existing) {
         await updateSolution({ id: existing.id, content: doc.current, references })
       } else {
@@ -118,6 +137,13 @@ export function SolutionEditor({ target, userId, existing, choiceCount, onSaved,
           </div>
         </div>
       )}
+
+      <UnitPicker
+        subjectId={subjectId}
+        unitId={unitId}
+        onChange={setUnitId}
+        unconfirmedAiSuggestion={isUnconfirmedAiSuggestion}
+      />
 
       <LazyRichTextEditor
         key={seed.version}
