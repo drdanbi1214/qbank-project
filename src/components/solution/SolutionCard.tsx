@@ -5,6 +5,7 @@ import { useTextMarks } from '@/components/marking/useTextMarks'
 import type { RenderMark, SelectionRange } from '@/components/marking/marks'
 import { InlineCommentPanel } from '@/components/solution/InlineCommentPanel'
 import { SolutionHistoryModal } from '@/components/solution/SolutionHistoryModal'
+import { SolutionScopeBadge } from '@/components/solution/SolutionScope'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/lib/auth'
@@ -123,6 +124,7 @@ export function SolutionCard({
             검수 완료
           </span>
         )}
+        <SolutionScopeBadge permissionKey={solution.requiredPermission} />
         <Avatar path={solution.author.avatarUrl} name={solution.author.displayName} size={24} />
         <span className="font-semibold">{solution.author.displayName}</span>
         <span className="text-xs text-slate-400 dark:text-slate-500">

@@ -2,10 +2,12 @@ import { useNavigate } from 'react-router-dom'
 import { useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
+import { SolutionScopePicker } from '@/components/solution/SolutionScope'
 import { UnitPicker } from '@/components/question/UnitPicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { createSolution, type SolutionReference } from '@/lib/queries/solutions'
 import { setEditorAnswer } from '@/lib/queries/questions'
 import { assignUnit } from '@/lib/queries/admin'
@@ -55,6 +57,7 @@ export function AssignmentEditor({
 }: Props) {
   const navigate = useNavigate()
   const { taxonomy } = useData()
+  const { profile, updateProfile } = useAuth()
   // 편집자답이 아직 없으면 야마답으로 미리 채워, 편집자가 다시 고를 필요 없이
   // 다르다고 판단할 때만 바꾸도록 한다.
   const initialSelection = currentEditorAnswer.length > 0 ? currentEditorAnswer : (yamaAnswer ?? [])
@@ -64,6 +67,10 @@ export function AssignmentEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [references, setReferences] = useState<SolutionReference[]>([])
+  // 배정 풀이도 마지막에 쓴 공개범위를 그대로 따른다.
+  const [scope, setScope] = useState<string | null>(
+    profile?.default_solution_permission ?? null,
+  )
 
   const subjectId = taxonomy?.examById.get(examId)?.subjectId ?? null
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
@@ -113,8 +120,16 @@ export function AssignmentEditor({
         authorId: userId,
         content: doc.current,
         references,
+        requiredPermission: scope,
       })
       await discard()
+
+      if (scope !== (profile?.default_solution_permission ?? null)) {
+        await updateProfile({ default_solution_permission: scope }).catch((caught: unknown) =>
+          console.error('기본 공개범위를 저장하지 못했습니다.', caught),
+        )
+      }
+
       navigate('/assignments')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '등록하지 못했습니다.')
@@ -135,6 +150,10 @@ export function AssignmentEditor({
         onChange={setUnitId}
         unconfirmedAiSuggestion={isUnconfirmedAiSuggestion}
       />
+
+      <div className="mb-4">
+        <SolutionScopePicker value={scope} onChange={setScope} disabled={busy} />
+      </div>
 
       {choices.length > 0 && (
         <div className="mb-4">

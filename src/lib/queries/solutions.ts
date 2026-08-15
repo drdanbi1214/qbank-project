@@ -36,6 +36,8 @@ export type Solution = {
   editedAt: string | null
   /** 내가 추천했는지 */
   upvoted: boolean
+  /** 이 풀이를 읽는 데 필요한 권한. null 이면 전체공개다. */
+  requiredPermission: string | null
 }
 
 export type SolutionSort = 'top' | 'recent'
@@ -55,6 +57,7 @@ type SolutionRow = {
   upvote_count: number
   created_at: string
   edited_at: string | null
+  required_permission: string | null
   profiles: AuthorRow
 }
 
@@ -93,6 +96,7 @@ function toSolution(row: SolutionRow, upvoted: Set<string>): Solution {
     createdAt: row.created_at,
     editedAt: row.edited_at,
     upvoted: upvoted.has(row.id),
+    requiredPermission: row.required_permission,
   }
 }
 
@@ -104,7 +108,7 @@ export async function fetchSolutions(
     .from('solutions')
     .select(
       `id, question_id, group_id, author_id, content, references, is_verified,
-       upvote_count, created_at, edited_at, ${AUTHOR_SELECT}`,
+       upvote_count, created_at, edited_at, required_permission, ${AUTHOR_SELECT}`,
     )
 
   query = target.groupId
@@ -157,7 +161,7 @@ export async function fetchSolutionsForQuestions(
     .from('solutions')
     .select(
       `id, question_id, group_id, author_id, content, references, is_verified,
-       upvote_count, created_at, edited_at, ${AUTHOR_SELECT}`,
+       upvote_count, created_at, edited_at, required_permission, ${AUTHOR_SELECT}`,
     )
     .or(filters.join(','))
     .order('upvote_count', { ascending: false })
@@ -204,6 +208,8 @@ export async function createSolution(params: {
   authorId: string
   content: RichDoc
   references: SolutionReference[]
+  /** null 이면 전체공개. 컬럼 기본값에 기대지 않고 항상 명시해서 보낸다. */
+  requiredPermission: string | null
 }): Promise<string> {
   const { data, error } = await supabase
     .from('solutions')
@@ -214,6 +220,7 @@ export async function createSolution(params: {
       author_id: params.authorId,
       content: toJson(params.content),
       references: toJson(params.references),
+      required_permission: params.requiredPermission,
     })
     .select('id')
     .single()
@@ -226,10 +233,15 @@ export async function updateSolution(params: {
   id: string
   content: RichDoc
   references: SolutionReference[]
+  requiredPermission: string | null
 }): Promise<void> {
   const { error } = await supabase
     .from('solutions')
-    .update({ content: toJson(params.content), references: toJson(params.references) })
+    .update({
+      content: toJson(params.content),
+      references: toJson(params.references),
+      required_permission: params.requiredPermission,
+    })
     .eq('id', params.id)
   if (error) throw error
 }

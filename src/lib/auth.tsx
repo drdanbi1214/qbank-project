@@ -33,7 +33,13 @@ type AuthState = {
 export type ProfilePatch = Partial<
   Pick<
     Profile,
-    'display_name' | 'cohort' | 'avatar_url' | 'theme' | 'font_scale' | 'welcome_popup_dismissed'
+    | 'display_name'
+    | 'cohort'
+    | 'avatar_url'
+    | 'theme'
+    | 'font_scale'
+    | 'welcome_popup_dismissed'
+    | 'default_solution_permission'
   >
 >
 

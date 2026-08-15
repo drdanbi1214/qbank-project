@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
+import { SolutionScopePicker } from '@/components/solution/SolutionScope'
 import { UnitPicker } from '@/components/question/UnitPicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { assignUnit } from '@/lib/queries/admin'
 import {
   createSolution,
@@ -42,7 +44,12 @@ export function SolutionEditor({
   currentUnitSource,
 }: Props) {
   const isNew = !existing
+  const { profile, updateProfile } = useAuth()
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
+  // 새 풀이는 마지막에 쓴 공개범위로 시작한다. 수정할 때는 그 풀이의 값을 그대로 쓴다.
+  const [scope, setScope] = useState<string | null>(
+    existing ? existing.requiredPermission : (profile?.default_solution_permission ?? null),
+  )
   const isUnconfirmedAiSuggestion = unitId === currentUnitId && currentUnitSource === 'ai_suggested'
   // 그룹이 있으면 그룹 단위로 임시저장한다. 같은 문제의 다른 학번에서 이어 쓸 수 있다.
   const draftKey = target.groupId ?? target.questionId
@@ -85,16 +92,31 @@ export function SolutionEditor({
     try {
       if (unitId !== currentUnitId) await assignUnit([target.questionId], unitId)
       if (existing) {
-        await updateSolution({ id: existing.id, content: doc.current, references })
+        await updateSolution({
+          id: existing.id,
+          content: doc.current,
+          references,
+          requiredPermission: scope,
+        })
       } else {
         await createSolution({
           target,
           authorId: userId,
           content: doc.current,
           references,
+          requiredPermission: scope,
         })
         await discard()
       }
+
+      // 다음 작성의 기본값으로 쓰려고 방금 고른 범위를 기억해둔다.
+      // 실패해도 풀이는 이미 저장됐으므로 저장 자체를 실패로 만들지 않는다.
+      if (scope !== (profile?.default_solution_permission ?? null)) {
+        await updateProfile({ default_solution_permission: scope }).catch((caught: unknown) =>
+          console.error('기본 공개범위를 저장하지 못했습니다.', caught),
+        )
+      }
+
       onSaved()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '저장하지 못했습니다.')
@@ -144,6 +166,8 @@ export function SolutionEditor({
         onChange={setUnitId}
         unconfirmedAiSuggestion={isUnconfirmedAiSuggestion}
       />
+
+      <SolutionScopePicker value={scope} onChange={setScope} disabled={busy} />
 
       <LazyRichTextEditor
         key={seed.version}
