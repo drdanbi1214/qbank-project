@@ -130,24 +130,33 @@ export function UnitQuestionsPage() {
   const unit = unlabeled ? null : taxonomy?.unitById.get(unitId)
   const title = unlabeled ? '미분류' : (unit?.name ?? '단원')
 
-  const solveHref = (examId: string) =>
-    unlabeled
-      ? `/solve?subject=${subjectId}&unlabeled=1&exam=${examId}`
-      : `/solve?unit=${unitId}&exam=${examId}`
+  // exam 을 빼면 단원 전체가 범위가 된다.
+  const scopeHref = unlabeled ? `/solve?subject=${subjectId}&unlabeled=1` : `/solve?unit=${unitId}`
+  const solveHref = (examId: string) => `${scopeHref}&exam=${examId}`
 
   return (
     <section>
-      <header className="mb-4">
-        <Link
-          to={`/study/${subjectId}`}
-          className="text-xs text-slate-500 hover:underline dark:text-slate-400"
-        >
-          {subject?.name ?? '과목'}
-        </Link>
-        <h1 className="mt-0.5 truncate text-xl font-bold">{title}</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          문제 {questions.length}개, 시험 {examGroups.length}개
-        </p>
+      <header className="mb-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <Link
+            to={`/study/${subjectId}`}
+            className="text-xs text-slate-500 hover:underline dark:text-slate-400"
+          >
+            {subject?.name ?? '과목'}
+          </Link>
+          <h1 className="mt-0.5 truncate text-xl font-bold">{title}</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            문제 {questions.length}개, 시험 {examGroups.length}개
+          </p>
+        </div>
+        {examGroups.length > 0 && (
+          <Link
+            to={scopeHref}
+            className="mt-4 inline-flex h-9 shrink-0 items-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            전체 풀기
+          </Link>
+        )}
       </header>
 
       {loading ? (
