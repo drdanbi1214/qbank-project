@@ -10,7 +10,7 @@ import {
   type StemBlock,
 } from '@/types/question'
 import { toJson } from '@/types/richtext'
-import { isPermissionKey, type PermissionKey } from '@/lib/permissions'
+import { type PermissionKey } from '@/lib/permissions'
 
 // =============================================================================
 // 관리자 조회 및 편집
@@ -380,7 +380,7 @@ export async function fetchMembers(): Promise<Member[]> {
     attemptCount: row.attempt_count ?? 0,
     solutionCount: row.solution_count ?? 0,
     lastActiveAt: row.last_active_at,
-    permissions: (row.permission_keys ?? []).filter(isPermissionKey),
+    permissions: row.permission_keys ?? [],
   }))
 }
 

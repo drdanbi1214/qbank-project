@@ -44,6 +44,7 @@ export type Database = {
           created_at: string
           description: string | null
           key: string
+          kind: string
           name: string
           sort_order: number
         }
@@ -51,6 +52,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           key: string
+          kind?: string
           name: string
           sort_order?: number
         }
@@ -58,6 +60,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           key?: string
+          kind?: string
           name?: string
           sort_order?: number
         }
@@ -693,6 +696,7 @@ export type Database = {
           format: string | null
           id: string
           overview: string | null
+          required_permission: string | null
           restored_questions: number | null
           source_file_url: string | null
           subject_id: string
@@ -709,6 +713,7 @@ export type Database = {
           format?: string | null
           id?: string
           overview?: string | null
+          required_permission?: string | null
           restored_questions?: number | null
           source_file_url?: string | null
           subject_id: string
@@ -725,6 +730,7 @@ export type Database = {
           format?: string | null
           id?: string
           overview?: string | null
+          required_permission?: string | null
           restored_questions?: number | null
           source_file_url?: string | null
           subject_id?: string
@@ -738,6 +744,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exams_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
           },
           {
             foreignKeyName: "exams_subject_id_fkey"
@@ -983,6 +996,7 @@ export type Database = {
           avatar_url: string | null
           cohort: string | null
           created_at: string
+          default_solution_permission: string | null
           display_name: string
           email: string | null
           font_scale: number
@@ -997,6 +1011,7 @@ export type Database = {
           avatar_url?: string | null
           cohort?: string | null
           created_at?: string
+          default_solution_permission?: string | null
           display_name: string
           email?: string | null
           font_scale?: number
@@ -1011,6 +1026,7 @@ export type Database = {
           avatar_url?: string | null
           cohort?: string | null
           created_at?: string
+          default_solution_permission?: string | null
           display_name?: string
           email?: string | null
           font_scale?: number
@@ -1021,7 +1037,15 @@ export type Database = {
           updated_at?: string
           welcome_popup_dismissed?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_default_solution_permission_fkey"
+            columns: ["default_solution_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
       }
       question_groups: {
         Row: {
@@ -1429,6 +1453,38 @@ export type Database = {
           },
         ]
       }
+      senior_solutions_pending: {
+        Row: {
+          content: Json
+          created_at: string
+          question_code: string
+          required_permission: string
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          question_code: string
+          required_permission?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          question_code?: string
+          required_permission?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "senior_solutions_pending_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       solution_upvotes: {
         Row: {
           created_at: string
@@ -1473,7 +1529,7 @@ export type Database = {
           is_verified: boolean
           question_id: string | null
           references: Json | null
-          required_permission: string
+          required_permission: string | null
           updated_at: string
           upvote_count: number
         }
@@ -1487,7 +1543,7 @@ export type Database = {
           is_verified?: boolean
           question_id?: string | null
           references?: Json | null
-          required_permission?: string
+          required_permission?: string | null
           updated_at?: string
           upvote_count?: number
         }
@@ -1501,7 +1557,7 @@ export type Database = {
           is_verified?: boolean
           question_id?: string | null
           references?: Json | null
-          required_permission?: string
+          required_permission?: string | null
           updated_at?: string
           upvote_count?: number
         }
@@ -2142,6 +2198,10 @@ export type Database = {
           unit_id: string
           wrong_count: number
         }[]
+      }
+      has_content_access: {
+        Args: { p_permission_key: string }
+        Returns: boolean
       }
       has_permission: { Args: { p_permission_key: string }; Returns: boolean }
       increment_discussion_view: {

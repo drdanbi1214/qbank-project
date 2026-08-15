@@ -10,7 +10,7 @@ import {
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, type Profile } from '@/lib/supabase'
-import { isPermissionKey, type PermissionKey } from '@/lib/permissions'
+import { type PermissionKey } from '@/lib/permissions'
 
 type AuthState = {
   session: Session | null
@@ -63,7 +63,8 @@ async function fetchPermissions(userId: string): Promise<PermissionKey[]> {
     console.error('콘텐츠 권한을 불러오지 못했습니다.', error)
     return []
   }
-  return (data ?? []).map((row) => row.permission_key).filter(isPermissionKey)
+  // 권한 키는 DB 에서 늘어날 수 있으므로 코드 목록으로 거르지 않는다.
+  return (data ?? []).map((row) => row.permission_key)
 }
 
 type Account = { profile: Profile | null; permissions: PermissionKey[] }

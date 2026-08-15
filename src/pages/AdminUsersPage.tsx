@@ -11,7 +11,8 @@ import {
   setSuspended,
   type Member,
 } from '@/lib/queries/admin'
-import { PERMISSION_KEYS, PERMISSION_LABEL, type PermissionKey } from '@/lib/permissions'
+import { fetchAccessPermissions } from '@/lib/queries/permissions'
+import { PERMISSION_KIND_LABEL, type AccessPermission } from '@/lib/permissions'
 import { formatShortDate, formatRelative } from '@/utils/date'
 import { cn } from '@/utils/cn'
 
@@ -29,6 +30,8 @@ export function AdminUsersPage() {
   const [loaded, setLoaded] = useState<{ key: number; rows: Member[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // 권한 목록은 DB 에 있다. 스터디 그룹이나 학번 권한이 늘어나면 여기에 그대로 나온다.
+  const [permissionList, setPermissionList] = useState<AccessPermission[]>([])
 
   useEffect(() => {
     let active = true
@@ -48,6 +51,18 @@ export function AdminUsersPage() {
       active = false
     }
   }, [reloadKey])
+
+  useEffect(() => {
+    let active = true
+    void fetchAccessPermissions()
+      .then((rows) => {
+        if (active) setPermissionList(rows)
+      })
+      .catch((caught: unknown) => console.error('권한 목록을 불러오지 못했습니다.', caught))
+    return () => {
+      active = false
+    }
+  }, [])
 
   async function run(id: string, action: () => Promise<void>) {
     setBusyId(id)
@@ -143,15 +158,15 @@ export function AdminUsersPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-col gap-1.5">
-                        {PERMISSION_KEYS.map((permission) => (
+                        {permissionList.map((permission) => (
                           <PermissionCheckbox
-                            key={permission}
+                            key={permission.key}
                             permission={permission}
-                            checked={row.permissions.includes(permission)}
+                            checked={row.permissions.includes(permission.key)}
                             disabled={busyId === row.id}
                             onChange={(enabled) =>
                               void run(row.id, async () => {
-                                await setPermission(row.id, permission, enabled)
+                                await setPermission(row.id, permission.key, enabled)
                                 if (row.id === myId) await refreshProfile()
                               })
                             }
@@ -206,13 +221,16 @@ function PermissionCheckbox({
   disabled,
   onChange,
 }: {
-  permission: PermissionKey
+  permission: AccessPermission
   checked: boolean
   disabled: boolean
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs">
+    <label
+      title={permission.description ?? undefined}
+      className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs"
+    >
       <input
         type="checkbox"
         checked={checked}
@@ -220,7 +238,12 @@ function PermissionCheckbox({
         onChange={(event) => onChange(event.target.checked)}
         className="h-4 w-4 accent-brand-600"
       />
-      {PERMISSION_LABEL[permission]}
+      <span>{permission.name}</span>
+      {permission.kind !== 'feature' && (
+        <span className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          {PERMISSION_KIND_LABEL[permission.kind]}
+        </span>
+      )}
     </label>
   )
 }
