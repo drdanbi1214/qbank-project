@@ -18,6 +18,7 @@ import { AdminRevisionsPage } from '@/pages/AdminRevisionsPage'
 import { AdminStatsPage } from '@/pages/AdminStatsPage'
 import { AdminUploadPage } from '@/pages/AdminUploadPage'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
+import { AdminVisibilityPage } from '@/pages/AdminVisibilityPage'
 import { AnnouncementsPage } from '@/pages/AnnouncementsPage'
 import { BlockTestPage } from '@/pages/BlockTestPage'
 import { DiscussionsPage } from '@/pages/DiscussionsPage'
@@ -93,6 +94,7 @@ export default function App() {
                             <Route path="/admin/upload" element={<AdminUploadPage />} />
                             <Route path="/admin/groups" element={<AdminGroupsPage />} />
                             <Route path="/admin/users" element={<AdminUsersPage />} />
+                            <Route path="/admin/visibility" element={<AdminVisibilityPage />} />
                             <Route path="/admin/reports" element={<AdminReportsPage />} />
                             <Route path="/admin/revisions" element={<AdminRevisionsPage />} />
                             <Route path="/admin/stats" element={<AdminStatsPage />} />

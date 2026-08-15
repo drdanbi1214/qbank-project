@@ -28,6 +28,11 @@ const TOOLS: { to: string | null; title: string; description: string; phase?: st
     description: '가입 승인, 정지, 관리자 권한을 다룹니다.',
   },
   {
+    to: '/admin/visibility',
+    title: '공개 범위 관리',
+    description: '학번별로 문제를 열고 잠급니다. 스터디 그룹도 여기서 만듭니다.',
+  },
+  {
     to: '/admin/reports',
     title: '신고 처리함',
     description: '신고된 문제와 글을 확인하고 처리합니다.',
