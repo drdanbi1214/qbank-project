@@ -124,6 +124,19 @@ export function isLeafNode(type: string): boolean {
   return LEAF_TYPES.has(type)
 }
 
+/** 이미지 폭 조절의 하한. 더 작아지면 손잡이를 다시 잡기 어렵다. */
+export const MIN_IMAGE_WIDTH = 80
+export const MAX_IMAGE_WIDTH = 2000
+
+/**
+ * 작성자가 정한 이미지 폭(px).
+ * 저장된 문서 JSON 은 남이 만든 것도 오므로 숫자와 범위를 확인하고 쓴다.
+ */
+export function imageWidthOf(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return Math.min(Math.max(Math.round(value), MIN_IMAGE_WIDTH), MAX_IMAGE_WIDTH)
+}
+
 /** ProseMirror 기준 노드 크기 */
 export function nodeSize(node: RichNode): number {
   if (node.type === 'text') return node.text?.length ?? 0

@@ -3,7 +3,7 @@ import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
-import { isLeafNode, type RichDoc, type RichMark, type RichNode } from '@/types/richtext'
+import { imageWidthOf, isLeafNode, type RichDoc, type RichMark, type RichNode } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -186,7 +186,8 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
     case 'image': {
       const src = typeof node.attrs?.src === 'string' ? node.attrs.src : null
       const alt = typeof node.attrs?.alt === 'string' ? node.attrs.alt : null
-      return src ? <ViewerImage path={src} alt={alt} onZoom={context.onZoom} /> : null
+      const width = imageWidthOf(node.attrs?.width)
+      return src ? <ViewerImage path={src} alt={alt} width={width} onZoom={context.onZoom} /> : null
     }
     case 'mathInline':
       return <Formula latex={latexOf(node)} display={false} />
@@ -204,34 +205,34 @@ function latexOf(node: RichNode): string {
 function ViewerImage({
   path,
   alt,
+  width,
   onZoom,
 }: {
   path: string
   alt: string | null
+  /** 작성자가 편집기에서 정한 폭(px). 없으면 예전처럼 높이로 가둔다. */
+  width: number | null
   onZoom: (src: string) => void
 }) {
   const external = /^https?:\/\//i.test(path)
   const signedUrl = useSignedUrl(external ? null : path)
+  const src = external ? path : signedUrl
 
-  if (external) {
-    return (
-      <button type="button" onClick={() => onZoom(path)} className="block cursor-zoom-in">
-        <img src={path} alt={alt ?? '본문 이미지'} loading="lazy" className="max-h-96 rounded-lg border border-slate-200 dark:border-slate-700" />
-      </button>
-    )
-  }
-
-  if (!signedUrl) {
+  if (!src) {
     return <div className="h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
   }
 
   return (
-    <button type="button" onClick={() => onZoom(signedUrl)} className="block cursor-zoom-in">
+    <button type="button" onClick={() => onZoom(src)} className="block cursor-zoom-in">
       <img
-        src={signedUrl}
+        src={src}
         alt={alt ?? '본문 이미지'}
         loading="lazy"
-        className="max-h-96 rounded-lg border border-slate-200 dark:border-slate-700"
+        style={width ? { width } : undefined}
+        className={cn(
+          'max-w-full rounded-lg border border-slate-200 dark:border-slate-700',
+          width ? 'h-auto' : 'max-h-96',
+        )}
       />
     </button>
   )
