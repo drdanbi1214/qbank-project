@@ -103,7 +103,12 @@ export function ProfilesPage() {
                 }
               >
                 <div className="flex items-center gap-3">
-                  <Avatar path={card.avatarUrl} name={card.displayName} size={44} />
+                  <Avatar
+                    path={card.avatarUrl}
+                    name={card.displayName}
+                    size={44}
+                    enlargeOnClick
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">
                       {card.displayName}
