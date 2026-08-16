@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       access_permissions: {
@@ -1005,7 +980,6 @@ export type Database = {
           role: string
           theme: string
           updated_at: string
-          welcome_popup_dismissed: boolean
         }
         Insert: {
           avatar_url?: string | null
@@ -1020,7 +994,6 @@ export type Database = {
           role?: string
           theme?: string
           updated_at?: string
-          welcome_popup_dismissed?: boolean
         }
         Update: {
           avatar_url?: string | null
@@ -1035,7 +1008,6 @@ export type Database = {
           role?: string
           theme?: string
           updated_at?: string
-          welcome_popup_dismissed?: boolean
         }
         Relationships: [
           {
@@ -1453,6 +1425,24 @@ export type Database = {
           },
         ]
       }
+      senior_solutions_backup_20260816: {
+        Row: {
+          content: Json | null
+          id: string | null
+          question_id: string | null
+        }
+        Insert: {
+          content?: Json | null
+          id?: string | null
+          question_id?: string | null
+        }
+        Update: {
+          content?: Json | null
+          id?: string | null
+          question_id?: string | null
+        }
+        Relationships: []
+      }
       senior_solutions_pending: {
         Row: {
           content: Json
@@ -1592,6 +1582,54 @@ export type Database = {
           },
           {
             foreignKeyName: "solutions_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      solutions_pending: {
+        Row: {
+          author_id: string
+          content: Json
+          created_at: string
+          id: string
+          question_code: string
+          references: Json | null
+          required_permission: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          content: Json
+          created_at?: string
+          id?: string
+          question_code: string
+          references?: Json | null
+          required_permission?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          question_code?: string
+          references?: Json | null
+          required_permission?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solutions_pending_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solutions_pending_required_permission_fkey"
             columns: ["required_permission"]
             isOneToOne: false
             referencedRelation: "access_permissions"
@@ -2051,7 +2089,7 @@ export type Database = {
         Args: never
         Returns: {
           attempt_count: number
-          avatar_url: string | null
+          avatar_url: string
           created_at: string
           display_name: string
           email: string
@@ -2087,6 +2125,16 @@ export type Database = {
         Args: { editor_answer: number[]; yama_answer: number[] }
         Returns: boolean
       }
+      can_read_lecture_file: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
+      can_read_solution_image: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
+      can_view_exam: { Args: { p_exam_id: string }; Returns: boolean }
+      can_view_question: { Args: { p_question_id: string }; Returns: boolean }
       can_write: { Args: never; Returns: boolean }
       circled_answer: { Args: { a: number[] }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
@@ -2101,7 +2149,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      dismiss_welcome_popup: { Args: never; Returns: boolean }
       effective_answer: {
         Args: { q: Database["public"]["Tables"]["questions"]["Row"] }
         Returns: number[]
@@ -2401,9 +2448,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

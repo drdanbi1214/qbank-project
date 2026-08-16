@@ -27,7 +27,6 @@ type AuthState = {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (patch: ProfilePatch) => Promise<void>
-  dismissWelcomePopup: () => Promise<void>
 }
 
 export type ProfilePatch = Partial<
@@ -38,7 +37,6 @@ export type ProfilePatch = Partial<
     | 'avatar_url'
     | 'theme'
     | 'font_scale'
-    | 'welcome_popup_dismissed'
     | 'default_solution_permission'
   >
 >
@@ -203,18 +201,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session?.user.id, refreshProfile],
   )
 
-  const dismissWelcomePopup = useCallback(async () => {
-    const userId = session?.user.id
-    if (!userId) throw new Error('로그인이 필요합니다.')
-
-    const { data, error } = await supabase.rpc('dismiss_welcome_popup')
-    if (error) throw error
-    if (data !== true) throw new Error('안내창 설정을 저장하지 못했습니다.')
-
-    // 서버 저장이 확인된 뒤에만 화면 상태도 바꾼다.
-    setProfile((prev) => (prev ? { ...prev, welcome_popup_dismissed: true } : prev))
-  }, [session?.user.id])
-
   const value = useMemo<AuthState>(
     () => {
       const permissionSet = new Set(permissions)
@@ -231,7 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         refreshProfile,
         updateProfile,
-        dismissWelcomePopup,
       }
     },
     [
@@ -244,7 +229,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       refreshProfile,
       updateProfile,
-      dismissWelcomePopup,
     ],
   )
 
