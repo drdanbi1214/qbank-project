@@ -2051,6 +2051,7 @@ export type Database = {
         Args: never
         Returns: {
           attempt_count: number
+          avatar_url: string | null
           created_at: string
           display_name: string
           email: string

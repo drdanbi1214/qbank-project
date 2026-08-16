@@ -357,6 +357,8 @@ export type Member = {
   id: string
   email: string
   displayName: string
+  /** `avatars/<user_id>/<file>` 형태의 저장 경로. 등록 안 했으면 null. */
+  avatarUrl: string | null
   role: string
   isSuspended: boolean
   createdAt: string
@@ -374,6 +376,7 @@ export async function fetchMembers(): Promise<Member[]> {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
+    avatarUrl: row.avatar_url,
     role: row.role,
     isSuspended: row.is_suspended,
     createdAt: row.created_at,

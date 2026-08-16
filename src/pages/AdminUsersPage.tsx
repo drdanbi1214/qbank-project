@@ -127,7 +127,7 @@ export function AdminUsersPage() {
                   <tr key={row.id} className={cn(row.isSuspended && 'bg-amber-50/50 dark:bg-amber-950/20')}>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <Avatar path={null} name={row.displayName} size={24} />
+                        <Avatar path={row.avatarUrl} name={row.displayName} size={28} />
                         <div className="min-w-0">
                           <p className="font-medium">{row.displayName}</p>
                           <p className="truncate text-xs text-slate-400">{row.email}</p>
