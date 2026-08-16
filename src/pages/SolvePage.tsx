@@ -81,19 +81,18 @@ export function SolvePage() {
           return
         }
 
-        const rows = await fetchQuestions({
-          unitId: unitId ?? undefined,
-          examId: examId ?? undefined,
-          subjectId: subjectId ?? undefined,
-          unlabeledOnly: unlabeled,
-        })
-
-        const scoped = questionId ? rows.filter((row) => row.id === questionId) : rows
-        // 단건 진입인데 범위 조회에 없으면 그 문제만 따로 받는다.
-        const finalRows =
-          questionId && scoped.length === 0
-            ? await fetchQuestions({}).then((all) => all.filter((r) => r.id === questionId))
-            : scoped
+        // 단건 진입은 그 문제만 바로 받는다. 예전에는 범위 전체를 받아
+        // 거기서 걸렀는데, 문제가 쌓이면서 PostgREST 반환 상한(기본 1000행)에
+        // 걸려 뒤쪽 문제는 목록에 아예 오지 않았다. 그래서 배정 화면에서
+        // 넘어오면 '이 범위에 풀 문제가 없습니다' 가 떴다.
+        const finalRows = questionId
+          ? await fetchQuestionById(questionId).then((one) => (one ? [one] : []))
+          : await fetchQuestions({
+              unitId: unitId ?? undefined,
+              examId: examId ?? undefined,
+              subjectId: subjectId ?? undefined,
+              unlabeledOnly: unlabeled,
+            })
 
         const marked = await fetchBookmarked(finalRows.map((row) => row.id))
         if (!active) return
