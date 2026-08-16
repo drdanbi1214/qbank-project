@@ -26,7 +26,7 @@ export function BrandMark({ className }: { className?: string }) {
   return (
     <img
       src="/brand-logo.png"
-      alt="한양대학교"
+      alt="DALLEN'S LIBRARY"
       onError={() => setFailed(true)}
       className={cn('object-contain', className)}
     />
@@ -34,4 +34,8 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 /** 헤더, 로그인 화면에 함께 쓰는 서비스 이름 */
-export const BRAND_NAME = '2026 학년말고사'
+export const BRAND_NAME = "DALLEN'S LIBRARY"
+
+/** BRAND_NAME 에 함께 적용하는 로고 색상/자간 스타일 */
+export const BRAND_NAME_CLASSNAME =
+  'font-sans font-extrabold uppercase tracking-wide text-brand-600 dark:text-brand-400'

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
-import { BRAND_NAME, BrandMark } from '@/components/ui/BrandMark'
+import { BRAND_NAME, BRAND_NAME_CLASSNAME, BrandMark } from '@/components/ui/BrandMark'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { MAIN_NAV } from '@/lib/navigation'
@@ -47,7 +47,7 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
 
         <NavLink to="/study" className="flex shrink-0 items-center gap-2">
           <BrandMark className="h-8 w-8 text-sm" />
-          <span className="hidden font-brand text-lg sm:inline">{BRAND_NAME}</span>
+          <span className={cn('hidden text-lg sm:inline', BRAND_NAME_CLASSNAME)}>{BRAND_NAME}</span>
         </NavLink>
 
         <nav className="ml-4 hidden items-center gap-1 lg:flex">

@@ -10,7 +10,7 @@ import {
   validateNickname,
 } from '@/lib/queries/profiles'
 import { cn } from '@/utils/cn'
-import { BRAND_NAME, BrandMark } from '@/components/ui/BrandMark'
+import { BRAND_NAME, BRAND_NAME_CLASSNAME, BrandMark } from '@/components/ui/BrandMark'
 
 type Mode = 'signin' | 'signup'
 
@@ -71,7 +71,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <BrandMark className="mx-auto mb-3 h-14 w-14 text-lg" />
-          <h1 className="font-brand text-2xl">{BRAND_NAME}</h1>
+          <h1 className={cn('text-2xl', BRAND_NAME_CLASSNAME)}>{BRAND_NAME}</h1>
         </div>
 
         <div className="mb-4 flex rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
