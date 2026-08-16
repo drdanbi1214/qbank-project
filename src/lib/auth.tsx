@@ -38,6 +38,7 @@ export type ProfilePatch = Partial<
     | 'theme'
     | 'font_scale'
     | 'default_solution_permission'
+    | 'one_liner'
   >
 >
 

@@ -977,6 +977,7 @@ export type Database = {
           font_scale: number
           id: string
           is_suspended: boolean
+          one_liner: string | null
           role: string
           theme: string
           updated_at: string
@@ -991,6 +992,7 @@ export type Database = {
           font_scale?: number
           id: string
           is_suspended?: boolean
+          one_liner?: string | null
           role?: string
           theme?: string
           updated_at?: string
@@ -1005,6 +1007,7 @@ export type Database = {
           font_scale?: number
           id?: string
           is_suspended?: boolean
+          one_liner?: string | null
           role?: string
           theme?: string
           updated_at?: string

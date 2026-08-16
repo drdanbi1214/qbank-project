@@ -30,6 +30,7 @@ import { MyPage } from '@/pages/MyPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
 import { PendingApprovalPage } from '@/pages/PendingApprovalPage'
 import { PrintPage } from '@/pages/PrintPage'
+import { ProfilesPage } from '@/pages/ProfilesPage'
 import { SearchPage } from '@/pages/SearchPage'
 import { SolvePage } from '@/pages/SolvePage'
 import { StudyHomePage } from '@/pages/StudyHomePage'
@@ -84,6 +85,7 @@ export default function App() {
                           <Route path="/announcements" element={<AnnouncementsPage />} />
                           <Route path="/notifications" element={<NotificationsPage />} />
                           <Route path="/me" element={<MyPage />} />
+                          <Route path="/profiles" element={<ProfilesPage />} />
 
                           <Route element={<AdminRoute />}>
                             <Route path="/admin" element={<AdminHomePage />} />

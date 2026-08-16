@@ -135,6 +135,13 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
                   >
                     마이페이지
                   </NavLink>
+                  <NavLink
+                    to="/profiles"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    프로필 보기
+                  </NavLink>
                   <button
                     type="button"
                     onClick={() => void handleSignOut()}
