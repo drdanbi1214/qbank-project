@@ -16,7 +16,6 @@ const UNLABELED = 'unlabeled'
 type ExamGroup = {
   examId: string
   label: string
-  examDate: string | null
   progress: Progress
 }
 
@@ -24,7 +23,6 @@ function groupByExam(
   questions: SolveQuestion[],
   states: Map<string, QuestionState>,
   labelOf: (examId: string) => string,
-  dateOf: (examId: string) => string | null,
 ): ExamGroup[] {
   const byExam = new Map<string, SolveQuestion[]>()
   for (const question of questions) {
@@ -46,16 +44,15 @@ function groupByExam(
     return {
       examId,
       label: labelOf(examId),
-      examDate: dateOf(examId),
       progress: { total: rows.length, solved, correct },
     }
   })
 
-  // 최신 시험이 위로 오도록 정렬한다. 날짜가 없으면 뒤로 보낸다.
+  // 최신 학번(연도)이 위로 오도록 정렬한다. label 이 "2026 학년말고사"처럼 연도로 시작한다.
   return groups.sort((a, b) => {
-    if (a.examDate && b.examDate) return b.examDate.localeCompare(a.examDate)
-    if (a.examDate) return -1
-    if (b.examDate) return 1
+    const yearA = Number(a.label.match(/^\d{4}/)?.[0] ?? 0)
+    const yearB = Number(b.label.match(/^\d{4}/)?.[0] ?? 0)
+    if (yearA !== yearB) return yearB - yearA
     return a.label.localeCompare(b.label)
   })
 }
@@ -119,7 +116,6 @@ export function UnitQuestionsPage() {
         questions,
         states,
         (examId) => examYearLabel(taxonomy?.examById.get(examId)),
-        (examId) => taxonomy?.examById.get(examId)?.examDate ?? null,
       ),
     [questions, states, taxonomy],
   )
