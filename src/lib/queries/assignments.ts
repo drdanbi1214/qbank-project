@@ -92,9 +92,24 @@ export async function fetchCompletedAssignmentQuestionIds(
 /** 이미 누군가에게 배정된 문항 id 전체. 한 문항은 한 명에게만 배정되므로
  * 이 목록에 있는 문항은 배정 화면에서 선택 대상으로 보여주지 않는다. */
 export async function fetchAssignedQuestionIds(): Promise<Set<string>> {
-  const { data, error } = await supabase.from('assignments').select('question_id')
-  if (error) throw error
-  return new Set((data ?? []).map((row) => row.question_id))
+  // 배정은 문항 수만큼 늘어난다. 한 번에 다 받으면 PostgREST 반환 상한에
+  // 걸려 조용히 잘리고, 이미 배정된 문항이 '배정 가능' 으로 보이게 된다.
+  // 나눠 받아 전체 개수와 맞을 때까지 돈다.
+  const PAGE = 500
+  const ids: string[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error, count } = await supabase
+      .from('assignments')
+      .select('question_id', { count: 'exact' })
+      .order('question_id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+
+    const page = data ?? []
+    ids.push(...page.map((row) => row.question_id))
+    if (page.length === 0 || (count !== null && ids.length >= count)) break
+  }
+  return new Set(ids)
 }
 
 /** 문항 일괄 배정. 이미 다른 사람에게 배정된 문항(레이스 컨디션 등)은 건너뛴다. */

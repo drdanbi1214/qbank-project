@@ -102,17 +102,18 @@ export type QuestionFilter = {
   unlabeledOnly?: boolean
 }
 
+/**
+ * 한 번에 받아올 행 수.
+ *
+ * PostgREST 는 한 응답에 담는 행 수에 상한이 있고, 상한에 걸려도 오류가
+ * 아니라 그냥 잘려서 온다. 잘린 줄 모르면 "문제가 없다" 처럼 보인다.
+ * 실제로 문제가 2577개가 되면서 전체 조회가 조용히 잘렸다.
+ * 서버 상한보다 확실히 작은 값으로 나눠 받고, 전체 개수와 맞을 때까지 돈다.
+ */
+const PAGE_SIZE = 500
+
 export async function fetchQuestions(filter: QuestionFilter): Promise<SolveQuestion[]> {
-  let query = supabase.from('questions_solve').select(SOLVE_COLUMNS).eq('status', 'published')
-
-  if (filter.unlabeledOnly) {
-    query = query.is('unit_id', null)
-  } else if (filter.unitId) {
-    query = query.eq('unit_id', filter.unitId)
-  }
-
-  if (filter.examId) query = query.eq('exam_id', filter.examId)
-
+  let examIds: string[] | null = null
   if (filter.subjectId) {
     // 과목으로 좁힐 때는 해당 과목의 시험 목록을 먼저 구한다.
     const { data: exams, error } = await supabase
@@ -120,17 +121,41 @@ export async function fetchQuestions(filter: QuestionFilter): Promise<SolveQuest
       .select('id')
       .eq('subject_id', filter.subjectId)
     if (error) throw error
-    const examIds = (exams ?? []).map((row) => row.id)
+    examIds = (exams ?? []).map((row) => row.id)
     if (examIds.length === 0) return []
-    query = query.in('exam_id', examIds)
   }
 
-  const { data, error } = await query
-    .order('exam_id', { ascending: true })
-    .order('question_number', { ascending: true })
+  const build = () => {
+    let query = supabase
+      .from('questions_solve')
+      .select(SOLVE_COLUMNS, { count: 'exact' })
+      .eq('status', 'published')
 
-  if (error) throw error
-  return (data ?? []).map((row) => toSolveQuestion(row as SolveRow))
+    if (filter.unlabeledOnly) {
+      query = query.is('unit_id', null)
+    } else if (filter.unitId) {
+      query = query.eq('unit_id', filter.unitId)
+    }
+    if (filter.examId) query = query.eq('exam_id', filter.examId)
+    if (examIds) query = query.in('exam_id', examIds)
+
+    return query
+      .order('exam_id', { ascending: true })
+      .order('question_number', { ascending: true })
+  }
+
+  const rows: SolveRow[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error, count } = await build().range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+
+    const page = (data ?? []) as SolveRow[]
+    rows.push(...page)
+    // 서버가 세어 준 전체 개수를 다 받았거나, 더 줄 게 없으면 끝난다.
+    if (page.length === 0 || (count !== null && rows.length >= count)) break
+  }
+
+  return rows.map((row) => toSolveQuestion(row))
 }
 
 export async function fetchQuestionById(id: string): Promise<SolveQuestion | null> {
