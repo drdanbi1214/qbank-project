@@ -139,7 +139,16 @@ export async function imageFilesFromClipboard(data: DataTransfer | null): Promis
   const direct = imageFilesFrom(data)
   if (direct.length > 0) return direct
 
-  const html = data.getData('text/html')
+  return imageFilesFromHtml(data.getData('text/html'))
+}
+
+/**
+ * 클립보드 HTML 의 img 태그를 실제 파일로 바꾼다.
+ *
+ * DataTransfer 는 이벤트 핸들러가 끝나면 못 읽으므로, 호출하는 쪽에서 HTML 을
+ * 먼저 동기적으로 꺼내 넘긴다.
+ */
+export async function imageFilesFromHtml(html: string): Promise<File[]> {
   if (!html) return []
 
   const document = new DOMParser().parseFromString(html, 'text/html')

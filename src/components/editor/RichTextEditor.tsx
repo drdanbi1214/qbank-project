@@ -8,7 +8,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
-import { imageFilesFrom, uploadImage } from '@/lib/uploads'
+import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
 import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
@@ -97,9 +97,30 @@ export function RichTextEditor({
       },
       handlePaste(view, event) {
         const files = imageFilesFrom(event.clipboardData)
-        if (files.length === 0) return false
+        if (files.length > 0) {
+          event.preventDefault()
+          insertImages(view, files)
+          return true
+        }
+
+        // 웹페이지나 슬라이드에서 복사한 이미지는 파일이 아니라 HTML 의 img 로 온다.
+        // 그대로 두면 남의 서버 주소가 본문에 박혀 나중에 깨지므로 우리 버킷으로 올린다.
+        // DataTransfer 는 핸들러가 끝나면 못 읽으니 지금 꺼내둔다.
+        const html = event.clipboardData?.getData('text/html') ?? ''
+        const text = event.clipboardData?.getData('text/plain') ?? ''
+        // 글과 섞여 온 붙여넣기는 건드리지 않는다. 텍스트까지 사라진다.
+        if (!/<img\b/i.test(html) || text.trim() !== '') return false
+
         event.preventDefault()
-        insertImages(view, files)
+        void imageFilesFromHtml(html).then((converted) => {
+          if (converted.length === 0) {
+            errorRef.current?.(
+              '클립보드 이미지를 읽지 못했습니다. 이미지를 파일로 저장한 뒤 올려주세요.',
+            )
+            return
+          }
+          insertImages(view, converted)
+        })
         return true
       },
       handleDrop(view, event, _slice, moved) {
