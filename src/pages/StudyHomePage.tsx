@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ResetProgressMenu } from '@/components/ResetProgressMenu'
+import { DailyChallengeStatsModal } from '@/components/study/DailyChallengeStatsModal'
 import { ProgressBar } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { accuracy, useData } from '@/lib/data'
-import { fetchOpenSession, type StudySession } from '@/lib/queries/study'
+import {
+  ensureDailySession,
+  fetchDailyChallengeStats,
+  fetchOpenSession,
+  type DailyChallengeStats,
+  type StudySession,
+} from '@/lib/queries/study'
 import { examShortLabel, type Taxonomy } from '@/lib/queries/taxonomy'
 
 const SESSION_LABEL: Record<string, string> = {
@@ -49,6 +57,8 @@ const TILE_COLORS = [
 
 export function StudyHomePage() {
   const { taxonomy, loading, subjectProgress } = useData()
+  const { session: authSession } = useAuth()
+  const userId = authSession?.user.id ?? ''
 
   // 진행 중인 세션이 있으면 이어풀기 버튼을 띄운다.
   const [openSession, setOpenSession] = useState<StudySession | null>(null)
@@ -63,6 +73,43 @@ export function StudyHomePage() {
       active = false
     }
   }, [])
+
+  // 오늘의 문제: 26학번 학년말고사 전 과목에서 매일 같은 10문제를 모두가 푼다.
+  const [dailySession, setDailySession] = useState<{
+    sessionId: string
+    date: string
+    questionIds: string[]
+  } | null>(null)
+  const [dailyStats, setDailyStats] = useState<DailyChallengeStats | null>(null)
+  const [showDailyStats, setShowDailyStats] = useState(false)
+
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+
+    async function load() {
+      try {
+        const session = await ensureDailySession(userId)
+        if (!active) return
+        setDailySession(session)
+
+        const stats = await fetchDailyChallengeStats()
+        if (active) setDailyStats(stats)
+      } catch (caught) {
+        console.error('오늘의 문제를 불러오지 못했습니다.', caught)
+      }
+    }
+
+    void load()
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  const today = dailySession ? dailyStats?.history.find((day) => day.date === dailySession.date) : undefined
+  const dailyDone = today?.done ?? 0
+  const dailyTotal = today?.total ?? dailySession?.questionIds.length ?? 10
+  const dailyRemaining = Math.max(0, dailyTotal - dailyDone)
 
   if (loading) {
     return (
@@ -100,6 +147,42 @@ export function StudyHomePage() {
           </span>
         </Link>
       )}
+
+      {dailySession && (
+        <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-sm font-bold text-white">
+              {dailyTotal}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">오늘의 문제</span>
+              <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                {dailyRemaining === 0
+                  ? '오늘의 문제를 모두 풀었습니다'
+                  : `오늘의 문제가 ${dailyRemaining}개 남았습니다.`}
+              </span>
+            </span>
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDailyStats(true)}
+              className="h-9 flex-1 rounded-lg border border-emerald-300 bg-white text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-700 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+            >
+              현황 보기
+            </button>
+            <Link
+              to={`/solve?session=${dailySession.sessionId}`}
+              className="flex h-9 flex-1 items-center justify-center rounded-lg bg-emerald-600 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+            >
+              {dailyDone > 0 && dailyRemaining > 0 ? '이어풀기' : dailyRemaining === 0 ? '다시 보기' : '문제풀기'}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {showDailyStats && <DailyChallengeStatsModal onClose={() => setShowDailyStats(false)} />}
 
       {subjects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">

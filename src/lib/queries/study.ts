@@ -146,7 +146,7 @@ export async function searchQuestions(params: {
 // 학습 세션 (이어풀기, 블록테스트)
 // -----------------------------------------------------------------------------
 
-export type SessionMode = 'sequential' | 'block_test' | 'wrong_only' | 'bookmark'
+export type SessionMode = 'sequential' | 'block_test' | 'wrong_only' | 'bookmark' | 'daily'
 
 export type StudySession = {
   id: string
@@ -183,12 +183,13 @@ function toSession(row: SessionRow): StudySession {
   }
 }
 
-/** 이어풀기 대상. 진행 중인 가장 최근 세션 하나만 본다. */
+/** 이어풀기 대상. 진행 중인 가장 최근 세션 하나만 본다. 오늘의 문제는 별도 카드로 보여주므로 제외한다. */
 export async function fetchOpenSession(): Promise<StudySession | null> {
   const { data, error } = await supabase
     .from('study_sessions')
     .select('id, mode, scope, question_ids, current_index, time_limit_sec, started_at, status')
     .eq('status', 'in_progress')
+    .neq('mode', 'daily')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -216,11 +217,13 @@ export async function startSession(params: {
   timeLimitSec?: number | null
 }): Promise<string> {
   // 같은 사람의 예전 진행 중 세션은 접어둔다. 이어풀기는 하나만 유지한다.
+  // 오늘의 문제는 독립된 흐름이라 여기서 건드리지 않는다.
   await supabase
     .from('study_sessions')
     .update({ status: 'abandoned' })
     .eq('user_id', params.userId)
     .eq('status', 'in_progress')
+    .neq('mode', 'daily')
 
   const { data, error } = await supabase
     .from('study_sessions')
@@ -261,6 +264,99 @@ export async function finishSession(id: string): Promise<void> {
     .update({ status: 'completed', finished_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
+}
+
+// -----------------------------------------------------------------------------
+// 오늘의 문제
+//   26학번 학년말고사 전 과목 중 매일 같은 10문제를, 모든 사용자가 동일하게 푼다.
+//   문제 목록은 서버(get_daily_question_set)가 날짜를 시드로 결정적으로 뽑아
+//   저장해두고, 진행 위치는 study_sessions 를 그대로 재사용한다(mode: 'daily').
+// -----------------------------------------------------------------------------
+
+export type DailyChallengeDay = { date: string; total: number; done: number }
+
+export type DailyChallengeStats = {
+  currentStreak: number
+  longestStreak: number
+  totalDays: number
+  history: DailyChallengeDay[]
+}
+
+/** 오늘 날짜(KST)의 고정 10문제. 서버가 최초 1회 생성해 저장하고, 그 뒤로는 같은 값을 돌려준다. */
+export async function fetchDailyQuestionSet(): Promise<{ date: string; questionIds: string[] }> {
+  const { data, error } = await supabase.rpc('get_daily_question_set')
+  if (error) throw error
+  const row = data as { date: string; question_ids: string[] }
+  return { date: row.date, questionIds: row.question_ids }
+}
+
+/** 이 사용자가 만든 가장 최근 오늘의 문제 세션. 날짜가 오늘과 같은지는 호출부에서 scope.date 로 확인한다. */
+async function fetchLatestDailySession(userId: string): Promise<StudySession | null> {
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('id, mode, scope, question_ids, current_index, time_limit_sec, started_at, status')
+    .eq('user_id', userId)
+    .eq('mode', 'daily')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data ? toSession(data as SessionRow) : null
+}
+
+/** 오늘의 문제 세션을 새로 만든다. 다른 모드 세션을 밀어내지 않는다(startSession 과 달리 독립적으로 공존). */
+async function startDailySession(params: {
+  userId: string
+  date: string
+  questionIds: string[]
+}): Promise<string> {
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .insert({
+      user_id: params.userId,
+      mode: 'daily',
+      scope: { date: params.date } as never,
+      question_ids: params.questionIds,
+    })
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return data.id
+}
+
+/** 오늘의 문제 카드를 열 때 호출. 오늘 것이 이미 있으면 이어가고, 없으면 새로 만든다. */
+export async function ensureDailySession(
+  userId: string,
+): Promise<{ sessionId: string; date: string; questionIds: string[] }> {
+  const { date, questionIds } = await fetchDailyQuestionSet()
+  const existing = await fetchLatestDailySession(userId)
+
+  if (existing && existing.scope.date === date) {
+    return { sessionId: existing.id, date, questionIds: existing.questionIds }
+  }
+
+  const sessionId = await startDailySession({ userId, date, questionIds })
+  return { sessionId, date, questionIds }
+}
+
+/** 연속 성공일, 최고 기록, 총 성공일, 최근 히스토리(현황 보기 화면용). */
+export async function fetchDailyChallengeStats(): Promise<DailyChallengeStats> {
+  const { data, error } = await supabase.rpc('get_daily_challenge_stats')
+  if (error) throw error
+  const row = data as {
+    current_streak: number
+    longest_streak: number
+    total_days: number
+    history: { date: string; total: number; done: number }[]
+  }
+  return {
+    currentStreak: row.current_streak,
+    longestStreak: row.longest_streak,
+    totalDays: row.total_days,
+    history: row.history,
+  }
 }
 
 // -----------------------------------------------------------------------------
