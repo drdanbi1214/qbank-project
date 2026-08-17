@@ -343,6 +343,24 @@ export type Database = {
           },
         ]
       }
+      daily_question_sets: {
+        Row: {
+          created_at: string
+          date: string
+          question_ids: string[]
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          question_ids: string[]
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          question_ids?: string[]
+        }
+        Relationships: []
+      }
       discussion_bookmarks: {
         Row: {
           created_at: string
@@ -1857,6 +1875,7 @@ export type Database = {
       units: {
         Row: {
           created_at: string
+          group_name: string | null
           id: string
           name: string
           sort_order: number
@@ -1865,6 +1884,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          group_name?: string | null
           id?: string
           name: string
           sort_order?: number
@@ -1873,6 +1893,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          group_name?: string | null
           id?: string
           name?: string
           sort_order?: number
@@ -2178,6 +2199,8 @@ export type Database = {
           total: number
         }[]
       }
+      get_daily_challenge_stats: { Args: { p_user_id?: string }; Returns: Json }
+      get_daily_question_set: { Args: { p_date?: string }; Returns: Json }
       get_my_assignments: {
         Args: never
         Returns: {
