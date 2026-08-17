@@ -8,7 +8,14 @@ export type Subject = {
   /** 문제 코드용 2자리 과목코드. 없으면 문제 코드를 만들 수 없다 */
   code: string | null
 }
-export type Unit = { id: string; subjectId: string; name: string; sortOrder: number }
+export type Unit = {
+  id: string
+  subjectId: string
+  name: string
+  sortOrder: number
+  /** "총론"/"각론"처럼 단원을 묶는 상위 그룹. 없으면 평평한 목록으로 보여준다 */
+  groupName: string | null
+}
 export type Exam = {
   id: string
   cohort: string
@@ -38,7 +45,7 @@ export type Taxonomy = {
 export async function fetchTaxonomy(): Promise<Taxonomy> {
   const [subjectsRes, unitsRes, examsRes] = await Promise.all([
     supabase.from('subjects').select('id, name, icon_key, sort_order, code'),
-    supabase.from('units').select('id, subject_id, name, sort_order'),
+    supabase.from('units').select('id, subject_id, name, sort_order, group_name'),
     supabase
       .from('exams')
       .select(
@@ -65,6 +72,7 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
       subjectId: row.subject_id,
       name: row.name,
       sortOrder: row.sort_order,
+      groupName: row.group_name,
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ko'))
 
@@ -110,14 +118,20 @@ export async function createUnit(subjectId: string, name: string, existingUnits:
   const { data, error } = await supabase
     .from('units')
     .insert({ subject_id: subjectId, name: trimmed, sort_order: maxSortOrder + 1 })
-    .select('id, subject_id, name, sort_order')
+    .select('id, subject_id, name, sort_order, group_name')
     .single()
   if (error) {
     if (error.code === '23505') throw new Error('이미 있는 단원 이름입니다.')
     throw error
   }
 
-  return { id: data.id, subjectId: data.subject_id, name: data.name, sortOrder: data.sort_order }
+  return {
+    id: data.id,
+    subjectId: data.subject_id,
+    name: data.name,
+    sortOrder: data.sort_order,
+    groupName: data.group_name,
+  }
 }
 
 /** `20학번 정신건강의학과 학년말고사` 형태의 표시명 */
