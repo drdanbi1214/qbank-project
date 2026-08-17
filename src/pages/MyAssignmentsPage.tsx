@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Spinner } from '@/components/ui/Spinner'
 import { fetchMyAssignments, type MyAssignment } from '@/lib/queries/assignments'
+import { fetchAccessPermissions } from '@/lib/queries/permissions'
 import { cn } from '@/utils/cn'
 
 type Filter = 'open' | 'done' | 'all'
+/** 스코프 탭 값. null 은 "특정 스터디에 매이지 않은 배정" 묶음이다. */
+type ScopeFilter = 'all' | string | null
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '대기',
@@ -20,6 +23,8 @@ export function MyAssignmentsPage() {
   const [rows, setRows] = useState<MyAssignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('open')
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all')
+  const [scopeNames, setScopeNames] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     let active = true
@@ -36,13 +41,38 @@ export function MyAssignmentsPage() {
     }
   }, [])
 
-  const filtered = useMemo(() => {
+  useEffect(() => {
+    let active = true
+    void fetchAccessPermissions()
+      .then((permissions) => {
+        if (active) setScopeNames(new Map(permissions.map((row) => [row.key, row.name])))
+      })
+      .catch((caught: unknown) => console.error('공개범위 목록을 불러오지 못했습니다.', caught))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // 한 사람이 합본3, 클로버처럼 여러 스터디에서 동시에 배정받을 수 있어
+  // 배정 목록에 실제로 나타나는 범위만 탭으로 보여준다.
+  const scopes = useMemo(() => {
     if (!rows) return []
-    if (filter === 'all') return rows
+    const keys = new Set(rows.map((row) => row.requiredPermission))
+    return [...keys].sort((a, b) => (a ?? '').localeCompare(b ?? ''))
+  }, [rows])
+
+  const byScope = useMemo(() => {
+    if (!rows) return []
+    if (scopeFilter === 'all') return rows
+    return rows.filter((row) => row.requiredPermission === scopeFilter)
+  }, [rows, scopeFilter])
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return byScope
     return filter === 'done'
-      ? rows.filter((row) => row.status === 'done')
-      : rows.filter((row) => row.status !== 'done')
-  }, [rows, filter])
+      ? byScope.filter((row) => row.status === 'done')
+      : byScope.filter((row) => row.status !== 'done')
+  }, [byScope, filter])
 
   const grouped = useMemo(() => {
     const map = new Map<string, { name: string; items: MyAssignment[] }>()
@@ -54,9 +84,14 @@ export function MyAssignmentsPage() {
     return [...map.entries()]
   }, [filtered])
 
-  const openCount = rows?.filter((row) => row.status !== 'done').length ?? 0
-  const doneCount = rows?.filter((row) => row.status === 'done').length ?? 0
+  const openCount = byScope.filter((row) => row.status !== 'done').length
+  const doneCount = byScope.filter((row) => row.status === 'done').length
   const today = new Date().toISOString().slice(0, 10)
+
+  function scopeLabel(key: string | null): string {
+    if (key === null) return '미지정'
+    return scopeNames.get(key) ?? key
+  }
 
   return (
     <section>
@@ -66,6 +101,38 @@ export function MyAssignmentsPage() {
           풀이 작성을 맡은 문항입니다. 문항을 열어 풀이를 작성하면 자동으로 완료 처리됩니다.
         </p>
       </header>
+
+      {scopes.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
+          <button
+            type="button"
+            onClick={() => setScopeFilter('all')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              scopeFilter === 'all'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100'
+                : 'text-slate-500 dark:text-slate-400',
+            )}
+          >
+            전체
+          </button>
+          {scopes.map((key) => (
+            <button
+              key={key ?? '__none__'}
+              type="button"
+              onClick={() => setScopeFilter(key)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                scopeFilter === key
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100'
+                  : 'text-slate-500 dark:text-slate-400',
+              )}
+            >
+              {scopeLabel(key)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
         {(
@@ -152,6 +219,9 @@ export function MyAssignmentsPage() {
                             {row.unitName ? ` | ${row.unitName}` : ' | 미분류'}
                             {row.questionType === 'essay' && ' | 서술형'}
                             {row.questionType === 'R' && ' | R형'}
+                            {scopeFilter === 'all' &&
+                              scopes.length > 1 &&
+                              ` | ${scopeLabel(row.requiredPermission)}`}
                             {row.dueDate && (
                               <span className={overdue ? ' font-semibold text-rose-600' : ''}>
                                 {' '}

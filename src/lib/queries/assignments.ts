@@ -19,6 +19,8 @@ export type MyAssignment = {
   questionType: string
   stemPreview: string
   hasMySolution: boolean
+  /** 이 배정이 매인 스터디 공개범위. null 이면 특정 스터디에 매이지 않은 배정. */
+  requiredPermission: string | null
 }
 
 export async function fetchMyAssignments(): Promise<MyAssignment[]> {
@@ -42,6 +44,7 @@ export async function fetchMyAssignments(): Promise<MyAssignment[]> {
     questionType: row.question_type,
     stemPreview: row.stem_preview ?? '',
     hasMySolution: row.has_my_solution ?? false,
+    requiredPermission: row.required_permission,
   }))
 }
 
@@ -118,6 +121,8 @@ export async function assignQuestions(params: {
   assigneeId: string
   assignedBy: string
   dueDate: string | null
+  /** 이 배정이 매일 스터디 공개범위. null 이면 특정 스터디에 매이지 않는다. */
+  requiredPermission: string | null
 }): Promise<number> {
   if (params.questionIds.length === 0) return 0
 
@@ -126,6 +131,7 @@ export async function assignQuestions(params: {
     assignee_id: params.assigneeId,
     assigned_by: params.assignedBy,
     due_date: params.dueDate,
+    required_permission: params.requiredPermission,
   }))
 
   const { data, error } = await supabase

@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       access_permissions: {
@@ -186,6 +211,7 @@ export type Database = {
           due_date: string | null
           id: string
           question_id: string
+          required_permission: string | null
           status: string
           updated_at: string
         }
@@ -197,6 +223,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           question_id: string
+          required_permission?: string | null
           status?: string
           updated_at?: string
         }
@@ -208,6 +235,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           question_id?: string
+          required_permission?: string | null
           status?: string
           updated_at?: string
         }
@@ -239,6 +267,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "questions_solve"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignments_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
           },
         ]
       }
@@ -2218,6 +2253,7 @@ export type Database = {
           question_id: string
           question_number: number
           question_type: string
+          required_permission: string
           status: string
           stem_preview: string
           subject_id: string
@@ -2478,6 +2514,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

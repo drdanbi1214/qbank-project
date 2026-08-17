@@ -10,9 +10,11 @@ import {
   fetchCompletedAssignmentQuestionIds,
   type AssignmentProgress,
 } from '@/lib/queries/assignments'
+import { fetchAccessPermissions } from '@/lib/queries/permissions'
 import { fetchMembers, type Member } from '@/lib/queries/profiles'
 import { fetchQuestions, fetchQuestionsByIds, type SolveQuestion } from '@/lib/queries/questions'
 import { examTitle } from '@/lib/queries/taxonomy'
+import type { AccessPermission } from '@/lib/permissions'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { formatDateTime } from '@/utils/date'
@@ -33,6 +35,8 @@ export function AdminAssignmentsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [assigneeId, setAssigneeId] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [studyScopes, setStudyScopes] = useState<AccessPermission[]>([])
+  const [requiredPermission, setRequiredPermission] = useState('')
   const [progress, setProgress] = useState<AssignmentProgress[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -48,6 +52,18 @@ export function AdminAssignmentsPage() {
         if (active) setMembers(rows)
       })
       .catch((error: unknown) => console.error('사용자를 불러오지 못했습니다.', error))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void fetchAccessPermissions()
+      .then((rows) => {
+        if (active) setStudyScopes(rows.filter((row) => row.kind === 'study'))
+      })
+      .catch((error: unknown) => console.error('공개범위 목록을 불러오지 못했습니다.', error))
     return () => {
       active = false
     }
@@ -118,6 +134,7 @@ export function AdminAssignmentsPage() {
         assigneeId,
         assignedBy: userId,
         dueDate: dueDate || null,
+        requiredPermission: requiredPermission || null,
       })
       const skipped = selected.size - created
       setMessage(
@@ -192,6 +209,22 @@ export function AdminAssignmentsPage() {
               onChange={(event) => setDueDate(event.target.value)}
               className={inputClass}
             />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">공개범위</span>
+            <select
+              value={requiredPermission}
+              onChange={(event) => setRequiredPermission(event.target.value)}
+              className={inputClass}
+            >
+              <option value="">특정 스터디 아님</option>
+              {studyScopes.map((scope) => (
+                <option key={scope.key} value={scope.key}>
+                  {scope.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           <Button
