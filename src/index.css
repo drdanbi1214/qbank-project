@@ -76,6 +76,16 @@
     @apply mt-2;
   }
 
+  /* 풀이 이미지 중 작성자가 크기를 직접 조절하지 않은 것(고정 width가 없는
+     것)은 높이 상한(max-h-96) 대신 카드 폭을 그대로 채운다. E조스터디처럼
+     시험지 페이지를 통째로 캡처해 올린 풀이가 카드 폭보다 훨씬 좁게 보이던
+     문제를 해결한다. 작성자가 명시적으로 크기를 지정한 이미지는 그대로 둔다. */
+  .rich-text.solution-rich-text img.max-h-96 {
+    max-height: none;
+    width: 100%;
+    height: auto;
+  }
+
   .rich-text h1 {
     @apply mt-5 text-lg font-bold;
   }

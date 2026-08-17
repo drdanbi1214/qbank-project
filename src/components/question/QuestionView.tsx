@@ -508,6 +508,47 @@ export function QuestionView({
         </div>
       )}
 
+      {revealed && (
+        <div className="mt-4 space-y-4">
+          {/* 탭과 무관하게 항상 보이는 게시판 영역 */}
+          <QuestionDiscussions
+            questionId={question.id}
+            unitId={question.unitId}
+            stem={firstStemText}
+            pendingQuote={askQuote}
+            onQuoteHandled={() => setAskQuote(null)}
+          />
+
+          {isAdmin && <AllNotesPanel questionId={question.id} groupId={question.groupId} />}
+        </div>
+      )}
+
+      {/* 하단 고정 액션. 모바일에서 정답 확인 버튼을 항상 닿는 위치에 둔다. */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur lg:static lg:mt-6 lg:border-0 lg:bg-transparent lg:px-0 lg:backdrop-blur-none dark:border-slate-800 dark:bg-slate-950/95 lg:dark:bg-transparent"
+        style={{ paddingBottom: 'calc(0.5rem + var(--safe-bottom))' }}
+      >
+        <div className="mx-auto flex max-w-3xl items-center gap-2">
+          {!revealed && !isEssay && (
+            <>
+              <Button variant="secondary" onClick={() => void handleSkip()} disabled={busy}>
+                스킵
+              </Button>
+              <Button block size="lg" onClick={() => void handleSubmit()} disabled={!canSubmit || busy}>
+                {busy && <Spinner className="h-4 w-4 border-white/40 border-t-white" />}
+                정답 확인
+              </Button>
+            </>
+          )}
+
+          {revealed && (
+            <Button block size="lg" onClick={onNext} disabled={!onNext}>
+              {onNext ? '다음 문제' : '마지막 문제입니다'}
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* 내 노트는 정답 공개 전부터 열 수 있다. 공개 후에도 같은 위치와 컴포넌트를
           유지해 저장 전 작성 내용이 사라지지 않게 한다. */}
       {!autoWrite && (
@@ -554,47 +595,6 @@ export function QuestionView({
           )}
         </div>
       )}
-
-      {revealed && (
-        <div className="mt-4 space-y-4">
-          {/* 탭과 무관하게 항상 보이는 게시판 영역 */}
-          <QuestionDiscussions
-            questionId={question.id}
-            unitId={question.unitId}
-            stem={firstStemText}
-            pendingQuote={askQuote}
-            onQuoteHandled={() => setAskQuote(null)}
-          />
-
-          {isAdmin && <AllNotesPanel questionId={question.id} groupId={question.groupId} />}
-        </div>
-      )}
-
-      {/* 하단 고정 액션. 모바일에서 정답 확인 버튼을 항상 닿는 위치에 둔다. */}
-      <div
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur lg:static lg:mt-6 lg:border-0 lg:bg-transparent lg:px-0 lg:backdrop-blur-none dark:border-slate-800 dark:bg-slate-950/95 lg:dark:bg-transparent"
-        style={{ paddingBottom: 'calc(0.5rem + var(--safe-bottom))' }}
-      >
-        <div className="mx-auto flex max-w-3xl items-center gap-2">
-          {!revealed && !isEssay && (
-            <>
-              <Button variant="secondary" onClick={() => void handleSkip()} disabled={busy}>
-                스킵
-              </Button>
-              <Button block size="lg" onClick={() => void handleSubmit()} disabled={!canSubmit || busy}>
-                {busy && <Spinner className="h-4 w-4 border-white/40 border-t-white" />}
-                정답 확인
-              </Button>
-            </>
-          )}
-
-          {revealed && (
-            <Button block size="lg" onClick={onNext} disabled={!onNext}>
-              {onNext ? '다음 문제' : '마지막 문제입니다'}
-            </Button>
-          )}
-        </div>
-      </div>
     </article>
   )
 }
