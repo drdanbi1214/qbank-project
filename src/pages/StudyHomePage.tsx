@@ -149,12 +149,15 @@ export function StudyHomePage() {
       )}
 
       {dailySession && (
-        <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-sm font-bold text-white">
-              {dailyTotal}
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+          <Link
+            to={`/solve?session=${dailySession.sessionId}`}
+            className="flex min-w-0 flex-1 items-center gap-3"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">
+              ▶
             </span>
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0">
               <span className="block text-sm font-semibold">오늘의 문제</span>
               <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
                 {dailyRemaining === 0
@@ -162,23 +165,15 @@ export function StudyHomePage() {
                   : `오늘의 문제가 ${dailyRemaining}개 남았습니다.`}
               </span>
             </span>
-          </div>
+          </Link>
 
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowDailyStats(true)}
-              className="h-9 flex-1 rounded-lg border border-emerald-300 bg-white text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-700 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-            >
-              현황 보기
-            </button>
-            <Link
-              to={`/solve?session=${dailySession.sessionId}`}
-              className="flex h-9 flex-1 items-center justify-center rounded-lg bg-emerald-600 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
-            >
-              {dailyDone > 0 && dailyRemaining > 0 ? '이어풀기' : dailyRemaining === 0 ? '다시 보기' : '문제풀기'}
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowDailyStats(true)}
+            className="h-9 shrink-0 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-700 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+          >
+            현황 보기
+          </button>
         </div>
       )}
 
