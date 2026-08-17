@@ -59,6 +59,23 @@ python3 scripts/import_ai_solutions.py ai_solutions.csv --images ./ai_images
 python3 scripts/import_ai_solutions.py ai_solutions.csv --images ./ai_images --apply
 ```
 
+이미지 파일만 별도 전달된 경우에는 파일명을 `문제코드-순번.확장자`
+(`2607044-01.jpg`) 형식으로 맞춘 뒤 아래처럼 넣을 수 있다. 기존 AI 풀이의
+본문은 보존하고 이미지 블록만 새 전달본으로 교체한다. 파일명으로 번호를
+추정하지 않으므로, 반영 전에는 반드시 실제 DB 문제의 발문과 이미지 내용을
+표본 대조한다.
+
+```bash
+# 기본은 dry-run
+python3 scripts/import_ai_solutions.py --images ./ai_images --images-only
+
+# 실제 반영
+python3 scripts/import_ai_solutions.py --images ./ai_images --images-only --apply
+```
+
+새 전달본에서 의도적으로 빠진 기존 이미지를 제거해야 할 때만, 검증한
+문제코드를 명시해서 `--prune-image-codes 2601013,2601018`처럼 사용한다.
+
 CSV는 `question_code,content` 두 컬럼(헤더 포함, UTF-8)이다.
 `question_code` 는 학번2자리+과목코드2자리+문항번호3자리 7자리 코드다
 (예: `2607044` = 26학번 정형외과 44번).

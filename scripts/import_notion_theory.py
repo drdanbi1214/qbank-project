@@ -99,9 +99,12 @@ def to_supported_image(data: bytes, suffix: str) -> tuple[bytes, str]:
 
 def doc_has_body(text: str) -> bool:
     body = re.sub(r"^# .*?$", "", text, flags=re.M)
-    body = re.sub(r"\[[^]]+\]\([^)]+\)", "", body)
+    # 링크 라벨이 빈 `[](path.md)`인 경우도 목차의 일부다. 이것을 남겨 두면
+    # Notion의 하위 페이지 목록이 실제 본문으로 잘못 판정된다.
+    body = re.sub(r"\[[^]]*\]\([^)]+\)", "", body)
     body = re.sub(r"<aside>|</aside>|💡|#+\s*Table of content", "", body, flags=re.I)
-    return bool(re.sub(r"\s|\d|[.()\-]", "", body))
+    body = re.sub(r"[\s\d.()\-*_`~>#|:]", "", body)
+    return bool(body)
 
 
 def inline(text: str) -> list[dict]:

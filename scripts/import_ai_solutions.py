@@ -46,6 +46,7 @@ DB/스토리지에는 아무것도 쓰지 않는다. 확인 후 --apply 를 붙�
 사용법:
     python3 import_ai_solutions.py ai_solutions.csv --images ./ai_images
     python3 import_ai_solutions.py ai_solutions.csv --images ./ai_images --apply
+    python3 import_ai_solutions.py --images ./ai_images --images-only --apply
 """
 
 from __future__ import annotations
@@ -57,6 +58,7 @@ import os
 import re
 import sys
 import uuid
+from collections import defaultdict
 
 try:
     import requests
@@ -67,6 +69,7 @@ IMG_MARKER = re.compile(r"^\[\[img:(.+?)\]\]$")
 SPECIAL_BLOCK_START = re.compile(r"^<(제목|근거)>\s*(.*)$")
 SPECIAL_BLOCK_END = re.compile(r"^(.*?)\s*</(제목|근거)>$")
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+IMAGE_ONLY_FILENAME = re.compile(r"^(\d{7})-(\d+)\.(png|jpe?g|webp|gif)$", re.IGNORECASE)
 
 TRACKS = {
     "ai": {
@@ -253,9 +256,69 @@ def resolve_images(doc: dict, uploaded: dict[str, str]) -> None:
             block["attrs"]["src"] = uploaded[filename]
 
 
+def image_only_docs(images_dir: str) -> dict[str, dict]:
+    """이미지 파일명(`2607044-01.jpg`)만으로 문항별 RichDoc을 만든다.
+
+    이미지 전달본에는 풀이 CSV가 빠지는 경우가 있다. 이때 파일명의 7자리
+    문제코드를 그대로 사용하므로 번호를 추정해서 붙이지 않는다.
+    """
+    grouped: dict[str, list[tuple[int, str]]] = defaultdict(list)
+    for filename in os.listdir(images_dir):
+        match = IMAGE_ONLY_FILENAME.fullmatch(filename)
+        if not match:
+            continue
+        code, sequence, _extension = match.groups()
+        grouped[code].append((int(sequence), filename))
+
+    if not grouped:
+        sys.exit("--images 폴더에서 '문제코드-순번.확장자' 형식의 이미지 파일을 찾지 못했다")
+
+    docs: dict[str, dict] = {}
+    for code, files in grouped.items():
+        files.sort()
+        sequence_numbers = [sequence for sequence, _filename in files]
+        if len(sequence_numbers) != len(set(sequence_numbers)):
+            sys.exit(f"문제코드 {code}: 이미지 순번이 중복됐다")
+        docs[code] = {
+            "type": "doc",
+            "content": [
+                {"type": "image", "attrs": {"src": None, "alt": None}, "_filename": filename}
+                for _sequence, filename in files
+            ],
+        }
+    return docs
+
+
+def replace_image_blocks(existing: object, incoming: dict) -> dict:
+    """기존 풀이의 글은 보존하고 이미지 블록만 전달본으로 바꾼다.
+
+    첫 기존 이미지가 있던 자리에 새 이미지 묶음을 넣어 원래 문맥상 위치를
+    최대한 유지한다. 기존에 이미지가 없으면 풀이 맨 끝에 추가한다.
+    """
+    if not isinstance(existing, dict) or existing.get("type") != "doc":
+        raise ValueError("기존 AI 풀이의 RichDoc 형식이 올바르지 않다")
+    old_blocks = existing.get("content")
+    incoming_blocks = incoming.get("content")
+    if not isinstance(old_blocks, list) or not isinstance(incoming_blocks, list):
+        raise ValueError("기존 또는 새 AI 풀이의 블록 배열 형식이 올바르지 않다")
+
+    new_blocks: list[dict] = []
+    inserted = False
+    for block in old_blocks:
+        if isinstance(block, dict) and block.get("type") == "image":
+            if not inserted:
+                new_blocks.extend(incoming_blocks)
+                inserted = True
+            continue
+        new_blocks.append(block)
+    if not inserted:
+        new_blocks.extend(incoming_blocks)
+    return {**existing, "content": new_blocks or [{"type": "paragraph"}]}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AI 풀이/선배해설 CSV 일괄 입력")
-    parser.add_argument("csv_path")
+    parser.add_argument("csv_path", nargs="?", help="question_code,content CSV 경로")
     parser.add_argument(
         "--kind",
         choices=TRACKS,
@@ -263,64 +326,97 @@ def main() -> None:
         help="입력할 해설 종류. 기본값은 ai, 선배해설은 senior",
     )
     parser.add_argument("--images", default="", help="[[img:...]] 로 참조한 이미지 파일들이 있는 폴더")
+    parser.add_argument(
+        "--images-only",
+        action="store_true",
+        help="CSV 없이 문제코드-순번 이미지 파일을 AI 풀이에 반영한다. 기존 본문은 보존한다.",
+    )
+    parser.add_argument(
+        "--prune-image-codes",
+        default="",
+        help="이미지를 제거할 문제코드 목록(쉼표 구분). --images-only에서만 쓴다.",
+    )
     parser.add_argument("--apply", action="store_true", help="실제로 반영한다. 기본은 dry-run")
     args = parser.parse_args()
     track = TRACKS[args.kind]
 
+    if args.images_only:
+        if args.csv_path:
+            sys.exit("--images-only에서는 CSV 경로를 함께 쓸 수 없다")
+        if args.kind != "ai":
+            sys.exit("--images-only는 AI 풀이에만 쓸 수 있다")
+        if not args.images or not os.path.isdir(args.images):
+            sys.exit("--images-only에는 이미지가 든 --images 폴더가 필요하다")
+    elif not args.csv_path:
+        sys.exit("CSV 경로가 필요하다 (--images-only 사용 시에는 생략)")
+
     base_url, key = load_env()
     client = Client(base_url, key)
 
-    with open(args.csv_path, encoding="utf-8-sig", newline="") as fh:
-        reader = csv.DictReader(fh)
-        if reader.fieldnames is None or {"question_code", "content"} - set(reader.fieldnames):
-            sys.exit("CSV 헤더에 question_code, content 두 컬럼이 있어야 한다")
-        csv_rows = list(reader)
+    if args.images_only:
+        incoming_by_code = image_only_docs(args.images)
+        prune_codes = {code.strip() for code in args.prune_image_codes.split(",") if code.strip()}
+        invalid_prune_codes = sorted(code for code in prune_codes if not re.fullmatch(r"\d{7}", code))
+        if invalid_prune_codes:
+            sys.exit(f"잘못된 제거 문제코드: {', '.join(invalid_prune_codes)}")
+        for code in prune_codes:
+            incoming_by_code.setdefault(code, {"type": "doc", "content": []})
+        print(f"이미지 전용 전달본: 이미지 문항 {len(incoming_by_code) - len(prune_codes)}건, 제거 문항 {len(prune_codes)}건")
+    else:
+        with open(args.csv_path, encoding="utf-8-sig", newline="") as fh:
+            reader = csv.DictReader(fh)
+            if reader.fieldnames is None or {"question_code", "content"} - set(reader.fieldnames):
+                sys.exit("CSV 헤더에 question_code, content 두 컬럼이 있어야 한다")
+            csv_rows = list(reader)
 
-    if not csv_rows:
-        sys.exit("CSV 에 데이터 행이 없다")
-
-    print(f"CSV {len(csv_rows)}행 읽음")
+        if not csv_rows:
+            sys.exit("CSV 에 데이터 행이 없다")
+        print(f"CSV {len(csv_rows)}행 읽음")
+        incoming_by_code = {}
+        for row in csv_rows:
+            code = (row.get("question_code") or "").strip()
+            content = (row.get("content") or "").replace("\r\n", "\n").replace("\r", "\n")
+            if not code:
+                sys.exit(f"question_code 가 빈 행이 있다: {row}")
+            if code in incoming_by_code:
+                sys.exit(f"CSV 안에서 문제코드가 중복됐다: {code}")
+            try:
+                incoming_by_code[code] = text_to_doc(content)
+            except ValueError as error:
+                sys.exit(f"문제코드 {code}: {error}")
 
     # 문제코드 -> id 매핑 (questions_solve 뷰가 question_code 를 계산해서 노출한다)
     code_to_id = {row["question_code"]: row["id"] for row in client.get("questions_solve", {"select": "id,question_code"})}
 
-    seen_codes: set[str] = set()
     docs: dict[str, dict] = {}  # question_id -> doc (매칭된 것)
     pending_docs: dict[str, dict] = {}  # question_code -> doc (대기, senior 전용)
     missing_codes: list[str] = []
-    dup_codes: list[str] = []
-
-    for row in csv_rows:
-        code = (row.get("question_code") or "").strip()
-        # 엑셀 등에서 CRLF 로 저장되면 문단 구분 정규식이 어긋나므로 미리 통일한다.
-        content = (row.get("content") or "").replace("\r\n", "\n").replace("\r", "\n")
-        if not code:
-            sys.exit(f"question_code 가 빈 행이 있다: {row}")
-        if code in seen_codes:
-            dup_codes.append(code)
-            continue
-        seen_codes.add(code)
+    for code, incoming_doc in incoming_by_code.items():
 
         question_id = code_to_id.get(code)
         if question_id is None:
             missing_codes.append(code)
             if track["pending_table"] is None:
                 continue
-            try:
-                pending_docs[code] = text_to_doc(content)
-            except ValueError as error:
-                sys.exit(f"문제코드 {code}: {error}")
+            pending_docs[code] = incoming_doc
             continue
-
-        try:
-            docs[question_id] = text_to_doc(content)
-        except ValueError as error:
-            sys.exit(f"문제코드 {code}: {error}")
+        docs[question_id] = incoming_doc
 
     if missing_codes and track["pending_table"] is None:
         sys.exit(f"DB 에 없는 문제코드 {len(missing_codes)}개: {', '.join(missing_codes)}")
-    if dup_codes:
-        sys.exit(f"CSV 안에서 문제코드가 중복됐다: {', '.join(dup_codes)}")
+    if args.images_only:
+        existing_rows = client.get(track["table"], {"select": "question_id,content"})
+        existing_by_question_id = {row["question_id"]: row.get("content") for row in existing_rows}
+        existing_count = 0
+        for question_id, incoming_doc in list(docs.items()):
+            existing = existing_by_question_id.get(question_id)
+            if existing is not None:
+                try:
+                    docs[question_id] = replace_image_blocks(existing, incoming_doc)
+                except ValueError as error:
+                    sys.exit(f"문제 ID {question_id}: {error}")
+                existing_count += 1
+        print(f"기존 AI 풀이 본문 보존 {existing_count}건, 이미지 전용 AI 풀이 생성 {len(docs) - existing_count}건")
 
     # 이미지 파일 확인 (매칭된 것 + 대기 중인 것 모두)
     needed_images: set[str] = set()
