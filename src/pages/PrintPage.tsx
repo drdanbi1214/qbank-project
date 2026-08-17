@@ -7,12 +7,13 @@ import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
 import { useAuth } from '@/lib/auth'
 import {
+  fetchQuestions,
   fetchQuestionsByIds,
   revealAnswers,
   type SolveQuestion,
 } from '@/lib/queries/questions'
 import { fetchSolutionsForQuestions, type Solution } from '@/lib/queries/solutions'
-import { examShortLabel } from '@/lib/queries/taxonomy'
+import { examShortLabel, examYearLabel } from '@/lib/queries/taxonomy'
 import { fetchBookmarkedQuestions, fetchWrongNotes } from '@/lib/queries/study'
 import { circled, formatAnswer, type AnswerPayload } from '@/types/question'
 import { cn } from '@/utils/cn'
@@ -41,7 +42,8 @@ export function PrintPage() {
   const { hasPermission } = useAuth()
   const canViewStudySolutions = hasPermission('study_hapbon3')
 
-  const source = params.get('source') === 'bookmark' ? 'bookmark' : 'wrong'
+  const sourceParam = params.get('source')
+  const source = sourceParam === 'bookmark' ? 'bookmark' : sourceParam === 'exam' ? 'exam' : 'wrong'
   const subjectId = params.get('subject')
   const unitId = params.get('unit')
   const examId = params.get('exam')
@@ -62,14 +64,19 @@ export function PrintPage() {
 
     async function load() {
       try {
-        const ids =
-          source === 'bookmark'
-            ? (await fetchBookmarkedQuestions()).map((row) => row.questionId)
-            : (await fetchWrongNotes({ subjectId, unitId, examId, cohort })).map(
-                (row) => row.questionId,
-              )
-
-        const questions = await fetchQuestionsByIds(ids)
+        let questions: SolveQuestion[]
+        if (source === 'exam') {
+          if (!examId) throw new Error('시험 정보가 없습니다.')
+          questions = await fetchQuestions({ examId })
+        } else {
+          const ids =
+            source === 'bookmark'
+              ? (await fetchBookmarkedQuestions()).map((row) => row.questionId)
+              : (await fetchWrongNotes({ subjectId, unitId, examId, cohort })).map(
+                  (row) => row.questionId,
+                )
+          questions = await fetchQuestionsByIds(ids)
+        }
         const [answers, solutions] = await Promise.all([
           revealAnswers(questions.map((row) => row.id)),
           canViewStudySolutions
@@ -105,7 +112,17 @@ export function PrintPage() {
   const ready = loaded?.key === requestKey
   const questions = ready ? loaded.questions : []
 
-  const title = source === 'bookmark' ? '북마크 문제집' : '오답 문제집'
+  const exam = source === 'exam' && examId ? taxonomy?.examById.get(examId) : undefined
+  const examSubjectName = exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined
+
+  const title =
+    source === 'exam'
+      ? exam
+        ? `${examSubjectName ?? ''} ${examYearLabel(exam)}`.trim()
+        : '시험 문제집'
+      : source === 'bookmark'
+        ? '북마크 문제집'
+        : '오답 문제집'
 
   return (
     <div className="min-h-dvh bg-slate-100 py-6 print:bg-white print:py-0 dark:bg-slate-950">
@@ -121,7 +138,7 @@ export function PrintPage() {
             checked={withAnswer}
             onChange={(event) => setWithAnswer(event.target.checked)}
           />
-          정답 포함
+          정답·해설 포함
         </label>
         {canViewStudySolutions && (
           <label className="flex items-center gap-1 text-sm">
@@ -157,9 +174,12 @@ export function PrintPage() {
             <h1 className="text-2xl font-bold">{title}</h1>
             <p className="mt-1 text-sm text-slate-500">
               총 {questions.length}문항
-              {withAnswer ? ', 정답 포함' : ''}
+              {withAnswer ? ', 정답·해설 포함' : ''}
               {withSolution ? ', 풀이 포함' : ''}
             </p>
+            {source === 'exam' && exam?.overview && (
+              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{exam.overview}</p>
+            )}
           </header>
 
           <ol className="space-y-8">
@@ -183,28 +203,31 @@ export function PrintPage() {
                   <div className="flex gap-2">
                     <span className="shrink-0 text-base font-bold">{position + 1}.</span>
                     <div className="min-w-0 flex-1">
-                      <StemBlocks blocks={question.stemBlocks} />
+                      {/* 문제(지문+선지)만 옅은 박스로 감싸 해설과 시각적으로 분리한다. */}
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <StemBlocks blocks={question.stemBlocks} />
 
-                      {question.choices.length > 0 && (
-                        <ol className="mt-2 space-y-1">
-                          {question.choices.map((choice) => {
-                            const isAnswer =
-                              withAnswer && (answer?.editorAnswer.includes(choice.no) ?? false)
-                            return (
-                              <li
-                                key={choice.no}
-                                className={cn(
-                                  'flex gap-2 text-[15px] leading-6',
-                                  isAnswer && 'font-bold',
-                                )}
-                              >
-                                <span className="shrink-0">{circled(choice.no)}</span>
-                                <span>{choice.text ?? '(이미지 보기)'}</span>
-                              </li>
-                            )
-                          })}
-                        </ol>
-                      )}
+                        {question.choices.length > 0 && (
+                          <ol className="mt-2 space-y-1">
+                            {question.choices.map((choice) => {
+                              const isAnswer =
+                                withAnswer && (answer?.editorAnswer.includes(choice.no) ?? false)
+                              return (
+                                <li
+                                  key={choice.no}
+                                  className={cn(
+                                    'flex gap-2 text-[15px] leading-6',
+                                    isAnswer && 'font-bold',
+                                  )}
+                                >
+                                  <span className="shrink-0">{circled(choice.no)}</span>
+                                  <span>{choice.text ?? '(이미지 보기)'}</span>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                        )}
+                      </div>
 
                       {withAnswer && answer && (
                         <div className="mt-2 border-l-4 border-slate-800 bg-slate-50 py-1.5 pl-3 text-sm">

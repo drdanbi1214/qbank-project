@@ -1,38 +1,11 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ProgressBadge } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
-import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { downloadExamBooklets } from '@/lib/exportBooklet'
-import { cn } from '@/utils/cn'
-import { isChunkLoadError } from '@/utils/reloadOnChunkError'
 
 /** 학번 -> 과목 순으로 시험을 나열한다. */
 export function ExamsPage() {
   const { taxonomy, loading, examProgress } = useData()
-  const { session } = useAuth()
-  const [downloadingId, setDownloadingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  async function download(examId: string, label: string) {
-    if (downloadingId) return
-    setDownloadingId(examId)
-    setError(null)
-    try {
-      await downloadExamBooklets(examId, label, session?.user.id ?? null)
-    } catch (caught) {
-      setError(
-        isChunkLoadError(caught)
-          ? '새 버전이 배포되어 다시 불러오는 중입니다. 잠시 후 다시 눌러주세요.'
-          : caught instanceof Error
-            ? caught.message
-            : '문제집을 만들지 못했습니다.',
-      )
-    } finally {
-      setDownloadingId(null)
-    }
-  }
 
   if (loading) {
     return (
@@ -56,12 +29,6 @@ export function ExamsPage() {
         </p>
       </header>
 
-      {error && (
-        <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-          {error}
-        </p>
-      )}
-
       {exams.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">등록된 시험이 없습니다.</p>
@@ -84,7 +51,6 @@ export function ExamsPage() {
                       exam.restoredQuestions !== null && exam.totalQuestions !== null
                         ? `${exam.restoredQuestions}/${exam.totalQuestions} 복기`
                         : null
-                    const busy = downloadingId === exam.id
 
                     return (
                       <li key={exam.id}>
@@ -102,21 +68,16 @@ export function ExamsPage() {
                             <ProgressBadge progress={examProgress(exam.id)} />
                           </Link>
 
-                          <button
-                            type="button"
-                            onClick={() => void download(exam.id, label)}
-                            disabled={busy}
-                            title="문제집 PDF 내려받기 (문제집, 문제+답 두 파일)"
-                            aria-label="문제집 PDF 내려받기"
-                            className={cn(
-                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg transition-colors',
-                              busy
-                                ? 'opacity-50'
-                                : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-                            )}
+                          <Link
+                            to={`/print?source=exam&exam=${exam.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="문제집 인쇄/PDF 저장 화면 열기"
+                            aria-label="문제집 인쇄/PDF 저장 화면 열기"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
                           >
-                            {busy ? <Spinner className="h-4 w-4" /> : '📄'}
-                          </button>
+                            📄
+                          </Link>
                         </div>
                       </li>
                     )
