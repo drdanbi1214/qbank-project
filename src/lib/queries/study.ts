@@ -359,6 +359,37 @@ export async function fetchDailyChallengeStats(): Promise<DailyChallengeStats> {
   }
 }
 
+export type DailyChallengeLeaderboardEntry = {
+  userId: string
+  displayName: string
+  avatarUrl: string | null
+  currentStreak: number
+  longestStreak: number
+  totalDays: number
+}
+
+/** 연속 성공일 기준 전체 순위. 한 번도 성공한 적 없는 사용자는 제외한다. */
+export async function fetchDailyChallengeLeaderboard(): Promise<DailyChallengeLeaderboardEntry[]> {
+  const { data, error } = await supabase.rpc('get_daily_challenge_leaderboard')
+  if (error) throw error
+  const rows = data as {
+    user_id: string
+    display_name: string
+    avatar_url: string | null
+    current_streak: number
+    longest_streak: number
+    total_days: number
+  }[]
+  return rows.map((row) => ({
+    userId: row.user_id,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    currentStreak: row.current_streak,
+    longestStreak: row.longest_streak,
+    totalDays: row.total_days,
+  }))
+}
+
 // -----------------------------------------------------------------------------
 // 마이페이지 요약
 // -----------------------------------------------------------------------------

@@ -2199,6 +2199,10 @@ export type Database = {
           total: number
         }[]
       }
+      get_daily_challenge_leaderboard: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       get_daily_challenge_stats: { Args: { p_user_id?: string }; Returns: Json }
       get_daily_question_set: { Args: { p_date?: string }; Returns: Json }
       get_my_assignments: {
