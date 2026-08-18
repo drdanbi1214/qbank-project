@@ -152,6 +152,11 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
           subjectId={subjectIdOf(question.examId)}
           examLabelOf={examLabel}
           canCluster={canCluster}
+          solutionContext={{
+            choiceCount: question.choices.length,
+            unitId: question.unitId,
+            unitSource: question.unitSource,
+          }}
         />
       </div>
     </div>

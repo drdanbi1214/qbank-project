@@ -20,6 +20,7 @@ import { SolutionList } from '@/components/solution/SolutionList'
 import { hasAiSolution } from '@/lib/queries/aiSolutions'
 import { hasSeniorSolution } from '@/lib/queries/seniorSolutions'
 import { hasSolutions } from '@/lib/queries/solutions'
+import { fetchAccessPermissions } from '@/lib/queries/permissions'
 import { AssignmentEditor } from '@/components/assignments/AssignmentEditor'
 import {
   fetchDiscussionCount,
@@ -91,9 +92,8 @@ export function QuestionView({
   autoWrite = false,
 }: Props) {
   const { taxonomy } = useData()
-  const { session, isAdmin, hasPermission } = useAuth()
+  const { session, isAdmin, hasPermission, permissions } = useAuth()
   const userId = session?.user.id ?? ''
-  const canViewStudySolutions = hasPermission('study_hapbon3')
   const canViewAiSolution = hasPermission('ai_solution_view')
   const canViewSeniorSolution = hasPermission('senior_solution_view')
   // 이론 카드는 레전드옵세스터디원과 관리자만. 레옵스 밖에서는 아예 조회하지 않는다.
@@ -112,6 +112,19 @@ export function QuestionView({
   const [error, setError] = useState<string | null>(null)
   const [lectureSources, setLectureSources] = useState<QuestionLectureSource[]>([])
   const [threadCount, setThreadCount] = useState(0)
+  // 어떤 권한이 '스터디' 종류인지는 DB 가 정한다. 키를 코드에 고정하면 스터디가
+  // 하나 늘 때마다 배포해야 한다.
+  const [studyKeys, setStudyKeys] = useState<Set<string>>(new Set())
+
+  // 풀이 탭은 스터디 권한이 하나라도 있으면 연다. 예전에는 합본3 하나로 잠겨
+  // 있었는데, 그때는 스터디가 그것뿐이었다. 지금은 레옵스만 가진 사람이 자기가
+  // 쓴 풀이를 못 보는 상태가 된다. 개별 풀이는 solutions_select 정책이
+  // required_permission 으로 이미 거르므로 탭을 연다고 남의 스터디 풀이가
+  // 보이지는 않는다.
+  const canViewStudySolutions = useMemo(
+    () => permissions.some((key) => studyKeys.has(key)),
+    [permissions, studyKeys],
+  )
 
   // 서술형
   const [essayText, setEssayText] = useState('')
@@ -133,6 +146,20 @@ export function QuestionView({
 
   // 이 컴포넌트는 호출 측에서 key={question.id} 로 감싸므로 문제가 바뀌면 새로 마운트된다.
   // 따라서 상태를 수동으로 초기화할 필요가 없고, 마운트 시점의 부수효과만 처리한다.
+  useEffect(() => {
+    let active = true
+    void fetchAccessPermissions()
+      .then((rows) => {
+        if (active) {
+          setStudyKeys(new Set(rows.filter((row) => row.kind === 'study').map((row) => row.key)))
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
   useEffect(() => {
     startedAt.current = Date.now()
     void incrementView(question.id)

@@ -34,6 +34,8 @@ export type ClusterSibling = {
   stemBlocks: StemBlock[]
   choices: Choice[]
   questionCode: string | null
+  unitId: string | null
+  unitSource: 'ai_suggested' | 'human_confirmed' | null
 }
 
 type SiblingRow = {
@@ -44,9 +46,12 @@ type SiblingRow = {
   stem_blocks: unknown
   choices: unknown
   question_code: string | null
+  unit_id: string | null
+  unit_source: string | null
 }
 
-const SIBLING_SELECT = 'id, exam_id, question_number, variant_type, stem_blocks, choices, question_code'
+const SIBLING_SELECT =
+  'id, exam_id, question_number, variant_type, stem_blocks, choices, question_code, unit_id, unit_source'
 
 /**
  * 같은 클러스터의 다른 문제들.
@@ -82,6 +87,11 @@ export async function fetchClusterSiblings(
         stemBlocks: parseStemBlocks(row.stem_blocks),
         choices: parseChoices(row.choices),
         questionCode: row.question_code,
+        unitId: row.unit_id,
+        unitSource:
+          row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed'
+            ? row.unit_source
+            : null,
       },
     ]
   })
@@ -140,6 +150,20 @@ export async function attachToCluster(params: {
     p_anchor_id: params.anchorId,
     p_target_id: params.targetId,
     p_variant: params.variant,
+  })
+  if (error) throw error
+  return data as string
+}
+
+/**
+ * 이 문제의 클러스터를 보장한다. 없으면 혼자짜리 그룹을 만들어 돌려준다.
+ *
+ * 해설을 항상 그룹에 붙이기 위한 것이다. 그룹 없이 문제에 직접 붙이면 나중에
+ * 다른 학번 판본을 묶어도 해설이 따라가지 않는다.
+ */
+export async function ensureClusterGroup(questionId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('cluster_ensure_group', {
+    p_question_id: questionId,
   })
   if (error) throw error
   return data as string

@@ -2350,6 +2350,7 @@ export type Database = {
         Returns: string
       }
       cluster_detach: { Args: { p_question_id: string }; Returns: undefined }
+      cluster_ensure_group: { Args: { p_question_id: string }; Returns: string }
       circled_answer: { Args: { a: number[] }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {
