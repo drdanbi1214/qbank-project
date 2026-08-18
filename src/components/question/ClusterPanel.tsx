@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Spinner } from '@/components/ui/Spinner'
 import { StemBlocks } from '@/components/question/StemBlocks'
+import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { useData } from '@/lib/data'
 import {
   attachToCluster,
   detachFromCluster,
   fetchClusterSiblings,
-  findQuestionInExam,
   type ClusterSibling,
-  type LookupResult,
   type VariantType,
 } from '@/lib/queries/clusters'
-import type { Exam } from '@/lib/queries/taxonomy'
 
 type Props = {
   questionId: string
@@ -165,207 +162,28 @@ export function ClusterPanel({
       )}
 
       {adding && taxonomy && (
-        <AttachForm
-          variant={adding}
-          anchorId={questionId}
-          anchorExamId={examId}
-          subjectId={subjectId}
-          exams={taxonomy.exams}
-          examLabelOf={examLabelOf}
-          onCancel={() => setAdding(null)}
-          onDone={handleAttached}
-        />
+        <div className="rounded-lg border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
+          <h4 className="mb-2 text-sm font-semibold">{VARIANT_LABEL[adding]} 추가</h4>
+          <QuestionLookup
+            exams={taxonomy.exams}
+            subjectId={subjectId}
+            excludeExamId={examId}
+            excludeQuestionId={questionId}
+            rejectGrouped
+            examLabelOf={examLabelOf}
+            confirmLabel="이 문제로 확정"
+            onCancel={() => setAdding(null)}
+            onPick={(found) => {
+              void attachToCluster({ anchorId: questionId, targetId: found.id, variant: adding })
+                .then(handleAttached)
+                .catch((caught: unknown) => {
+                  window.alert(caught instanceof Error ? caught.message : '묶지 못했습니다.')
+                })
+            }}
+          />
+        </div>
       )}
     </section>
   )
 }
 
-// -----------------------------------------------------------------------------
-
-type FormProps = {
-  variant: VariantType
-  anchorId: string
-  anchorExamId: string
-  subjectId: string | null
-  exams: Exam[]
-  examLabelOf: (examId: string) => string
-  onCancel: () => void
-  onDone: (groupId: string) => void
-}
-
-/**
- * 찾은 문제를 확정 전에 한 번 보여준다.
- *
- * 자동 유사도 매칭을 쓰지 않기로 했으므로 오류원은 사람의 입력 실수뿐이다.
- * 클릭을 한 번 더 받는 대신, 엉뚱한 문제에 해설이 공유되는 사고를 막는다.
- */
-function AttachForm({
-  variant,
-  anchorId,
-  anchorExamId,
-  subjectId,
-  exams,
-  examLabelOf,
-  onCancel,
-  onDone,
-}: FormProps) {
-  const candidates = useMemo(() => {
-    const list = exams.filter((exam) => !subjectId || exam.subjectId === subjectId)
-    // 기준 문제와 같은 시험은 후보에서 뺀다. 같은 시험 안에서 자기 자신을 붙일 일은 없다.
-    return list.filter((exam) => exam.id !== anchorExamId)
-  }, [exams, subjectId, anchorExamId])
-
-  const [pickedExamId, setPickedExamId] = useState('')
-  const [number, setNumber] = useState('')
-  const [found, setFound] = useState<LookupResult | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // 후보가 하나뿐이면 고를 것이 없으므로 드롭다운을 숨긴다.
-  // 26학번 내과만 시험이 9개(학년말고사 + 계통 Y1~Y8)라 선택이 필요하다.
-  const cohorts = useMemo(
-    () => [...new Set(candidates.map((exam) => exam.cohort))].sort(),
-    [candidates],
-  )
-  const [cohort, setCohort] = useState(() => cohorts[0] ?? '')
-  const examsInCohort = useMemo(
-    () => candidates.filter((exam) => exam.cohort === cohort),
-    [candidates, cohort],
-  )
-
-  // 고른 시험이 지금 학번에 속하지 않으면 첫 시험으로 떨어뜨린다. 학번을 바꿀 때
-  // 이펙트로 되맞추는 대신 파생으로 계산해 렌더 연쇄를 피한다.
-  const examId = examsInCohort.some((exam) => exam.id === pickedExamId)
-    ? pickedExamId
-    : (examsInCohort[0]?.id ?? '')
-
-  const search = useCallback(() => {
-    const parsed = Number.parseInt(number, 10)
-    if (!examId || !Number.isFinite(parsed)) {
-      setError('시험과 번호를 입력해 주세요.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    void findQuestionInExam(examId, parsed)
-      .then((result) => {
-        if (!result) {
-          setError('그 시험에 해당 번호의 문제가 없습니다.')
-          setFound(null)
-          return
-        }
-        if (result.id === anchorId) {
-          setError('지금 보고 있는 문제와 같습니다.')
-          setFound(null)
-          return
-        }
-        if (result.groupId) {
-          setError('이미 다른 야마에 묶여 있는 문제입니다. 먼저 묶기를 풀어 주세요.')
-          setFound(null)
-          return
-        }
-        setFound(result)
-      })
-      .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : '문제를 찾지 못했습니다.')
-      })
-      .finally(() => setBusy(false))
-  }, [examId, number, anchorId])
-
-  const confirm = useCallback(() => {
-    if (!found) return
-    setBusy(true)
-    void attachToCluster({ anchorId, targetId: found.id, variant })
-      .then(onDone)
-      .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : '묶지 못했습니다.')
-      })
-      .finally(() => setBusy(false))
-  }, [found, anchorId, variant, onDone])
-
-  return (
-    <div className="rounded-lg border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
-      <h4 className="mb-2 text-sm font-semibold">{VARIANT_LABEL[variant]} 추가</h4>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={cohort}
-          onChange={(event) => {
-            setCohort(event.target.value)
-            setFound(null)
-          }}
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
-        >
-          {cohorts.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-
-        {examsInCohort.length > 1 && (
-          <select
-            value={examId}
-            onChange={(event) => {
-              setPickedExamId(event.target.value)
-              setFound(null)
-            }}
-            className="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
-          >
-            {examsInCohort.map((exam) => (
-              <option key={exam.id} value={exam.id}>
-                {[exam.examCode, exam.examSubjectLabel, exam.examName].filter(Boolean).join(' ')}
-              </option>
-            ))}
-          </select>
-        )}
-
-        <input
-          type="number"
-          inputMode="numeric"
-          value={number}
-          onChange={(event) => setNumber(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') search()
-          }}
-          placeholder="번호"
-          className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums dark:border-slate-600 dark:bg-slate-800"
-        />
-
-        <Button size="sm" onClick={search} disabled={busy}>
-          찾기
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
-          취소
-        </Button>
-        {busy && <Spinner />}
-      </div>
-
-      {error && <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-
-      {found && (
-        <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-          <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-            {examLabelOf(found.examId)} {found.questionNumber}번
-          </p>
-          <StemBlocks blocks={found.stemBlocks} />
-          <ol className="mt-2 space-y-1 text-sm">
-            {found.choices.map((choice) => (
-              <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-                {choice.no}. {choice.text}
-              </li>
-            ))}
-          </ol>
-          <div className="mt-3 flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setFound(null)}>
-              다시 찾기
-            </Button>
-            <Button size="sm" onClick={confirm} disabled={busy}>
-              이 문제로 확정
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}

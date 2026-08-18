@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
-import { emptyDoc, parseRichDoc, toJson, type RichDoc } from '@/types/richtext'
+import { emptyDoc, parseRichDoc, toJson, type RichDoc, type RichNode } from '@/types/richtext'
 
 /**
  * 테마 — 주제 하나를 이론으로 정리한 글.
@@ -141,6 +141,61 @@ export async function updateTopic(params: {
   if (params.content !== undefined) patch.content = toJson(params.content)
 
   const { error } = await supabase.from('topics').update(patch).eq('id', params.id)
+  if (error) throw error
+}
+
+/**
+ * 본문에 박힌 야마의 문제 id 를 등장 순서대로 뽑는다.
+ *
+ * 같은 문제를 두 번 넣었으면 처음 것만 센다. 역인덱스의 기본키가
+ * (topic_id, question_id) 라 중복이 들어가면 저장이 깨진다.
+ */
+export function extractYamaIds(doc: RichDoc): string[] {
+  const found: string[] = []
+  const seen = new Set<string>()
+
+  const walk = (nodes: RichNode[] | undefined) => {
+    for (const node of nodes ?? []) {
+      if (node.type === 'yamaEmbed') {
+        const id = node.attrs?.questionId
+        if (typeof id === 'string' && id !== '' && !seen.has(id)) {
+          seen.add(id)
+          found.push(id)
+        }
+      }
+      walk(node.content)
+    }
+  }
+
+  walk(doc.content)
+  return found
+}
+
+/**
+ * 역인덱스를 본문에 맞춰 다시 만든다.
+ *
+ * 본문이 정본이므로 통째로 지우고 다시 넣는다. 야마가 많아야 수십 개라
+ * 차이를 계산하는 것보다 이쪽이 단순하고, 본문에서 지운 야마가 표에 남는
+ * 사고가 원천적으로 없다.
+ */
+export async function syncTopicQuestions(topicId: string, doc: RichDoc): Promise<void> {
+  const ids = extractYamaIds(doc)
+
+  const { error: clearError } = await supabase
+    .from('topic_questions')
+    .delete()
+    .eq('topic_id', topicId)
+  if (clearError) throw clearError
+
+  if (ids.length === 0) return
+
+  const { error } = await supabase
+    .from('topic_questions')
+    .insert(ids.map((questionId, index) => ({
+      topic_id: topicId,
+      question_id: questionId,
+      position: index,
+    })))
   if (error) throw error
 }
 

@@ -1928,6 +1928,39 @@ export type Database = {
           },
         ]
       }
+      topic_questions: {
+        Row: {
+          position: number
+          question_id: string
+          topic_id: string
+        }
+        Insert: {
+          position?: number
+          question_id: string
+          topic_id: string
+        }
+        Update: {
+          position?: number
+          question_id?: string
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       topic_units: {
         Row: {
           topic_id: string

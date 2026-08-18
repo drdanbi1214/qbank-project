@@ -118,6 +118,10 @@ const LEAF_TYPES = new Set([
   'horizontalRule',
   'mathInline',
   'mathBlock',
+  // 테마 본문에 끼워 넣는 야마. 문제 하나를 통째로 가리키는 원자 노드다.
+  // 반드시 여기 있어야 한다 — 빠지면 크기를 2로 세어 뒤따르는 인라인 코멘트의
+  // anchor_from/anchor_to 가 전부 밀린다.
+  'yamaEmbed',
 ])
 
 export function isLeafNode(type: string): boolean {

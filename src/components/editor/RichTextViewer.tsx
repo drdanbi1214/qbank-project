@@ -1,6 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
+import { YamaCard } from '@/components/question/YamaCard'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
 import { imageWidthOf, isLeafNode, type RichDoc, type RichMark, type RichNode } from '@/types/richtext'
@@ -193,6 +194,15 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       return <Formula latex={latexOf(node)} display={false} />
     case 'mathBlock':
       return <Formula latex={latexOf(node)} />
+    case 'yamaEmbed': {
+      const questionId =
+        typeof node.attrs?.questionId === 'string' ? node.attrs.questionId : null
+      return (
+        <div className="my-3">
+          <YamaCard questionId={questionId} />
+        </div>
+      )
+    }
     default:
       return <span data-pos={start} />
   }

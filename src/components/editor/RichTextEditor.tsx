@@ -8,6 +8,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
+import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
 import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
@@ -31,6 +32,12 @@ type Props = {
   onUploadError?: (message: string) => void
   /** 본문 종류별 Storage 버킷을 선택할 수 있게 한다. */
   uploadImageFile?: (file: File, userId: string) => Promise<string>
+  /**
+   * 야마 삽입 버튼을 보여주고, 누르면 이 함수를 부른다.
+   * 부모가 문제 고르기 화면을 띄우고 고른 문제 id 를 돌려주면 본문에 꽂는다.
+   * 넘기지 않으면 버튼 자체가 없다 — 테마 편집에서만 쓴다.
+   */
+  onRequestYama?: () => Promise<string | null>
 }
 
 export function RichTextEditor({
@@ -44,6 +51,7 @@ export function RichTextEditor({
   toolbarExtra,
   onUploadError,
   uploadImageFile = uploadImage,
+  onRequestYama,
 }: Props) {
   // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
   const userIdRef = useRef(userId)
@@ -85,6 +93,7 @@ export function RichTextEditor({
       Color,
       TableKit.configure({ table: { resizable: false } }),
       StoredImage,
+      YamaEmbed,
       MathInline,
       MathBlock,
       Placeholder.configure({ placeholder }),
@@ -147,7 +156,13 @@ export function RichTextEditor({
         className,
       )}
     >
-      <Toolbar editor={editor} compact={compact} onPickImage={insertImages} extra={toolbarExtra} />
+      <Toolbar
+        editor={editor}
+        compact={compact}
+        onPickImage={insertImages}
+        extra={toolbarExtra}
+        onRequestYama={onRequestYama}
+      />
       <div className="px-3 py-2">
         <EditorContent editor={editor} />
       </div>
@@ -199,11 +214,13 @@ function Toolbar({
   compact,
   onPickImage,
   extra,
+  onRequestYama,
 }: {
   editor: Editor
   compact: boolean
   onPickImage: (view: EditorView, files: File[]) => void
   extra?: ReactNode
+  onRequestYama?: () => Promise<string | null>
 }) {
   // 서식 버튼의 활성 상태는 선택 영역이 바뀔 때마다 달라진다.
   const [, forceRender] = useState(0)
@@ -221,6 +238,19 @@ function Toolbar({
 
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 px-2 py-1.5 dark:border-slate-700">
+      {onRequestYama && (
+        <ToolButton
+          label="야마 넣기"
+          active={false}
+          onClick={() => {
+            void onRequestYama().then((questionId) => {
+              if (questionId) editor.chain().focus().insertYama(questionId).run()
+            })
+          }}
+        >
+          <span className="px-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">야마</span>
+        </ToolButton>
+      )}
       <ToolButton
         label="굵게"
         active={editor.isActive('bold')}

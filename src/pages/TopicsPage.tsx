@@ -6,14 +6,17 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
+import { examShortLabel } from '@/lib/queries/taxonomy'
 import {
   createTopic,
   deleteTopic,
   fetchTopics,
   findSimilarTopics,
+  syncTopicQuestions,
   updateTopic,
   type Topic,
 } from '@/lib/queries/topics'
+import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
 import type { RichDoc } from '@/types/richtext'
@@ -64,13 +67,44 @@ export function TopicsPage() {
     [taxonomy],
   )
 
+  const examLabelOf = useCallback(
+    (id: string) => {
+      const exam = taxonomy?.examById.get(id)
+      const name = exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined
+      return examShortLabel(exam, name)
+    },
+    [taxonomy],
+  )
+
+  // 편집기 도구 모음의 "야마" 버튼이 이 함수를 부른다. 고르기 화면을 띄우고,
+  // 사용자가 고르면 문제 id 로 약속을 갚는다. 편집기가 그 자리에 노드를 꽂는다.
+  const [picking, setPicking] = useState(false)
+  const resolvePick = useRef<((id: string | null) => void) | null>(null)
+
+  const requestYama = useCallback(() => {
+    setPicking(true)
+    return new Promise<string | null>((resolve) => {
+      resolvePick.current = resolve
+    })
+  }, [])
+
+  const finishPick = useCallback((id: string | null) => {
+    setPicking(false)
+    resolvePick.current?.(id)
+    resolvePick.current = null
+  }, [])
+
   const save = useCallback(() => {
     if (!selected || !editedContent.current) {
       setEditing(false)
       return
     }
+    const content = editedContent.current
     setBusy(true)
-    void updateTopic({ id: selected.id, userId, content: editedContent.current })
+    void updateTopic({ id: selected.id, userId, content })
+      // 본문이 정본이고 topic_questions 는 거기서 뽑아낸 역인덱스다.
+      // 본문 저장이 끝난 뒤에 맞춘다.
+      .then(() => syncTopicQuestions(selected.id, content))
       .then(() => {
         setEditing(false)
         editedContent.current = null
@@ -212,6 +246,7 @@ export function TopicsPage() {
                   placeholder="이 주제의 이론을 정리하세요. 캡처는 붙여넣으면 바로 들어갑니다."
                   minHeight="30rem"
                   onUploadError={setError}
+                  onRequestYama={requestYama}
                 />
               ) : (
                 <RichTextViewer doc={selected.content} />
@@ -220,6 +255,26 @@ export function TopicsPage() {
           )}
         </article>
       </div>
+
+      {picking && taxonomy && (
+        <div
+          className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <h3 className="mb-3 text-sm font-semibold">본문에 넣을 야마 고르기</h3>
+            <QuestionLookup
+              exams={taxonomy.exams}
+              subjectId={subjectId}
+              examLabelOf={examLabelOf}
+              confirmLabel="본문에 넣기"
+              onCancel={() => finishPick(null)}
+              onPick={(found) => finishPick(found.id)}
+            />
+          </div>
+        </div>
+      )}
     </section>
   )
 }
