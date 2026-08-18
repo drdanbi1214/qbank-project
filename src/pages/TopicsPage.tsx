@@ -139,7 +139,7 @@ export function TopicsPage() {
           to="/topics"
           className="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
         >
-          테마
+          레옵스
         </Link>
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <h1 className="text-xl font-bold">{subject?.name ?? ''}</h1>

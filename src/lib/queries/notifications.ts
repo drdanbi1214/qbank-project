@@ -142,13 +142,27 @@ export type Announcement = {
   createdAt: string
 }
 
-export async function fetchAnnouncements(): Promise<Announcement[]> {
-  const { data, error } = await supabase
+/**
+ * 공지사항.
+ *
+ * requiredPermission 을 넘기면 그 스터디의 공지만, 넘기지 않으면 전체공개
+ * 공지만 가져온다. 섞이면 전체 공지 목록에 남의 스터디 공지가 끼어든다.
+ */
+export async function fetchAnnouncements(
+  requiredPermission: string | null = null,
+): Promise<Announcement[]> {
+  let query = supabase
     .from('announcements')
     .select(
       `id, title, content, is_pinned, author_id, created_at,
        profiles!announcements_author_id_fkey (id, display_name, avatar_url)`,
     )
+
+  query = requiredPermission
+    ? query.eq('required_permission', requiredPermission)
+    : query.is('required_permission', null)
+
+  const { data, error } = await query
     .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false })
 
@@ -177,12 +191,15 @@ export async function createAnnouncement(params: {
   title: string
   content: RichDoc
   isPinned: boolean
+  /** 스터디 공지면 그 권한 키. null 이면 전체공개(관리자만 쓸 수 있다). */
+  requiredPermission?: string | null
 }): Promise<void> {
   const { error } = await supabase.from('announcements').insert({
     author_id: params.authorId,
     title: params.title,
     content: toJson(params.content),
     is_pinned: params.isPinned,
+    required_permission: params.requiredPermission ?? null,
   })
   if (error) throw error
 }

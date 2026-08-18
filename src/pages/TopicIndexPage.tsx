@@ -57,15 +57,31 @@ export function TopicIndexPage() {
     <section>
       <header className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-bold">테마</h1>
+          <h1 className="text-xl font-bold">레옵스</h1>
           <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
             레전드옵세스터디
           </span>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          주제 하나를 정리하고 관련된 야마를 붙여 나가는 곳입니다. 지금까지 {total}개.
+          주제 하나를 정리하고 관련된 야마를 붙여 나가는 곳입니다. 테마 {total}개.
         </p>
       </header>
+
+      <Link
+        to="/topics/notices"
+        className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 transition-colors hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/30"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white">
+          <Icon name="megaphone" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">공지사항</span>
+          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+            레옵스 안에서만 도는 공지입니다.
+          </span>
+        </span>
+        <Icon name="chevron-right" size={18} className="text-slate-400" />
+      </Link>
 
       {error ? (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">

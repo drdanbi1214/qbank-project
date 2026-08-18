@@ -38,6 +38,7 @@ import { SubjectPage } from '@/pages/SubjectPage'
 import { TheoryIndexPage } from '@/pages/TheoryIndexPage'
 import { TheorySubjectPage } from '@/pages/TheorySubjectPage'
 import { TopicIndexPage } from '@/pages/TopicIndexPage'
+import { TopicNoticesPage } from '@/pages/TopicNoticesPage'
 import { TopicsPage } from '@/pages/TopicsPage'
 import { UnitQuestionsPage } from '@/pages/UnitQuestionsPage'
 import { WrongNotesPage } from '@/pages/WrongNotesPage'
@@ -81,6 +82,7 @@ export default function App() {
                           <Route path="/theory/:subjectId/:documentId" element={<TheorySubjectPage />} />
                           {/* 테마는 스터디 권한이 있어야 열린다. 가드는 페이지 안에서 한다. */}
                           <Route path="/topics" element={<TopicIndexPage />} />
+                          <Route path="/topics/notices" element={<TopicNoticesPage />} />
                           <Route path="/topics/:subjectId" element={<TopicsPage />} />
                           <Route path="/topics/:subjectId/:topicId" element={<TopicsPage />} />
                           <Route path="/exams/:examId" element={<ExamDetailPage />} />
