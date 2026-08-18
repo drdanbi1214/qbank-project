@@ -6,6 +6,7 @@ import { useData } from '@/lib/data'
 import { useAuth } from '@/lib/auth'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
+import { searchTopics, type TopicForQuestion } from '@/lib/queries/topics'
 import { cn } from '@/utils/cn'
 
 /**
@@ -27,6 +28,10 @@ export function SearchPage() {
   const [input, setInput] = useState(query)
   const [loaded, setLoaded] = useState<{ key: string; hits: SearchHit[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 테마는 레옵스 전용이라 권한이 있을 때만 찾는다. RLS 도 같은 조건으로 막지만
+  // 없는 사람에게 헛조회를 보내지 않는다.
+  const canSearchTopics = hasPermission('study_legendob')
+  const [topicHits, setTopicHits] = useState<TopicForQuestion[]>([])
 
   const requestKey = `${query}|${includeSolutions}|${subjectId ?? ''}|${cohort ?? ''}`
 
@@ -49,10 +54,20 @@ export function SearchPage() {
         }
       })
 
+    if (canSearchTopics) {
+      void searchTopics(query, subjectId)
+        .then((rows) => {
+          if (active) setTopicHits(rows)
+        })
+        .catch(() => {
+          if (active) setTopicHits([])
+        })
+    }
+
     return () => {
       active = false
     }
-  }, [query, includeSolutions, subjectId, cohort, requestKey])
+  }, [query, includeSolutions, subjectId, cohort, requestKey, canSearchTopics])
 
   const update = useCallback(
     (patch: Record<string, string | null>) => {
@@ -162,14 +177,40 @@ export function SearchPage() {
         <div className="flex justify-center py-10">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : hits.length === 0 ? (
+      ) : hits.length === 0 && topicHits.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">검색 결과가 없습니다.</p>
         </div>
       ) : (
         <>
+          {/* 테마는 문제보다 위에 둔다. 개념을 찾는 사람에게는 이쪽이 먼저다. */}
+          {topicHits.length > 0 && (
+            <section className="mb-5">
+              <h2 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                레옵스 테마 {topicHits.length}개
+              </h2>
+              <ul className="space-y-2">
+                {topicHits.map((topic) => (
+                  <li key={topic.id}>
+                    <Link
+                      to={`/topics/${topic.subjectId}/${topic.id}`}
+                      className="block rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 transition-colors hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/20"
+                    >
+                      <span className="font-medium">{topic.title}</span>
+                      {topic.preview !== '' && (
+                        <span className="mt-1 line-clamp-2 block text-sm text-slate-600 dark:text-slate-300">
+                          {topic.preview}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-            {hits.length}개를 찾았습니다.
+            문제 {hits.length}개를 찾았습니다.
           </p>
           <ul className="space-y-2">
             {hits.map((hit) => (

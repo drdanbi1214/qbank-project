@@ -204,6 +204,53 @@ export async function deleteTopic(id: string): Promise<void> {
   if (error) throw error
 }
 
+export type TopicForQuestion = {
+  id: string
+  title: string
+  subjectId: string
+  /** 접힌 카드에 보여줄 앞부분 몇 줄 */
+  preview: string
+}
+
+/**
+ * 이 문제가 실린 테마.
+ *
+ * 문제 하나가 아니라 그 문제가 속한 야마 클러스터 전체로 넓혀 찾는다. 21학번
+ * 대표에 이론을 붙여 놨는데 학생이 26학번 변주를 풀고 있을 수 있기 때문이다.
+ * 넓히는 일은 topics_for_question 함수가 한다.
+ */
+export async function fetchTopicsForQuestion(questionId: string): Promise<TopicForQuestion[]> {
+  const { data, error } = await supabase.rpc('topics_for_question', {
+    p_question_id: questionId,
+  })
+  if (error) throw error
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    subjectId: row.subject_id,
+    preview: previewOf(parseRichDoc(row.content)),
+  }))
+}
+
+/** 본문에서 글자만 훑어 미리보기 문장을 만든다. 야마 카드와 이미지는 건너뛴다. */
+function previewOf(doc: RichDoc, limit = 160): string {
+  const parts: string[] = []
+
+  const walk = (nodes: RichNode[] | undefined) => {
+    for (const node of nodes ?? []) {
+      if (parts.join(' ').length >= limit) return
+      if (node.type === 'yamaEmbed') continue
+      if (typeof node.text === 'string') parts.push(node.text)
+      walk(node.content)
+    }
+  }
+
+  walk(doc.content)
+  const text = parts.join(' ').replace(/\s+/g, ' ').trim()
+  return text.length > limit ? `${text.slice(0, limit)}…` : text
+}
+
 /** 대표 단원 말고 더 걸치는 단원을 통째로 갈아끼운다. */
 export async function setExtraUnits(topicId: string, unitIds: string[]): Promise<void> {
   const { error: clearError } = await supabase
@@ -218,6 +265,48 @@ export async function setExtraUnits(topicId: string, unitIds: string[]): Promise
     .from('topic_units')
     .insert(unitIds.map((unitId) => ({ topic_id: topicId, unit_id: unitId })))
   if (error) throw error
+}
+
+/**
+ * 검색 화면용. 제목과 본문에서 찾는다.
+ *
+ * RLS 가 권한 없는 테마를 걸러 주므로 여기서 따로 필터하지 않는다. 레옵스가
+ * 아닌 사람에게는 애초에 결과가 오지 않는다.
+ */
+export async function searchTopics(
+  keyword: string,
+  subjectId?: string | null,
+): Promise<TopicForQuestion[]> {
+  const trimmed = keyword.trim()
+  if (trimmed === '') return []
+
+  let query = supabase.from('topics').select('id, title, subject_id, content')
+  if (subjectId) query = query.eq('subject_id', subjectId)
+
+  const { data, error } = await query.limit(200)
+  if (error) throw error
+
+  const lowered = trimmed.toLowerCase()
+  return (data ?? [])
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      subjectId: row.subject_id,
+      content: parseRichDoc(row.content),
+    }))
+    // 본문은 jsonb 라 서버에서 부분 일치를 걸기 어렵다. 테마는 많아야 수백 개라
+    // 받아서 훑는 편이 인덱스를 새로 만드는 것보다 싸다.
+    .filter(
+      (row) =>
+        row.title.toLowerCase().includes(lowered) ||
+        previewOf(row.content, 100000).toLowerCase().includes(lowered),
+    )
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      subjectId: row.subjectId,
+      preview: previewOf(row.content),
+    }))
 }
 
 /**

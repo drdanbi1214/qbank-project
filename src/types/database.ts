@@ -2521,6 +2521,15 @@ export type Database = {
         Returns: undefined
       }
       richtext_plain: { Args: { doc: Json }; Returns: string }
+      topics_for_question: {
+        Args: { p_question_id: string }
+        Returns: {
+          id: string
+          title: string
+          subject_id: string
+          content: Json
+        }[]
+      }
       search_questions: {
         Args: {
           p_cohort?: string

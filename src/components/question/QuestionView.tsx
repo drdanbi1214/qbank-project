@@ -8,6 +8,7 @@ import { ChoiceList } from '@/components/question/ChoiceList'
 import { StatsBar } from '@/components/question/StatsBar'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { ClusterPanel } from '@/components/question/ClusterPanel'
+import { TopicPanel } from '@/components/question/TopicPanel'
 import { MarkableRegion } from '@/components/marking/MarkableRegion'
 import { useTextMarks } from '@/components/marking/useTextMarks'
 import { QuestionDiscussions } from '@/components/discussion/QuestionDiscussions'
@@ -97,6 +98,8 @@ export function QuestionView({
   const canViewSeniorSolution = hasPermission('senior_solution_view')
   // 야마 묶기는 레전드옵세스터디원과 관리자만. DB 쪽도 cluster_attach RPC 가 같은 조건으로 막는다.
   const canCluster = isAdmin || hasPermission('study_legendob')
+  // 이론 카드도 같은 스터디 권한을 따른다. 레옵스 밖에서는 아예 조회하지 않는다.
+  const canViewTopics = canCluster
   // 야마를 붙일 후보 시험을 같은 과목으로 좁히려면 과목 id 가 필요하다.
   const subjectId = useMemo(
     () => taxonomy?.exams.find((exam) => exam.id === question.examId)?.subjectId ?? null,
@@ -622,6 +625,14 @@ export function QuestionView({
           )}
           {revealed && tab === 'senior' && canViewSeniorSolution && (
             <SeniorSolutionPanel questionId={question.id} />
+          )}
+
+          {/* 해설을 읽고 난 다음에 이론이 온다. 문제를 푸는 중에는 힌트가 되므로
+              정답이 공개된 뒤에만 보여준다. */}
+          {revealed && (
+            <div className="mt-4">
+              <TopicPanel questionId={question.id} enabled={canViewTopics} />
+            </div>
           )}
         </div>
       )}
