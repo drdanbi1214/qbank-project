@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { toClusterRole, type ClusterRole } from '@/lib/queries/clusters'
 import {
   parseAnswerPayload,
   parseChoices,
@@ -30,6 +31,8 @@ export type SolveQuestion = {
   restorerNote: string | null
   sourceTags: string[]
   groupId: string | null
+  /** 클러스터 안에서의 역할. 'identical' 은 이어풀기에서 하나만 남긴다. */
+  variantType: ClusterRole
   completeness: Completeness
   viewCount: number
   /** 'ai_suggested' 면 사람이 아직 확인하지 않은 AI 1차 단원 분류다 */
@@ -45,6 +48,27 @@ export type QuestionSet = {
   sharedChoices: SharedChoice[]
 }
 
+/** 복기 원문에 적힌 출제 강의. 강의록 파일은 나중에 별도로 연결될 수 있다. */
+export type QuestionLectureSource = {
+  id: string
+  title: string
+  professor: string | null
+  theoryDocumentId: string | null
+}
+
+export async function fetchQuestionLectureSources(questionId: string): Promise<QuestionLectureSource[]> {
+  const { data, error } = await supabase.rpc('get_question_lecture_sources', {
+    p_question_id: questionId,
+  })
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    professor: row.professor,
+    theoryDocumentId: row.theory_document_id,
+  }))
+}
+
 /** 내 풀이 상태 (문제 목록의 O/X 표시) */
 export type QuestionState = {
   isCorrect: boolean | null
@@ -52,7 +76,7 @@ export type QuestionState = {
 }
 
 const SOLVE_COLUMNS =
-  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, completeness, view_count, unit_source, question_code'
+  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, variant_type, completeness, view_count, unit_source, question_code'
 
 type SolveRow = {
   id: string
@@ -67,6 +91,7 @@ type SolveRow = {
   restorer_note: string | null
   source_tags: string[] | null
   group_id: string | null
+  variant_type: string | null
   completeness: string
   view_count: number
   unit_source: string | null
@@ -87,6 +112,7 @@ function toSolveQuestion(row: SolveRow): SolveQuestion {
     restorerNote: row.restorer_note,
     sourceTags: row.source_tags ?? [],
     groupId: row.group_id,
+    variantType: toClusterRole(row.variant_type),
     completeness: (row.completeness as Completeness) ?? 'complete',
     viewCount: row.view_count,
     unitSource: row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed' ? row.unit_source : null,

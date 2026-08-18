@@ -720,13 +720,19 @@ export type Database = {
           created_by: string | null
           duration_min: number | null
           exam_date: string | null
+          exam_code: string | null
           exam_name: string
+          exam_subject_label: string | null
           format: string | null
           id: string
+          curriculum: string | null
           overview: string | null
           required_permission: string | null
           restored_questions: number | null
+          source_page_end: number | null
+          source_page_start: number | null
           source_file_url: string | null
+          status: string
           subject_id: string
           total_questions: number | null
           updated_at: string
@@ -737,13 +743,19 @@ export type Database = {
           created_by?: string | null
           duration_min?: number | null
           exam_date?: string | null
+          exam_code?: string | null
           exam_name?: string
+          exam_subject_label?: string | null
           format?: string | null
           id?: string
+          curriculum?: string | null
           overview?: string | null
           required_permission?: string | null
           restored_questions?: number | null
+          source_page_end?: number | null
+          source_page_start?: number | null
           source_file_url?: string | null
+          status?: string
           subject_id: string
           total_questions?: number | null
           updated_at?: string
@@ -754,13 +766,19 @@ export type Database = {
           created_by?: string | null
           duration_min?: number | null
           exam_date?: string | null
+          exam_code?: string | null
           exam_name?: string
+          exam_subject_label?: string | null
           format?: string | null
           id?: string
+          curriculum?: string | null
           overview?: string | null
           required_permission?: string | null
           restored_questions?: number | null
+          source_page_end?: number | null
+          source_page_start?: number | null
           source_file_url?: string | null
+          status?: string
           subject_id?: string
           total_questions?: number | null
           updated_at?: string
@@ -1024,6 +1042,7 @@ export type Database = {
           avatar_url: string | null
           cohort: string | null
           created_at: string
+          dedupe_identical: boolean
           default_solution_permission: string | null
           display_name: string
           email: string | null
@@ -1039,6 +1058,7 @@ export type Database = {
           avatar_url?: string | null
           cohort?: string | null
           created_at?: string
+          dedupe_identical?: boolean
           default_solution_permission?: string | null
           display_name: string
           email?: string | null
@@ -1054,6 +1074,7 @@ export type Database = {
           avatar_url?: string | null
           cohort?: string | null
           created_at?: string
+          dedupe_identical?: boolean
           default_solution_permission?: string | null
           display_name?: string
           email?: string | null
@@ -2192,9 +2213,15 @@ export type Database = {
         Args: { p_object_name: string }
         Returns: boolean
       }
+      can_cluster: { Args: never; Returns: boolean }
       can_view_exam: { Args: { p_exam_id: string }; Returns: boolean }
       can_view_question: { Args: { p_question_id: string }; Returns: boolean }
       can_write: { Args: never; Returns: boolean }
+      cluster_attach: {
+        Args: { p_anchor_id: string; p_target_id: string; p_variant: string }
+        Returns: string
+      }
+      cluster_detach: { Args: { p_question_id: string }; Returns: undefined }
       circled_answer: { Args: { a: number[] }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {
@@ -2316,6 +2343,15 @@ export type Database = {
       has_content_access: {
         Args: { p_permission_key: string }
         Returns: boolean
+      }
+      get_question_lecture_sources: {
+        Args: { p_question_id: string }
+        Returns: {
+          id: string
+          professor: string | null
+          theory_document_id: string | null
+          title: string
+        }[]
       }
       has_permission: { Args: { p_permission_key: string }; Returns: boolean }
       increment_discussion_view: {

@@ -12,6 +12,12 @@ import {
   type BookmarkedQuestion,
   type WrongNote,
 } from '@/lib/queries/study'
+import {
+  collapseIdenticalWithFolds,
+  fetchClusterRoles,
+  fetchCollapseSetting,
+  type ClusterRole,
+} from '@/lib/queries/clusters'
 import { downloadCsv } from '@/utils/download'
 import { formatShortDate } from '@/utils/date'
 import { cn } from '@/utils/cn'
@@ -32,10 +38,13 @@ export function WrongNotesPage() {
   const [cohort, setCohort] = useState<string | null>(null)
   const [examId, setExamId] = useState<string | null>(null)
 
+  type ClusterRoleMap = Map<string, { groupId: string | null; variantType: ClusterRole }>
   const [loaded, setLoaded] = useState<{
     key: string
     wrong: WrongNote[]
     bookmarks: BookmarkedQuestion[]
+    /** 비어 있으면 접기가 꺼진 것이다 */
+    roles: ClusterRoleMap
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -47,12 +56,18 @@ export function WrongNotesPage() {
 
     async function load() {
       try {
-        const [wrong, bookmarks] = await Promise.all([
+        const [wrong, bookmarks, collapse] = await Promise.all([
           fetchWrongNotes({ subjectId, unitId, examId, cohort }),
           fetchBookmarkedQuestions(),
+          fetchCollapseSetting(),
         ])
+        // 같은 문제를 여러 학번 판본으로 틀리면 목록에 그만큼 줄이 늘어난다.
+        // 한 줄로 접고, 접힌 판본은 배지로 알린다.
+        const roles = collapse
+          ? await fetchClusterRoles(wrong.map((row) => row.questionId))
+          : new Map()
         if (!active) return
-        setLoaded({ key: requestKey, wrong, bookmarks })
+        setLoaded({ key: requestKey, wrong, bookmarks, roles })
         setError(null)
       } catch (caught) {
         if (!active) return
@@ -98,13 +113,33 @@ export function WrongNotesPage() {
     [taxonomy, subjectId, cohort],
   )
 
-  const wrongNotes = useMemo(() => {
+  /** 접힌 판본. key 는 남은 문제의 id, value 는 접힌 문제들의 시험 id */
+  const [wrongNotes, foldedExams] = useMemo<[WrongNote[], Map<string, string[]>]>(() => {
     const rows = ready ? [...loaded.wrong] : []
-    return rows.sort((a, b) =>
+    rows.sort((a, b) =>
       sort === 'repeated'
         ? b.wrongCount - a.wrongCount || b.lastAttemptAt.localeCompare(a.lastAttemptAt)
         : b.lastAttemptAt.localeCompare(a.lastAttemptAt),
     )
+
+    const roles = ready ? loaded.roles : null
+    if (!roles || roles.size === 0) return [rows, new Map()]
+
+    // 정렬을 끝낸 뒤에 접어야 화면에 남는 판본이 사용자가 기대하는 순서의 첫 줄이 된다.
+    const { kept, folded } = collapseIdenticalWithFolds(
+      rows.map((row) => ({
+        ...row,
+        id: row.questionId,
+        groupId: roles.get(row.questionId)?.groupId ?? null,
+        variantType: roles.get(row.questionId)?.variantType ?? ('original' as ClusterRole),
+      })),
+    )
+
+    const exams = new Map<string, string[]>()
+    for (const [keeperId, list] of folded) {
+      exams.set(keeperId, list.map((row) => row.examId))
+    }
+    return [kept, exams]
   }, [ready, loaded, sort])
 
   const bookmarks = ready ? loaded.bookmarks : []
@@ -327,6 +362,15 @@ export function WrongNotesPage() {
                     {row.recentAllWrong && (
                       <span className="rounded bg-rose-600 px-1.5 py-0.5 font-semibold text-white">
                         최근 3회 연속 오답
+                      </span>
+                    )}
+                    {(foldedExams.get(row.questionId)?.length ?? 0) > 0 && (
+                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {foldedExams
+                          .get(row.questionId)!
+                          .map((id) => examLabelOf(id))
+                          .join(' · ')}{' '}
+                        동일 문제 접힘
                       </span>
                     )}
                     <span className="ml-auto text-slate-400">

@@ -11,6 +11,7 @@ import {
   validateNickname,
 } from '@/lib/queries/profiles'
 import { fetchMySummary, type MySummary } from '@/lib/queries/study'
+import { fetchCollapseSetting, setCollapseSetting } from '@/lib/queries/clusters'
 import {
   FONT_SCALE_MAX,
   FONT_SCALE_MIN,
@@ -30,7 +31,21 @@ export function MyPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [summary, setSummary] = useState<MySummary | null>(null)
+  // 기본값은 켜짐. 실제 값은 아래 이펙트에서 받아온다.
+  const [collapseIdenticalOn, setCollapseIdenticalOn] = useState(true)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let active = true
+    void fetchCollapseSetting()
+      .then((next) => {
+        if (active) setCollapseIdenticalOn(next)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -246,6 +261,26 @@ export function MyPage() {
               ))}
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={collapseIdenticalOn}
+              onChange={(event) => {
+                const next = event.target.checked
+                setCollapseIdenticalOn(next)
+                void setCollapseSetting(next).catch(() => setCollapseIdenticalOn(!next))
+              }}
+              className="mt-1"
+            />
+            <span>
+              <span className="text-sm font-medium">완전히 동일한 문제는 하나만 보기</span>
+              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                여러 학번 시험에 그대로 다시 나온 문제를 목록에서 한 번만 보여줍니다.
+                다 풀어보고 싶으면 꺼두세요.
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

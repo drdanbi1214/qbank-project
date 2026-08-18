@@ -7,6 +7,7 @@ import { AnswerNotice } from '@/components/question/AnswerNotice'
 import { ChoiceList } from '@/components/question/ChoiceList'
 import { StatsBar } from '@/components/question/StatsBar'
 import { StemBlocks } from '@/components/question/StemBlocks'
+import { ClusterPanel } from '@/components/question/ClusterPanel'
 import { MarkableRegion } from '@/components/marking/MarkableRegion'
 import { useTextMarks } from '@/components/marking/useTextMarks'
 import { QuestionDiscussions } from '@/components/discussion/QuestionDiscussions'
@@ -21,13 +22,14 @@ import { hasSolutions } from '@/lib/queries/solutions'
 import { AssignmentEditor } from '@/components/assignments/AssignmentEditor'
 import {
   fetchDiscussionCount,
-  fetchGroupSiblings,
+  fetchQuestionLectureSources,
   fetchStats,
   incrementView,
   revealAnswer,
   setBookmark,
   submitAttempt,
   type QuestionSet,
+  type QuestionLectureSource,
   type SolveQuestion,
 } from '@/lib/queries/questions'
 import { useAuth } from '@/lib/auth'
@@ -93,6 +95,13 @@ export function QuestionView({
   const canViewStudySolutions = hasPermission('study_hapbon3')
   const canViewAiSolution = hasPermission('ai_solution_view')
   const canViewSeniorSolution = hasPermission('senior_solution_view')
+  // 야마 묶기는 레전드옵세스터디원과 관리자만. DB 쪽도 cluster_attach RPC 가 같은 조건으로 막는다.
+  const canCluster = isAdmin || hasPermission('study_legendob')
+  // 야마를 붙일 후보 시험을 같은 과목으로 좁히려면 과목 id 가 필요하다.
+  const subjectId = useMemo(
+    () => taxonomy?.exams.find((exam) => exam.id === question.examId)?.subjectId ?? null,
+    [taxonomy, question.examId],
+  )
 
   const [selected, setSelected] = useState<number[]>([])
   const [answer, setAnswer] = useState<AnswerPayload | null>(null)
@@ -100,7 +109,7 @@ export function QuestionView({
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [siblings, setSiblings] = useState<string[]>([])
+  const [lectureSources, setLectureSources] = useState<QuestionLectureSource[]>([])
   const [threadCount, setThreadCount] = useState(0)
 
   // 서술형
@@ -129,21 +138,20 @@ export function QuestionView({
     void fetchDiscussionCount(question.id).then(setThreadCount)
   }, [question.id])
 
-  // 중복 출제 안내
+  // 출제 강의는 정답이 공개된 뒤에만 가져온다. 문제를 푸는 중에는 출처 제목도
+  // 힌트가 될 수 있으므로 노출하지 않는다.
   useEffect(() => {
-    if (!question.groupId) return
+    if (!answer) return
     let active = true
-    void fetchGroupSiblings(question.groupId, question.id)
+    void fetchQuestionLectureSources(question.id)
       .then((rows) => {
-        if (!active) return
-        const labels = [...new Set(rows.map((row) => examLabelOf(row.examId)))].filter(Boolean)
-        setSiblings(labels)
+        if (active) setLectureSources(rows)
       })
-      .catch((caught: unknown) => console.error('동일 출제 정보를 불러오지 못했습니다.', caught))
+      .catch((caught: unknown) => console.error('출제 강의 정보를 불러오지 못했습니다.', caught))
     return () => {
       active = false
     }
-  }, [question.groupId, question.id, examLabelOf])
+  }, [answer, question.id])
 
   const elapsedSec = useCallback(
     () => Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
@@ -467,13 +475,35 @@ export function QuestionView({
 
           <AnswerNotice answer={answer} />
 
+          {lectureSources.length > 0 && (
+            <section className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 dark:border-sky-900 dark:bg-sky-950/20">
+              <h3 className="mb-2 text-sm font-semibold text-sky-950 dark:text-sky-100">출제 강의</h3>
+              <ul className="space-y-1.5">
+                {lectureSources.map((lecture) => (
+                  <li key={lecture.id} className="text-sm text-slate-700 dark:text-slate-200">
+                    <span className="font-medium">{lecture.title}</span>
+                    {lecture.professor && (
+                      <span className="text-slate-500 dark:text-slate-400"> · {lecture.professor} 교수</span>
+                    )}
+                    {!lecture.theoryDocumentId && (
+                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">강의록 연결 예정</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {stats && !autoWrite && <StatsBar stats={stats} />}
 
-          {siblings.length > 0 && (
-            <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              이 문제는 {siblings.join(', ')} 시험에도 동일 출제됨
-            </p>
-          )}
+          <ClusterPanel
+            questionId={question.id}
+            examId={question.examId}
+            initialGroupId={question.groupId}
+            subjectId={subjectId}
+            examLabelOf={examLabelOf}
+            canCluster={canCluster}
+          />
 
           {answer.officialExplanation && answer.officialExplanation.length > 0 && (
             <section className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">

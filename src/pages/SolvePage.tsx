@@ -11,6 +11,7 @@ import {
   type QuestionSet,
   type SolveQuestion,
 } from '@/lib/queries/questions'
+import { collapseIdentical, fetchCollapseSetting } from '@/lib/queries/clusters'
 import { fetchSession, startSession, updateSessionOrder, updateSessionProgress } from '@/lib/queries/study'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { useAuth } from '@/lib/auth'
@@ -85,7 +86,7 @@ export function SolvePage() {
         // 거기서 걸렀는데, 문제가 쌓이면서 PostgREST 반환 상한(기본 1000행)에
         // 걸려 뒤쪽 문제는 목록에 아예 오지 않았다. 그래서 배정 화면에서
         // 넘어오면 '이 범위에 풀 문제가 없습니다' 가 떴다.
-        const finalRows = questionId
+        const rawRows = questionId
           ? await fetchQuestionById(questionId).then((one) => (one ? [one] : []))
           : await fetchQuestions({
               unitId: unitId ?? undefined,
@@ -93,6 +94,12 @@ export function SolvePage() {
               subjectId: subjectId ?? undefined,
               unlabeledOnly: unlabeled,
             })
+
+        // 범위로 들어온 경우에만 완전 동일 문제를 접는다. 한 단원을 통으로 훑으면
+        // 같은 문제의 여러 학번 판본이 줄줄이 나오기 때문이다. 단건 보기는 지목한
+        // 그 문제를 보여줘야 하므로 건드리지 않는다.
+        const finalRows =
+          questionId || !(await fetchCollapseSetting()) ? rawRows : collapseIdentical(rawRows)
 
         const marked = await fetchBookmarked(finalRows.map((row) => row.id))
         if (!active) return

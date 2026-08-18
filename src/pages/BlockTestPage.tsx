@@ -8,6 +8,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { fetchQuestions, submitAttempt, type SolveQuestion } from '@/lib/queries/questions'
+import { collapseIdentical, fetchCollapseSetting } from '@/lib/queries/clusters'
 import { finishSession, startSession } from '@/lib/queries/study'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { cn } from '@/utils/cn'
@@ -55,11 +56,14 @@ export function BlockTestPage() {
     if (!examId) return
     let active = true
 
-    void fetchQuestions({ examId })
-      .then((rows) => {
+    void Promise.all([fetchQuestions({ examId }), fetchCollapseSetting()])
+      .then(([rows, collapse]) => {
         if (!active) return
         // 서술형은 자동 채점이 안 되므로 블록테스트에서는 제외한다.
-        setLoaded({ key: examId, questions: rows.filter((row) => row.questionType !== 'essay') })
+        const usable = rows.filter((row) => row.questionType !== 'essay')
+        // 블록테스트는 시험 하나만 담으므로 접히는 문제는 사실상 없다. 판본 중복은
+        // 학번을 가로질러 생기기 때문이다. 설정을 일관되게 적용하려고 걸어둔다.
+        setLoaded({ key: examId, questions: collapse ? collapseIdentical(usable) : usable })
         setError(null)
       })
       .catch((caught: unknown) => {
