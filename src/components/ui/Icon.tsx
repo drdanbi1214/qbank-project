@@ -20,6 +20,15 @@ export type IconName =
   | 'logout'
   | 'search'
   | 'shuffle'
+  | 'stethoscope'
+  | 'scalpel'
+  | 'venus'
+  | 'teddy'
+  | 'mood'
+  | 'brain'
+  | 'bone'
+  | 'scan'
+  | 'flask'
 
 const PATHS: Record<IconName, string> = {
   study: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H19v14H6.5A2.5 2.5 0 0 0 4 19.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20',
@@ -42,6 +51,17 @@ const PATHS: Record<IconName, string> = {
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16M21 21l-4.3-4.3',
   shuffle: 'M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5',
+
+  // 과목 아이콘. 목록에서 과목을 한눈에 구별하려고 기관/도구 모양으로 그린다.
+  stethoscope: 'M6 3v6a4 4 0 0 0 8 0V3M4 3h4M12 3h4M10 13v3a4 4 0 0 0 8 0v-3M18 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4',
+  scalpel: 'M3 21l7-7M10 14l4-10 6 6z',
+  venus: 'M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10M12 14v7M9 18h6',
+  teddy: 'M10 5a2 2 0 1 0-4 0 2 2 0 0 0 4 0M18 5a2 2 0 1 0-4 0 2 2 0 0 0 4 0M12 22a7 7 0 1 0 0-14 7 7 0 0 0 0 14M9.5 14h.01M14.5 14h.01M10 17.5a3 3 0 0 0 4 0',
+  mood: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 10h.01M15 10h.01M8.5 15a4.5 4.5 0 0 0 7 0',
+  brain: 'M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-2.5 3 3 3 0 0 0 .5 4.5A3 3 0 0 0 6 18a3 3 0 0 0 3.5 3zM14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 2.5 3 3 3 0 0 1-.5 4.5A3 3 0 0 1 18 18a3 3 0 0 1-3.5 3z',
+  bone: 'M6 18l12-12M6 18a2.5 2.5 0 1 1-1.8-4.2M6 18a2.5 2.5 0 1 0 4.2 1.8M18 6a2.5 2.5 0 1 0 1.8 4.2M18 6a2.5 2.5 0 1 1-4.2-1.8',
+  scan: 'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3M7 12h10',
+  flask: 'M9 3v6.5L4.2 17.9A2 2 0 0 0 6 21h12a2 2 0 0 0 1.8-3.1L15 9.5V3M8 3h8M7.5 15h9',
 }
 
 type IconProps = SVGProps<SVGSVGElement> & {

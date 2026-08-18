@@ -49,15 +49,22 @@ export function ClusterPanel({
   const [siblings, setSiblings] = useState<ClusterSibling[] | null>(initialGroupId ? null : [])
   const [adding, setAdding] = useState<VariantType | null>(null)
 
+  const refresh = useCallback(
+    (id: string) => {
+      void fetchClusterSiblings(id, questionId)
+        .then(setSiblings)
+        .catch((caught: unknown) => {
+          console.error('야마 묶음을 불러오지 못했습니다.', caught)
+          setSiblings([])
+        })
+    },
+    [questionId],
+  )
+
   const load = useCallback(() => {
     if (!groupId) return
-    void fetchClusterSiblings(groupId, questionId)
-      .then(setSiblings)
-      .catch((caught: unknown) => {
-        console.error('야마 묶음을 불러오지 못했습니다.', caught)
-        setSiblings([])
-      })
-  }, [groupId, questionId])
+    refresh(groupId)
+  }, [groupId, refresh])
 
   useEffect(load, [load])
 
@@ -72,10 +79,18 @@ export function ClusterPanel({
 
   // 붙이고 나면 기준 문제도 그 그룹에 들어간다. 부모가 문제를 다시 읽지 않아도
   // 되도록 새 그룹 id 를 여기서 받아 든다.
-  const handleAttached = useCallback((nextGroupId: string) => {
-    setAdding(null)
-    setGroupId(nextGroupId)
-  }, [])
+  //
+  // 두 번째부터는 cluster_attach 가 같은 그룹 id 를 돌려주므로 setGroupId 로는
+  // 아무 일도 일어나지 않는다(값이 같아 이펙트가 다시 돌지 않는다). 그래서 받은
+  // id 로 직접 다시 읽는다.
+  const handleAttached = useCallback(
+    (nextGroupId: string) => {
+      setAdding(null)
+      setGroupId(nextGroupId)
+      refresh(nextGroupId)
+    },
+    [refresh],
+  )
 
   const handleDetach = useCallback(
     (id: string) => {
@@ -133,7 +148,7 @@ export function ClusterPanel({
             <ol className="mt-2 space-y-1 text-sm">
               {row.choices.map((choice) => (
                 <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-                  {choice.no}. {choice.text}
+                  {choice.text}
                 </li>
               ))}
             </ol>

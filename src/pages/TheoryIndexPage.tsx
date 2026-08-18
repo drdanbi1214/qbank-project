@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
+import { subjectVisual } from '@/lib/subjectVisual'
+import { cn } from '@/utils/cn'
 import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
 
 export function TheoryIndexPage() {
@@ -50,14 +52,16 @@ export function TheoryIndexPage() {
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">{error}</p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {(taxonomy?.subjects ?? []).map((subject) => (
+          {(taxonomy?.subjects ?? []).map((subject) => {
+            const visual = subjectVisual(subject)
+            return (
             <li key={subject.id}>
               <Link
                 to={`/theory/${subject.id}`}
                 className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
               >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
-                  <Icon name="theory" />
+                <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', visual.tint)}>
+                  <Icon name={visual.icon} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-semibold">{subject.name}</span>
@@ -68,7 +72,8 @@ export function TheoryIndexPage() {
                 <Icon name="chevron-right" size={18} className="text-slate-400" />
               </Link>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </section>

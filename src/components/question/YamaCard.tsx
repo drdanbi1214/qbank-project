@@ -137,7 +137,7 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
       <ol className="mt-2 space-y-1 text-sm">
         {question.choices.map((choice) => (
           <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-            {choice.no}. {choice.text}
+            {choice.text}
           </li>
         ))}
       </ol>

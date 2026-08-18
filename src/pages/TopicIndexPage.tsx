@@ -4,7 +4,9 @@ import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
+import { subjectVisual } from '@/lib/subjectVisual'
 import { fetchAllTopicCounts } from '@/lib/queries/topics'
+import { cn } from '@/utils/cn'
 
 /**
  * 테마 첫 화면. 과목을 고르는 자리다.
@@ -78,14 +80,16 @@ export function TopicIndexPage() {
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {(taxonomy?.subjects ?? []).map((subject) => (
+          {(taxonomy?.subjects ?? []).map((subject) => {
+            const visual = subjectVisual(subject)
+            return (
             <li key={subject.id}>
               <Link
                 to={`/topics/${subject.id}`}
                 className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
               >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200">
-                  <Icon name="topic" />
+                <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', visual.tint)}>
+                  <Icon name={visual.icon} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-semibold">{subject.name}</span>
@@ -96,7 +100,8 @@ export function TopicIndexPage() {
                 <Icon name="chevron-right" size={18} className="text-slate-400" />
               </Link>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </section>
