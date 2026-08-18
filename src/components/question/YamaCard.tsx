@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { ClusterPanel } from '@/components/question/ClusterPanel'
+import { SolutionList } from '@/components/solution/SolutionList'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
@@ -35,6 +36,9 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
   const [question, setQuestion] = useState<SolveQuestion | null | 'missing'>(
     questionId ? null : 'missing',
   )
+  // 읽는 사람용. 게시물을 보다가 해설을 그 자리에서 펼친다. 풀이 화면으로
+  // 나갔다 오면 읽던 흐름이 끊긴다.
+  const [showSolution, setShowSolution] = useState(false)
 
   useEffect(() => {
     if (!questionId) return
@@ -114,6 +118,15 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
           {examLabel(question.examId)} {question.questionNumber}번
         </span>
         <span className="ml-auto flex items-center gap-2">
+          {!canCluster && (
+            <button
+              type="button"
+              onClick={() => setShowSolution((value) => !value)}
+              className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+            >
+              {showSolution ? '해설 접기' : '해설 보기'}
+            </button>
+          )}
           <Link
             to={`/solve?question=${question.id}`}
             className="text-brand-600 hover:underline dark:text-brand-300"
@@ -141,6 +154,21 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
           </li>
         ))}
       </ol>
+
+      {/* 읽는 중에는 해설을 이 자리에서 펼친다. 묶인 판본 전체가 공유하는
+          해설과, 이 문제에만 붙은 해설이 함께 나온다. */}
+      {showSolution && !canCluster && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+          <SolutionList
+            questionId={question.id}
+            groupId={question.groupId}
+            choiceCount={question.choices.length}
+            subjectId={subjectIdOf(question.examId)}
+            unitId={question.unitId}
+            unitSource={question.unitSource}
+          />
+        </div>
+      )}
 
       {/* 같은 논점을 묻는 다른 학번 판본을 여기서 모은다. 이론을 쓰면서 비슷한
           문제를 묶어 함께 설명하는 것이 이 기능의 주된 쓰임이다. */}

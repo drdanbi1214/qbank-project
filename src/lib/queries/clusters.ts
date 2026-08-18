@@ -140,6 +140,29 @@ export async function findQuestionInExam(
   }
 }
 
+/** 검색 결과에서 고른 문제를 확인용으로 받아온다. */
+export async function findQuestionById(id: string): Promise<LookupResult | null> {
+  const { data, error } = await supabase
+    .from('questions_solve')
+    .select(`${SIBLING_SELECT}, group_id`)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data?.id || !data.exam_id) return null
+
+  const row = data as SiblingRow & { group_id: string | null }
+  return {
+    id: row.id as string,
+    examId: row.exam_id as string,
+    questionNumber: row.question_number ?? 0,
+    stemBlocks: parseStemBlocks(row.stem_blocks),
+    choices: parseChoices(row.choices),
+    questionCode: row.question_code,
+    groupId: row.group_id,
+  }
+}
+
 /** 기준 문제의 클러스터에 붙인다. 그룹이 없으면 새로 만든다. */
 export async function attachToCluster(params: {
   anchorId: string

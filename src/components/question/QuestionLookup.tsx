@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { StemBlocks } from '@/components/question/StemBlocks'
-import { findQuestionInExam, type LookupResult } from '@/lib/queries/clusters'
+import { findQuestionById, findQuestionInExam, type LookupResult } from '@/lib/queries/clusters'
+import { searchQuestions, type SearchHit } from '@/lib/queries/study'
 import type { Exam } from '@/lib/queries/taxonomy'
 
 type Props = {
@@ -61,6 +62,10 @@ export function QuestionLookup({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 지문·선지 키워드로 찾기. 학번과 번호를 모를 때가 더 많다.
+  const [keyword, setKeyword] = useState('')
+  const [hits, setHits] = useState<SearchHit[] | null>(null)
+
   const examsInCohort = useMemo(
     () => candidates.filter((exam) => exam.cohort === cohort),
     [candidates, cohort],
@@ -105,9 +110,99 @@ export function QuestionLookup({
       .finally(() => setBusy(false))
   }, [examId, number, excludeQuestionId, rejectGrouped])
 
+  const searchByKeyword = useCallback(() => {
+    const trimmed = keyword.trim()
+    if (trimmed === '') return
+    setBusy(true)
+    setError(null)
+    setFound(null)
+    void searchQuestions({ query: trimmed, includeSolutions: false, subjectId })
+      .then((rows) => setHits(rows.filter((row) => row.questionId !== excludeQuestionId)))
+      .catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : '검색하지 못했습니다.')
+        setHits([])
+      })
+      .finally(() => setBusy(false))
+  }, [keyword, subjectId, excludeQuestionId])
+
+  const pickHit = useCallback(
+    (hit: SearchHit) => {
+      setBusy(true)
+      setError(null)
+      void findQuestionById(hit.questionId)
+        .then((result) => {
+          if (!result) {
+            setError('문제를 불러오지 못했습니다.')
+            return
+          }
+          if (rejectGrouped && result.groupId) {
+            setError('이미 다른 야마에 묶여 있는 문제입니다. 먼저 묶기를 풀어 주세요.')
+            return
+          }
+          setHits(null)
+          setFound(result)
+        })
+        .catch((caught: unknown) => {
+          setError(caught instanceof Error ? caught.message : '문제를 불러오지 못했습니다.')
+        })
+        .finally(() => setBusy(false))
+    },
+    [rejectGrouped],
+  )
+
   return (
     <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <input
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') searchByKeyword()
+          }}
+          placeholder="지문이나 선지 키워드로 찾기"
+          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
+        />
+        <Button size="sm" variant="secondary" onClick={searchByKeyword} disabled={busy}>
+          검색
+        </Button>
+      </div>
+
+      {hits !== null && (
+        <div className="mb-2 max-h-64 overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
+          {hits.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-slate-500 dark:text-slate-400">
+              찾은 문제가 없습니다.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {hits.map((hit) => (
+                <li key={hit.questionId}>
+                  <button
+                    type="button"
+                    onClick={() => pickHit(hit)}
+                    className="block w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <span className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="font-medium text-brand-600 dark:text-brand-300">
+                        {examLabelOf(hit.examId)} {hit.questionNumber}번
+                      </span>
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                        {hit.matchedIn}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 line-clamp-2 block text-sm text-slate-700 dark:text-slate-200">
+                      {hit.snippet ?? hit.stemText ?? '본문 없음'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-slate-400">또는</span>
         <select
           value={cohort}
           onChange={(event) => {
