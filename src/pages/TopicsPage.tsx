@@ -121,12 +121,17 @@ export function TopicsPage() {
     if (!window.confirm(`"${selected.title}" 테마를 지웁니다. 되돌릴 수 없습니다.`)) return
     setBusy(true)
     void deleteTopic(selected.id)
-      .then(() => navigate(`/topics/${subjectId}`, { replace: true }))
+      .then(() => {
+        // 목록을 다시 읽어야 왼쪽에서 사라진다. 주소만 바꾸면 subjectId 가 그대로라
+        // 조회 이펙트가 다시 돌지 않아 지운 테마가 남아 있는다.
+        load()
+        navigate(`/topics/${subjectId}`, { replace: true })
+      })
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '지우지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [selected, subjectId, navigate])
+  }, [selected, subjectId, navigate, load])
 
   if (!canUse) return <Navigate to="/study" replace />
   if (!subjectId) return <Navigate to="/study" replace />
