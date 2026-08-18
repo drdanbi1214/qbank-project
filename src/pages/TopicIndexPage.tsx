@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
@@ -38,11 +38,6 @@ export function TopicIndexPage() {
     }
   }, [canUse])
 
-  const total = useMemo(
-    () => [...(counts?.values() ?? [])].reduce((sum, value) => sum + value, 0),
-    [counts],
-  )
-
   if (!canUse) return <Navigate to="/study" replace />
 
   if (taxonomyLoading || counts === null) {
@@ -57,13 +52,10 @@ export function TopicIndexPage() {
     <section>
       <header className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-bold">레옵스</h1>
-          <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-            레전드옵세스터디
-          </span>
+          <h1 className="text-xl font-bold">레전드옵세스터디</h1>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          주제 하나를 정리하고 관련된 야마를 붙여 나가는 곳입니다. 테마 {total}개.
+          레전드로옵세시브한그들.
         </p>
       </header>
 
@@ -76,9 +68,6 @@ export function TopicIndexPage() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">공지사항</span>
-          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-            레옵스 안에서만 도는 공지입니다.
-          </span>
         </span>
         <Icon name="chevron-right" size={18} className="text-slate-400" />
       </Link>

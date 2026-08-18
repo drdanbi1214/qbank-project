@@ -9,6 +9,7 @@ import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
 import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
+import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
 import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
@@ -91,6 +92,7 @@ export function RichTextEditor({
       Highlight.configure({ multicolor: true }),
       TextStyle,
       Color,
+      FontSize,
       TableKit.configure({ table: { resizable: false } }),
       StoredImage,
       YamaEmbed,
@@ -292,13 +294,45 @@ function Toolbar({
       {!compact && (
         <>
           <Divider />
-          <ToolButton
-            label="소제목"
-            active={editor.isActive('heading', { level: 3 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          <select
+            aria-label="문단 종류"
+            value={
+              editor.isActive('heading', { level: 2 })
+                ? '2'
+                : editor.isActive('heading', { level: 3 })
+                  ? '3'
+                  : editor.isActive('heading', { level: 4 })
+                    ? '4'
+                    : 'p'
+            }
+            onChange={(event) => {
+              const value = event.target.value
+              if (value === 'p') editor.chain().focus().setParagraph().run()
+              else editor.chain().focus().setHeading({ level: Number(value) as 2 | 3 | 4 }).run()
+            }}
+            className="mx-0.5 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
           >
-            H3
-          </ToolButton>
+            <option value="p">본문</option>
+            <option value="2">제목 1</option>
+            <option value="3">제목 2</option>
+            <option value="4">제목 3</option>
+          </select>
+          <select
+            aria-label="글씨 크기"
+            value={safeFontSize(editor.getAttributes('textStyle').fontSize) ?? ''}
+            onChange={(event) => {
+              const value = event.target.value
+              if (value === '') editor.chain().focus().unsetFontSize().run()
+              else editor.chain().focus().setFontSize(value).run()
+            }}
+            className="mx-0.5 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+          >
+            {FONT_SIZES.map((item) => (
+              <option key={item.label} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
           <ToolButton
             label="글머리 목록"
             active={editor.isActive('bulletList')}
@@ -354,6 +388,18 @@ function Toolbar({
                 onClick={() => editor.chain().focus().addRowAfter().run()}
               >
                 +행
+              </ToolButton>
+              <ToolButton
+                label="열 삭제"
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+              >
+                −열
+              </ToolButton>
+              <ToolButton
+                label="행 삭제"
+                onClick={() => editor.chain().focus().deleteRow().run()}
+              >
+                −행
               </ToolButton>
               <ToolButton
                 label="표 삭제"

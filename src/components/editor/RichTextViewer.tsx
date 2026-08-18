@@ -2,6 +2,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
+import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
 import { imageWidthOf, isLeafNode, type RichDoc, type RichMark, type RichNode } from '@/types/richtext'
@@ -282,7 +283,9 @@ function applyMarks(children: ReactNode, marks: RichMark[]): ReactNode {
         return <mark style={{ backgroundColor: safeHighlightColor(mark.attrs?.color) }}>{acc}</mark>
       case 'textStyle': {
         const color = safeTextColor(mark.attrs?.color)
-        return color ? <span style={{ color }}>{acc}</span> : acc
+        const fontSize = safeFontSize(mark.attrs?.fontSize)
+        if (!color && !fontSize) return acc
+        return <span style={{ ...(color ? { color } : {}), ...(fontSize ? { fontSize } : {}) }}>{acc}</span>
       }
       case 'link': {
         const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : null
