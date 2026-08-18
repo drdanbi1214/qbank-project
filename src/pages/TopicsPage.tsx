@@ -339,15 +339,6 @@ function CreateForm({
   return (
     <div className="mb-4 rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') submit()
-          }}
-          placeholder="테마 제목 (예: 심부전의 약물치료)"
-          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
-        />
         <select
           value={unitId}
           onChange={(event) => setUnitId(event.target.value)}
@@ -360,6 +351,15 @@ function CreateForm({
             </option>
           ))}
         </select>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') submit()
+          }}
+          placeholder="테마 제목 (예: 심부전의 약물치료)"
+          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
+        />
         <Button size="sm" onClick={submit} disabled={busy}>
           만들기
         </Button>
