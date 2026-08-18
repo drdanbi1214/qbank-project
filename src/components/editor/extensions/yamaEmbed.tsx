@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- Tiptap 확장과 그 노드뷰는 한 파일에 두는 편이 읽기 쉽다. */
+import type { ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { YamaCard } from '@/components/question/YamaCard'
@@ -25,7 +26,19 @@ function YamaEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
   const questionId = typeof node.attrs.questionId === 'string' ? node.attrs.questionId : null
 
   return (
-    <NodeViewWrapper as="div" className="my-3" data-drag-handle>
+    <NodeViewWrapper
+      as="div"
+      className="my-3"
+      // 카드 안에 입력창과 버튼이 있다. contentEditable 을 끄지 않으면 번호 칸에
+      // 친 숫자를 에디터가 본문 타이핑으로 먹고, 백스페이스가 야마 노드를 통째로
+      // 지운다.
+      contentEditable={false}
+      // React 이벤트는 contentEditable 과 별개로 계속 위로 흐르므로 여기서 끊는다.
+      onKeyDown={(event: KeyboardEvent) => event.stopPropagation()}
+      onKeyUp={(event: KeyboardEvent) => event.stopPropagation()}
+      onPaste={(event: ClipboardEvent) => event.stopPropagation()}
+      onDrop={(event: DragEvent) => event.stopPropagation()}
+    >
       <YamaCard
         questionId={questionId}
         selected={selected}

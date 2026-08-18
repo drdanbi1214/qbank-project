@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { StemBlocks } from '@/components/question/StemBlocks'
+import { ClusterPanel } from '@/components/question/ClusterPanel'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchClusterSiblings, type ClusterSibling } from '@/lib/queries/clusters'
 import { fetchQuestionById } from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import type { SolveQuestion } from '@/lib/queries/questions'
@@ -13,7 +14,7 @@ type Props = {
   questionId: string | null
   /** 편집기에서 노드가 선택된 상태 */
   selected?: boolean
-  /** 편집기에서만 넘어온다. 있으면 빼기 버튼을 보여준다. */
+  /** 편집기에서만 넘어온다. 있으면 빼기 버튼과 묶기 버튼을 보여준다. */
   onRemove?: () => void
 }
 
@@ -26,12 +27,14 @@ type Props = {
  */
 export function YamaCard({ questionId, selected = false, onRemove }: Props) {
   const { taxonomy } = useData()
+  const { isAdmin, hasPermission } = useAuth()
+  // 묶기는 이론을 쓰는 자리에서만 한다. 읽기만 할 때는 배너와 변주만 보인다.
+  const canCluster = Boolean(onRemove) && (isAdmin || hasPermission('study_legendob'))
   // id 가 없으면 조회할 것도 없으므로 처음부터 자리표시자 상태로 둔다.
   // 이펙트 안에서 동기적으로 setState 하지 않기 위한 초기값 분기다.
   const [question, setQuestion] = useState<SolveQuestion | null | 'missing'>(
     questionId ? null : 'missing',
   )
-  const [siblings, setSiblings] = useState<ClusterSibling[]>([])
 
   useEffect(() => {
     if (!questionId) return
@@ -40,13 +43,6 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
       .then((found) => {
         if (!active) return
         setQuestion(found ?? 'missing')
-        if (found?.groupId) {
-          void fetchClusterSiblings(found.groupId, found.id)
-            .then((rows) => {
-              if (active) setSiblings(rows)
-            })
-            .catch(() => undefined)
-        }
       })
       .catch(() => {
         if (active) setQuestion('missing')
@@ -55,6 +51,9 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
       active = false
     }
   }, [questionId])
+
+  const subjectIdOf = (examId: string) =>
+    taxonomy?.examById.get(examId)?.subjectId ?? null
 
   const examLabel = (examId: string) => {
     const exam = taxonomy?.examById.get(examId)
@@ -92,10 +91,6 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
     )
   }
 
-  // 완전 동일로 묶인 판본은 배너 한 줄로만 알린다. 같은 문제라 본문을 반복할
-  // 이유가 없다.
-  const identical = siblings.filter((row) => row.variantType === 'identical')
-
   return (
     <div
       className={cn(
@@ -104,15 +99,20 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
       )}
     >
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded bg-emerald-600 px-1.5 py-0.5 font-semibold text-white">야마</span>
+        {/* 드래그 핸들은 이 배지에만 둔다. 카드 전체가 핸들이면 안쪽 입력창에서
+            글자를 고를 때 카드가 끌려간다. */}
+        <span
+          data-drag-handle={onRemove ? '' : undefined}
+          className={cn(
+            'rounded bg-emerald-600 px-1.5 py-0.5 font-semibold text-white',
+            onRemove && 'cursor-grab active:cursor-grabbing',
+          )}
+        >
+          야마
+        </span>
         <span className="font-medium text-slate-700 dark:text-slate-200">
           {examLabel(question.examId)} {question.questionNumber}번
         </span>
-        {identical.length > 0 && (
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-            {identical.map((row) => examLabel(row.examId)).join(' · ')}에도 동일 출제
-          </span>
-        )}
         <span className="ml-auto flex items-center gap-2">
           <Link
             to={`/solve?question=${question.id}`}
@@ -141,6 +141,19 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
           </li>
         ))}
       </ol>
+
+      {/* 같은 논점을 묻는 다른 학번 판본을 여기서 모은다. 이론을 쓰면서 비슷한
+          문제를 묶어 함께 설명하는 것이 이 기능의 주된 쓰임이다. */}
+      <div className="mt-3">
+        <ClusterPanel
+          questionId={question.id}
+          examId={question.examId}
+          initialGroupId={question.groupId}
+          subjectId={subjectIdOf(question.examId)}
+          examLabelOf={examLabel}
+          canCluster={canCluster}
+        />
+      </div>
     </div>
   )
 }
