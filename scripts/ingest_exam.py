@@ -18,16 +18,17 @@ unit/unit_suggestions 분리, unit_source 추적)를 기준으로 한다.
   때문이다.
 
 한계 (알고 있는 것):
-- exam_name 이 전사 JSON 스키마에 없어서, 같은 학번+과목 조합의 시험이
-  이미 하나 있다고 가정하고 그 시험에 매칭한다. 같은 과목에 이름이 다른
-  시험(중간고사 등)을 추가로 넣어야 하면 이 스크립트를 확장해야 한다.
+- exam_name 이 없으면 기존처럼 '학년말고사'로 처리한다. 같은 학번·과목에
+  여러 차수가 있으면 exam_name을 반드시 넣어야 올바른 시험에 매칭된다.
 - R형(공통 보기 세트) 문항의 question_set/set_id 연결은 다루지 않는다.
   전사 JSON에 그 구조가 아직 없다.
 
 사용법:
     python3 ingest_exam.py exam.json \\
         [--units unit_suggestions.json] \\
+        [--lectures lecture_sources.json] \\
         [--images ./images_dir] \\
+        [--image-map image_map.json] \\
         [--pdf original.pdf] \\
         [--apply]
 """
@@ -48,6 +49,7 @@ except ImportError:
     sys.exit("requests 가 필요하다. pip install -r requirements.txt")
 
 IMAGE_NAME_RE = re.compile(r"_q(\d+|UNKNOWN)_p(\d+)_(\d+)\.")
+UNIT_ID_CACHE: dict[tuple[str, str], str | None] = {}
 
 
 def load_env() -> tuple[str, str]:
@@ -94,16 +96,33 @@ class Client:
         if r.status_code not in (200, 204):
             raise RuntimeError(f"PATCH {path} 실패 {r.status_code}: {r.text[:300]}")
 
+    def delete(self, path: str, params: dict) -> None:
+        headers = {**self.headers, "Prefer": "return=minimal"}
+        r = requests.delete(f"{self.base_url}/rest/v1/{path}", headers=headers, params=params, timeout=60)
+        if r.status_code not in (200, 204):
+            raise RuntimeError(f"DELETE {path} 실패 {r.status_code}: {r.text[:300]}")
+
     def upload_storage(self, bucket: str, path: str, data: bytes, content_type: str) -> bool:
-        r = requests.post(
-            f"{self.base_url}/storage/v1/object/{bucket}/{path}",
-            data=data,
-            headers={**self.headers, "Content-Type": content_type, "x-upsert": "true"},
-            timeout=120,
-        )
-        # Storage 신규 업로드는 환경에 따라 200 또는 201을 돌려준다.
-        # 201도 정상 생성 성공인데 200만 받으면 PDF 연결 단계가 실패로 처리된다.
-        return r.status_code in (200, 201)
+        # Storage는 간헐적으로 연결을 끊거나 응답을 지연시킨다. x-upsert라 같은
+        # 파일 재시도는 안전하며, 모두 실패하면 문항 DB 행을 쓰기 전에 중단한다.
+        last_error = ""
+        for attempt in range(3):
+            try:
+                r = requests.post(
+                    f"{self.base_url}/storage/v1/object/{bucket}/{path}",
+                    data=data,
+                    headers={**self.headers, "Content-Type": content_type, "x-upsert": "true", "Connection": "close"},
+                    timeout=(15, 45),
+                )
+                # Storage 신규 업로드는 환경에 따라 200 또는 201을 돌려준다.
+                if r.status_code in (200, 201):
+                    return True
+                last_error = f"HTTP {r.status_code}: {r.text[:200]}"
+            except requests.RequestException as exc:
+                last_error = str(exc)
+            if attempt < 2:
+                print(f"  저장소 재시도 {attempt + 1}/2: {path}", flush=True)
+        raise RuntimeError(f"이미지 업로드 실패 ({path}): {last_error}")
 
 
 def resolve_subject(client: Client, name: str) -> dict:
@@ -116,38 +135,89 @@ def resolve_subject(client: Client, name: str) -> dict:
 
 
 def resolve_or_create_unit(client: Client, subject_id: str, name: str, apply: bool, created: list[str]) -> str | None:
+    cache_key = (subject_id, name)
+    if cache_key in UNIT_ID_CACHE:
+        return UNIT_ID_CACHE[cache_key]
     rows = client.get("units", {"subject_id": f"eq.{subject_id}", "name": f"eq.{name}", "select": "id"})
     if rows:
-        return rows[0]["id"]
+        UNIT_ID_CACHE[cache_key] = rows[0]["id"]
+        return UNIT_ID_CACHE[cache_key]
     created.append(name)
     if not apply:
+        UNIT_ID_CACHE[cache_key] = None
         return None
     row = client.post("units", [{"subject_id": subject_id, "name": name}])
-    return row[0]["id"]
+    UNIT_ID_CACHE[cache_key] = row[0]["id"]
+    return UNIT_ID_CACHE[cache_key]
 
 
-def resolve_exam(client: Client, subject_id: str, cohort: str) -> dict | None:
-    rows = client.get(
-        "exams",
-        {"subject_id": f"eq.{subject_id}", "cohort": f"eq.{cohort}", "select": "id,exam_name,restored_questions"},
-    )
+def resolve_exam(client: Client, subject_id: str, exam_meta: dict) -> dict | None:
+    """시험을 재실행용으로 찾되, 같은 과목의 동명 차수를 혼동하지 않는다.
+
+    계통Y처럼 같은 학번·과목에 여러 분야의 "1차"가 공존할 수 있다. 이때
+    exam_code가 있으면 그것을 최우선 식별자로 쓰고, 없으면 기존 동작처럼
+    학번·과목·시험명 조합으로 찾는다.
+    """
+    params = {
+        "subject_id": f"eq.{subject_id}",
+        "cohort": f"eq.{exam_meta['cohort']}",
+        "select": "id,exam_name,exam_code,curriculum,exam_subject_label,restored_questions",
+    }
+    if exam_meta.get("exam_code"):
+        params["exam_code"] = f"eq.{exam_meta['exam_code']}"
+    else:
+        params["exam_name"] = f"eq.{exam_meta.get('exam_name', '학년말고사')}"
+    rows = client.get("exams", params)
+    if len(rows) > 1:
+        sys.exit("같은 시험 식별자로 여러 시험이 발견됨. exam_code를 지정해 정리해야 한다.")
     return rows[0] if rows else None
 
 
 def create_exam(client: Client, subject_id: str, exam_meta: dict) -> dict:
     body: dict = {"subject_id": subject_id, "cohort": exam_meta["cohort"]}
-    for key in ("exam_date", "duration_min", "format", "total_questions", "restored_questions", "overview"):
+    for key in (
+        "exam_name",
+        "exam_date",
+        "duration_min",
+        "format",
+        "total_questions",
+        "restored_questions",
+        "overview",
+        "curriculum",
+        "exam_code",
+        "exam_subject_label",
+        "required_permission",
+        "source_page_start",
+        "source_page_end",
+    ):
         if exam_meta.get(key) is not None:
             body[key] = exam_meta[key]
     return client.post("exams", [body])[0]
 
 
-def load_images(images_dir: str) -> dict[int, list[tuple[int, str]]]:
+def load_images(images_dir: str, image_map_path: str = "") -> dict[int, list[tuple[int, str]]]:
     """폴더 안의 <접두어>_q<번호>_p<페이지>_<순번>.png 를 문항번호별로,
     순번 순서대로 묶는다. q<번호> 가 UNKNOWN 인 파일(매핑 실패)은 여기서
-    다루지 않는다 — 사람이 먼저 원본 PDF와 대조해 어느 문항인지 정해야 한다."""
+    다루지 않는다 — 사람이 먼저 원본 PDF와 대조해 어느 문항인지 정해야 한다.
+
+    원본 PDF에서 직접 추출한 이미지처럼 파일명에 문항 번호가 없는 경우에는
+    --image-map의 {"문항번호": ["파일명", ...]}를 사용한다. 이 경로는 원문과
+    대조를 마친 이미지에만 쓰며, 추측 매핑을 자동으로 만들지 않는다.
+    """
     by_question: dict[int, list[tuple[int, str]]] = defaultdict(list)
     if not images_dir or not os.path.isdir(images_dir):
+        return by_question
+    if image_map_path:
+        with open(image_map_path, encoding="utf-8") as fh:
+            mapped = json.load(fh)
+        for raw_number, names in mapped.items():
+            number = int(raw_number)
+            if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+                raise ValueError(f"image map 문항 {raw_number} 값은 파일명 배열이어야 한다")
+            for order, name in enumerate(names):
+                if not os.path.isfile(os.path.join(images_dir, name)):
+                    raise FileNotFoundError(f"image map 문항 {number}: 이미지 파일 없음 ({name})")
+                by_question[number].append((order, name))
         return by_question
     for name in sorted(os.listdir(images_dir)):
         if not name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
@@ -194,11 +264,89 @@ def substitute_placeholders(
     return result, list(file_iter)
 
 
+def resolve_or_create_lecture_sources(
+    client: Client,
+    subject_id: str,
+    curriculum: str | None,
+    rows: list[dict],
+    apply: bool,
+) -> dict[str, str]:
+    """복기 원문에 적힌 강의 제목/교수를 한 번 저장해 source_key로 찾는다.
+
+    강의록 파일은 후속 업로드 때 theory_document_id만 갱신하면 되므로 이 단계에서
+    연결하지 않는다. 같은 key를 다시 넣으면 원문 표기를 최신 상태로 갱신한다.
+    """
+    by_key: dict[str, str] = {}
+    for row in rows:
+        key = row.get("source_key")
+        title = row.get("title")
+        if not key or not title:
+            raise ValueError("lecture source에는 source_key와 title이 필요하다")
+        current = client.get(
+            "lecture_sources",
+            {
+                "subject_id": f"eq.{subject_id}",
+                "curriculum": f"eq.{curriculum or ''}",
+                "source_key": f"eq.{key}",
+                "select": "id",
+            },
+        )
+        payload = {
+            "subject_id": subject_id,
+            "curriculum": curriculum,
+            "source_key": key,
+            "title": title,
+            "professor": row.get("professor"),
+            "sort_order": row.get("sort_order", 0),
+        }
+        if current:
+            lecture_id = current[0]["id"]
+            if apply:
+                client.patch("lecture_sources", {"id": f"eq.{lecture_id}"}, payload)
+        elif apply:
+            lecture_id = client.post("lecture_sources", [payload])[0]["id"]
+        else:
+            lecture_id = f"DRY-RUN:{key}"
+        by_key[key] = lecture_id
+    return by_key
+
+
+def replace_question_lecture_sources(
+    client: Client,
+    question_id: str | None,
+    source_keys: list[str],
+    lecture_ids: dict[str, str],
+    apply: bool,
+) -> None:
+    """문항에 명시된 강의 연결만 원자적으로 교체한다.
+
+    JSON에 lecture_source_keys가 없는 기존 전사본은 건드리지 않는다. 명시된
+    연결은 원문 분류이므로 재실행 때도 오래된 연결이 남지 않게 교체한다.
+    """
+    unknown = [key for key in source_keys if key not in lecture_ids]
+    if unknown:
+        raise ValueError(f"등록되지 않은 lecture_source_keys: {unknown}")
+    if not apply or not question_id:
+        return
+    client.delete("question_lecture_sources", {"question_id": f"eq.{question_id}"})
+    if source_keys:
+        client.post(
+            "question_lecture_sources",
+            [
+                {"question_id": question_id, "lecture_source_id": lecture_ids[key], "sort_order": index}
+                for index, key in enumerate(source_keys)
+            ],
+            prefer="return=minimal",
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="전사 JSON을 DB에 반영한다 (기본 dry-run)")
     parser.add_argument("exam_json")
     parser.add_argument("--units", default="", help="unit_suggestions_*.json 경로")
+    parser.add_argument("--lectures", default="", help="강의 제목·교수명 JSON 경로")
     parser.add_argument("--images", default="", help="map_images_to_questions.py 결과 이미지 폴더")
+    parser.add_argument("--image-map", default="", help="원본 PDF 추출 이미지의 수동 대조 매핑 JSON 경로")
     parser.add_argument("--pdf", default="", help="원본 PDF 경로 (exam-sources 버킷에 업로드)")
     parser.add_argument("--apply", action="store_true", help="실제로 DB에 반영한다. 기본은 리포트만 하는 dry-run")
     args = parser.parse_args()
@@ -210,6 +358,12 @@ def main() -> None:
         data = json.load(fh)
     exam_meta = data.get("exam", {})
     questions = data["questions"]
+
+    lecture_rows: list[dict] = []
+    if args.lectures:
+        with open(args.lectures, encoding="utf-8") as fh:
+            lecture_data = json.load(fh)
+        lecture_rows = lecture_data.get("lectures", [])
 
     unit_suggestions: dict[int, str] = {}
     if args.units:
@@ -224,10 +378,11 @@ def main() -> None:
 
     subject = resolve_subject(client, subject_name)
     subject_id = subject["id"]
+    exam_name = exam_meta.get("exam_name", "학년말고사")
 
-    exam = resolve_exam(client, subject_id, cohort)
+    exam = resolve_exam(client, subject_id, exam_meta)
 
-    print(f"=== {cohort} {subject_name} ===")
+    print(f"=== {cohort} {subject_name} {exam_name} ===")
     if exam:
         print(f"기존 시험에 반영 (exam_id={exam['id']})")
     elif args.apply:
@@ -239,6 +394,16 @@ def main() -> None:
 
     exam_id = exam["id"]
 
+    lecture_ids = resolve_or_create_lecture_sources(
+        client,
+        subject_id,
+        exam_meta.get("curriculum"),
+        lecture_rows,
+        args.apply,
+    )
+    if lecture_rows:
+        print(f"출제 강의: {len(lecture_rows)}개 {'등록' if args.apply else '등록 예정'}")
+
     # 1. 문항 수 사전 확인 --------------------------------------------------
     existing = []
     if exam_id:
@@ -246,7 +411,7 @@ def main() -> None:
             "questions",
             {
                 "exam_id": f"eq.{exam_id}",
-                "select": "id,question_number,unit_id,unit_source,editor_answer,answer_status",
+                "select": "id,question_number,unit_id,unit_source,editor_answer,answer_status,stem_blocks",
             },
         )
     existing_by_number = {row["question_number"]: row for row in existing}
@@ -273,8 +438,9 @@ def main() -> None:
     # URL 인코딩된 한글 경로를 정상 처리하지 않아 원본 PDF 연결이 실패한다.
     cohort_code = re.sub(r"[^A-Za-z0-9]+", "", cohort) or "cohort"
     subject_code = re.sub(r"[^A-Za-z0-9]+", "", subject.get("code", "")) or "subject"
-    storage_prefix = f"{cohort_code}_{subject_code}"
-    image_files_by_q = load_images(args.images)
+    exam_code = re.sub(r"[^A-Za-z0-9]+", "", exam_meta.get("exam_code", ""))
+    storage_prefix = "_".join(part for part in (cohort_code, subject_code, exam_code) if part)
+    image_files_by_q = load_images(args.images, args.image_map)
 
     for q in sorted(questions, key=lambda x: x["question_number"]):
         number = q["question_number"]
@@ -300,6 +466,27 @@ def main() -> None:
 
         stem_blocks = q.get("stem_blocks", [])
         image_files = image_files_by_q.pop(number, [])
+        # 재실행 중에는 이미 성공적으로 저장된 원본 도판을 다시 전송하지 않는다.
+        # 기존 URL 수가 이번 매핑과 정확히 같을 때만 재사용하므로, 매핑 변경이나
+        # 불완전 입력은 평소처럼 다시 업로드해 드러난다.
+        if existing_row and image_files:
+            existing_urls = [
+                block.get("url") for block in (existing_row.get("stem_blocks") or [])
+                if block.get("type") == "image" and block.get("url") not in (None, "", "PLACEHOLDER")
+            ]
+            placeholders = sum(
+                1 for block in stem_blocks
+                if block.get("type") == "image" and block.get("url") == "PLACEHOLDER"
+            )
+            if len(existing_urls) == len(image_files) == placeholders:
+                url_iter = iter(existing_urls)
+                stem_blocks = [
+                    {**block, "url": next(url_iter)}
+                    if block.get("type") == "image" and block.get("url") == "PLACEHOLDER"
+                    else block
+                    for block in stem_blocks
+                ]
+                image_files = []
         if image_files:
             stem_blocks, remainder = substitute_placeholders(
                 stem_blocks, image_files, args.images, client, storage_prefix, args.apply, upload_log
@@ -332,6 +519,7 @@ def main() -> None:
             updated.append(number)
             if args.apply:
                 client.patch("questions", {"id": f"eq.{existing_row['id']}"}, body)
+            question_id = existing_row["id"]
         else:
             body.update(
                 {
@@ -349,7 +537,18 @@ def main() -> None:
             )
             inserted.append(number)
             if args.apply and exam_id:
-                client.post("questions", [body])
+                question_id = client.post("questions", [body])[0]["id"]
+            else:
+                question_id = None
+
+        if "lecture_source_keys" in q:
+            replace_question_lecture_sources(
+                client,
+                question_id,
+                q["lecture_source_keys"],
+                lecture_ids,
+                args.apply,
+            )
 
     unmatched_images = [f for files in image_files_by_q.values() for _, f in files]
 

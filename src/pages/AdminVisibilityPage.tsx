@@ -8,6 +8,7 @@ import {
   createPermission,
   fetchAdminExams,
   fetchAllPermissions,
+  setExamStatus,
   setCohortPermission,
   setExamPermission,
   updatePermission,
@@ -138,6 +139,20 @@ export function AdminVisibilityPage() {
                         </td>
                         <td className="px-4 py-2 text-right tabular-nums text-slate-400">
                           {exam.questionCount}문제
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <Button
+                            size="sm"
+                            variant={exam.status === 'published' ? 'secondary' : 'ghost'}
+                            disabled={busy !== null}
+                            onClick={() =>
+                              void run(`status:${exam.id}`, () =>
+                                setExamStatus(exam.id, exam.status === 'published' ? 'draft' : 'published'),
+                              )
+                            }
+                          >
+                            {exam.status === 'published' ? '공개됨' : '작업 중'}
+                          </Button>
                         </td>
                         <td className="px-4 py-2 text-right">
                           <div className="flex items-center justify-end gap-2">

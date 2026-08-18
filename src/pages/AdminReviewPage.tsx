@@ -67,7 +67,7 @@ export function AdminReviewPage() {
     async function load() {
       const { data, error: queryError } = await supabase
         .from('exams')
-        .select('source_file_url')
+      .select('source_file_url')
         .eq('id', examId ?? '')
         .maybeSingle()
 
@@ -141,7 +141,7 @@ export function AdminReviewPage() {
   const page =
     manualPage && manualPage.questionId === (currentId ?? '')
       ? manualPage.page
-      : (hintedPage ?? 1)
+      : (hintedPage ?? taxonomy?.examById.get(examId ?? '')?.sourcePageStart ?? 1)
 
   const goToPage = useCallback(
     (next: number) => setManualPage({ questionId: currentId ?? '', page: Math.max(1, next) }),

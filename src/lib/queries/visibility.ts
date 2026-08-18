@@ -15,13 +15,14 @@ export type AdminExam = {
   subjectName: string
   questionCount: number
   requiredPermission: string | null
+  status: 'draft' | 'published'
 }
 
 export async function fetchAdminExams(): Promise<AdminExam[]> {
   // 문제 수는 집계 임베드 대신 이미 쓰고 있는 RPC 에서 가져온다.
   // 관리자에게는 숨긴 학번까지 전부 세어 돌려준다.
   const [examResult, progressResult] = await Promise.all([
-    supabase.from('exams').select('id, cohort, exam_name, required_permission, subjects (name)'),
+    supabase.from('exams').select('id, cohort, exam_name, status, required_permission, subjects (name)'),
     supabase.rpc('get_progress_by_exam'),
   ])
 
@@ -36,6 +37,7 @@ export async function fetchAdminExams(): Promise<AdminExam[]> {
     id: string
     cohort: string
     exam_name: string
+    status: string
     required_permission: string | null
     subjects: { name: string } | null
   }
@@ -48,6 +50,7 @@ export async function fetchAdminExams(): Promise<AdminExam[]> {
       subjectName: row.subjects?.name ?? '(과목 없음)',
       questionCount: countByExam.get(row.id) ?? 0,
       requiredPermission: row.required_permission,
+      status: row.status === 'published' ? ('published' as const) : ('draft' as const),
     }))
     .sort(
       (a, b) =>
@@ -66,6 +69,12 @@ export async function setExamPermission(
     .from('exams')
     .update({ required_permission: permissionKey })
     .eq('id', examId)
+  if (error) throw error
+}
+
+/** 시험 단위 공개 상태. draft 시험은 권한이 있어도 학생 목록에 나타나지 않는다. */
+export async function setExamStatus(examId: string, status: 'draft' | 'published'): Promise<void> {
+  const { error } = await supabase.from('exams').update({ status }).eq('id', examId)
   if (error) throw error
 }
 

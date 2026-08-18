@@ -20,8 +20,17 @@ export type Exam = {
   id: string
   cohort: string
   subjectId: string
+  /** 학번 위에 표시하는 시험 묶음. NULL이면 기존 학년말고사 체계를 따른다. */
+  curriculum: string | null
+  /** 같은 과목 안의 차수를 구별하는 짧은 코드. 예: Y1 */
+  examCode: string | null
+  /** 시험별 보기에서만 쓰는 계통명. 실제 학습 분류는 subjectId를 유지한다. */
+  examSubjectLabel: string | null
   examName: string
+  status: 'draft' | 'published'
   examDate: string | null
+  sourcePageStart: number | null
+  sourcePageEnd: number | null
   durationMin: number | null
   format: string | null
   totalQuestions: number | null
@@ -49,7 +58,7 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
     supabase
       .from('exams')
       .select(
-        'id, cohort, subject_id, exam_name, exam_date, duration_min, format, total_questions, restored_questions, overview',
+        'id, cohort, subject_id, curriculum, exam_code, exam_name, exam_subject_label, status, exam_date, source_page_start, source_page_end, duration_min, format, total_questions, restored_questions, overview',
       ),
   ])
 
@@ -81,8 +90,14 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
       id: row.id,
       cohort: row.cohort,
       subjectId: row.subject_id,
+      curriculum: row.curriculum,
+      examCode: row.exam_code,
+      examSubjectLabel: row.exam_subject_label,
       examName: row.exam_name,
+      status: row.status === 'published' ? ('published' as const) : ('draft' as const),
       examDate: row.exam_date,
+      sourcePageStart: row.source_page_start,
+      sourcePageEnd: row.source_page_end,
       durationMin: row.duration_min,
       format: row.format,
       totalQuestions: row.total_questions,
@@ -153,7 +168,7 @@ export function examYearLabel(exam: Exam | undefined): string {
   return `${year} ${exam.examName}`.trim()
 }
 
-/** 등록 화면에서 DB와 같은 규칙으로 7자리 문제 코드를 미리 보여준다. */
+/** 등록 화면에서 DB와 같은 규칙으로 문제 코드를 미리 보여준다. */
 export function questionCodePreview(
   exam: Exam | undefined,
   subject: Subject | undefined,
@@ -164,5 +179,8 @@ export function questionCodePreview(
     return null
   }
   if (!Number.isInteger(questionNumber) || questionNumber < 1 || questionNumber > 999) return null
+  if (exam.examCode) {
+    return `${cohortCode}-${subject.code}-${exam.examCode}-${String(questionNumber).padStart(3, '0')}`
+  }
   return `${cohortCode}${subject.code}${String(questionNumber).padStart(3, '0')}`
 }

@@ -15,13 +15,15 @@ export const PERMISSION = {
  * feature: 기능 하나를 여는 권한 (AI 풀이 탭 등)
  * study  : 스터디 그룹. 이 권한으로 쓴 풀이는 같은 권한자만 읽는다.
  * cohort : 특정 학번의 문제를 볼 수 있는 권한.
+ * curriculum : 특정 학년·학기 계통 시험을 볼 수 있는 권한.
  */
-export type PermissionKind = 'feature' | 'study' | 'cohort'
+export type PermissionKind = 'feature' | 'study' | 'cohort' | 'curriculum'
 
 export const PERMISSION_KIND_LABEL: Record<PermissionKind, string> = {
   feature: '기능',
   study: '스터디',
   cohort: '학번',
+  curriculum: '계통',
 }
 
 export type AccessPermission = {
@@ -34,5 +36,5 @@ export type AccessPermission = {
 
 /** DB 값은 신뢰할 수 없으므로 모르는 값은 기능 권한으로 본다. */
 export function toPermissionKind(value: string): PermissionKind {
-  return value === 'study' || value === 'cohort' ? value : 'feature'
+  return value === 'study' || value === 'cohort' || value === 'curriculum' ? value : 'feature'
 }
