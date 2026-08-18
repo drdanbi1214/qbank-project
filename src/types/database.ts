@@ -1928,6 +1928,97 @@ export type Database = {
           },
         ]
       }
+      topic_units: {
+        Row: {
+          topic_id: string
+          unit_id: string
+        }
+        Insert: {
+          topic_id: string
+          unit_id: string
+        }
+        Update: {
+          topic_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_units_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      topics: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          required_permission: string
+          subject_id: string
+          title: string
+          unit_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          required_permission?: string
+          subject_id: string
+          title: string
+          unit_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          required_permission?: string
+          subject_id?: string
+          title?: string
+          unit_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topics_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "topics_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topics_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           created_at: string
@@ -2214,6 +2305,7 @@ export type Database = {
         Returns: boolean
       }
       can_cluster: { Args: never; Returns: boolean }
+      can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
       can_view_exam: { Args: { p_exam_id: string }; Returns: boolean }
       can_view_question: { Args: { p_question_id: string }; Returns: boolean }
       can_write: { Args: never; Returns: boolean }

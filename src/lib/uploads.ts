@@ -93,6 +93,30 @@ export async function uploadQuestionImage(file: File, userId: string): Promise<s
   return `question-images/${path}`
 }
 
+/**
+ * 테마 본문의 이미지 업로드.
+ *
+ * theory-images 는 업로드가 관리자 전용이고 solution-images 는 읽기가 풀이에
+ * 묶여 있어 둘 다 쓸 수 없다. 그래서 topic-images 를 따로 둔다.
+ */
+export async function uploadTopicImage(file: File, userId: string): Promise<string> {
+  if (!ALLOWED.has(file.type)) {
+    throw new Error('PNG, JPG, GIF, WebP 이미지만 올릴 수 있습니다.')
+  }
+  if (file.size > MAX_BYTES) {
+    throw new Error('이미지 크기는 10MB 까지 가능합니다.')
+  }
+
+  const path = `${userId}/${crypto.randomUUID()}.${extensionOf(file)}`
+  const { error } = await supabase.storage.from('topic-images').upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+  })
+  if (error) throw error
+
+  return `topic-images/${path}`
+}
+
 /** 관리자 이론 편집기의 이미지 업로드. */
 export async function uploadTheoryImage(file: File, userId: string): Promise<string> {
   if (!ALLOWED.has(file.type)) {
