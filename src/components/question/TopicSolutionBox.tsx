@@ -41,8 +41,11 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
   const [busy, setBusy] = useState(false)
   const draftRef = useRef<RichDoc>(emptyDoc())
 
-  // 테마 작성자 본인만 고칠 수 있다. 남의 풀이는 정책이 막는다.
-  const canEdit = Boolean(scope?.authorId) && (scope?.authorId === userId || isAdmin)
+  // 테마가 편집 중일 때만, 그리고 작성자 본인만 고칠 수 있다. 저장된 글을 읽는
+  // 중에 해설 입력칸이 보이면 게시물이 아직 작성 중인 것처럼 보인다.
+  // 남의 풀이는 정책이 막는다 (solutions_update 가 author_id = auth.uid()).
+  const canEdit =
+    Boolean(scope?.editing) && Boolean(scope?.authorId) && (scope?.authorId === userId || isAdmin)
 
   const load = useCallback(() => {
     void fetchSolutions({ questionId, groupId })

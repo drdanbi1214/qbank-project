@@ -1,11 +1,13 @@
 /* eslint-disable react-refresh/only-export-components -- 컨텍스트와 훅은 한 파일에 두는 편이 읽기 쉽다. */
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
 
 type TopicScope = {
   /** 테마를 처음 쓴 사람. 야마 카드는 이 사람의 해설만 보여준다. */
   authorId: string | null
   /** 해설을 새로 쓸 때 걸어 줄 공개 범위 */
   requiredPermission: string
+  /** 테마가 편집 중인지. 저장된 상태에서는 해설도 고칠 수 없다. */
+  editing: boolean
 }
 
 const Context = createContext<TopicScope | null>(null)
@@ -19,11 +21,14 @@ const Context = createContext<TopicScope | null>(null)
 export function TopicScopeProvider({
   authorId,
   requiredPermission,
+  editing,
   children,
 }: TopicScope & { children: ReactNode }) {
-  return (
-    <Context.Provider value={{ authorId, requiredPermission }}>{children}</Context.Provider>
+  const value = useMemo(
+    () => ({ authorId, requiredPermission, editing }),
+    [authorId, requiredPermission, editing],
   )
+  return <Context.Provider value={value}>{children}</Context.Provider>
 }
 
 export function useTopicScope(): TopicScope | null {

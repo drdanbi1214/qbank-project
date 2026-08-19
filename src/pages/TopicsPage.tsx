@@ -263,6 +263,7 @@ export function TopicsPage() {
               <TopicScopeProvider
                 authorId={selected.createdBy}
                 requiredPermission={selected.requiredPermission}
+                editing={editing}
               >
               {editing && session ? (
                 <LazyRichTextEditor
