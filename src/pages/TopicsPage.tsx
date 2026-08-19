@@ -4,7 +4,6 @@ import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
-import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { examShortLabel } from '@/lib/queries/taxonomy'
@@ -20,10 +19,10 @@ import {
 import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { TopicScopeProvider } from '@/components/question/TopicContext'
 import { TheoryPicker } from '@/components/question/TheoryPicker'
+import { TopicSidebar } from '@/components/question/TopicSidebar'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
 import type { RichDoc } from '@/types/richtext'
-import { cn } from '@/utils/cn'
 
 /**
  * 테마 — 주제별 이론 정리.
@@ -45,6 +44,8 @@ export function TopicsPage() {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const editedContent = useRef<RichDoc | null>(null)
+  // 목록이 대표 단원으로 묶이므로 나중에 옮길 길이 있어야 한다.
+  const [editedUnitId, setEditedUnitId] = useState<string | null>(null)
 
   const subject = subjectId ? taxonomy?.subjectById.get(subjectId) : undefined
 
@@ -63,6 +64,11 @@ export function TopicsPage() {
   const selected = useMemo(
     () => (topics ?? []).find((row) => row.id === topicId) ?? null,
     [topics, topicId],
+  )
+
+  const subjectUnits = useMemo(
+    () => (taxonomy?.units ?? []).filter((unit) => unit.subjectId === subjectId),
+    [taxonomy, subjectId],
   )
 
   const unitNameOf = useCallback(
@@ -121,7 +127,7 @@ export function TopicsPage() {
     }
     const content = editedContent.current
     setBusy(true)
-    void updateTopic({ id: selected.id, userId, content })
+    void updateTopic({ id: selected.id, userId, content, unitId: editedUnitId })
       // 본문이 정본이고 topic_questions 는 거기서 뽑아낸 역인덱스다.
       // 본문 저장이 끝난 뒤에 맞춘다.
       .then(() => syncTopicQuestions(selected.id, content))
@@ -134,7 +140,7 @@ export function TopicsPage() {
         setError(caught instanceof Error ? caught.message : '저장하지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [selected, userId, load])
+  }, [selected, userId, editedUnitId, load])
 
   const remove = useCallback(() => {
     if (!selected) return
@@ -183,7 +189,7 @@ export function TopicsPage() {
         <CreateForm
           subjectId={subjectId}
           userId={userId}
-          units={(taxonomy?.units ?? []).filter((unit) => unit.subjectId === subjectId)}
+          units={subjectUnits}
           onCancel={() => setCreating(false)}
           onCreated={(id) => {
             setCreating(false)
@@ -194,35 +200,12 @@ export function TopicsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
-        <nav className="space-y-1">
-          {topics === null ? (
-            <div className="flex justify-center py-8">
-              <Spinner />
-            </div>
-          ) : topics.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              아직 테마가 없습니다.
-            </p>
-          ) : (
-            topics.map((row) => (
-              <Link
-                key={row.id}
-                to={`/topics/${subjectId}/${row.id}`}
-                className={cn(
-                  'block rounded-lg px-3 py-2 text-sm transition-colors',
-                  row.id === topicId
-                    ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
-                )}
-              >
-                <span className="block truncate">{row.title}</span>
-                <span className="mt-0.5 block truncate text-xs text-slate-400">
-                  {unitNameOf(row.unitId)} · {formatShortDate(row.updatedAt)}
-                </span>
-              </Link>
-            ))
-          )}
-        </nav>
+        <TopicSidebar
+          topics={topics}
+          subjectId={subjectId}
+          topicId={topicId}
+          units={subjectUnits}
+        />
 
         <article className="min-w-0">
           {!selected ? (
@@ -233,9 +216,25 @@ export function TopicsPage() {
             <div className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <h2 className="text-2xl font-bold tracking-tight">{selected.title}</h2>
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                  {unitNameOf(selected.unitId)}
-                </span>
+                {editing ? (
+                  <select
+                    aria-label="대표 단원"
+                    value={editedUnitId ?? ''}
+                    onChange={(event) => setEditedUnitId(event.target.value || null)}
+                    className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+                  >
+                    <option value="">단원 없음</option>
+                    {subjectUnits.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    {unitNameOf(selected.unitId)}
+                  </span>
+                )}
                 <div className="ml-auto flex gap-2">
                   {editing ? (
                     <>
@@ -253,7 +252,14 @@ export function TopicsPage() {
                           삭제
                         </Button>
                       )}
-                      <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setEditedUnitId(selected.unitId)
+                          setEditing(true)
+                        }}
+                      >
                         편집
                       </Button>
                     </>
