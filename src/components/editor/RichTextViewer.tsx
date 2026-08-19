@@ -3,6 +3,7 @@ import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
+import { indentStyle, safeIndent } from '@/components/editor/extensions/indent'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
 import { imageWidthOf, isLeafNode, type RichDoc, type RichMark, type RichNode } from '@/types/richtext'
@@ -93,16 +94,22 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
 
   switch (node.type) {
     case 'paragraph':
-      return <p className={hierarchyClass(node, indentLevel)}>{children.length > 0 ? children : <br />}</p>
+      return (
+        <p className={hierarchyClass(node, indentLevel)} style={blockIndentStyle(node)}>
+          {children.length > 0 ? children : <br />}
+        </p>
+      )
     case 'aiTitle':
       return <p className="mb-1 mt-4 font-bold text-slate-900 dark:text-slate-100">{children}</p>
     case 'aiEvidence':
       return <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{children}</p>
     case 'heading': {
       const level = typeof node.attrs?.level === 'number' ? node.attrs.level : 3
-      if (level <= 2) return <h2 className={hierarchyClass(node, indentLevel)}>{children}</h2>
-      if (level === 3) return <h3 className={hierarchyClass(node, indentLevel)}>{children}</h3>
-      return <h4 className={hierarchyClass(node, indentLevel)}>{children}</h4>
+      const cls = hierarchyClass(node, indentLevel)
+      const style = blockIndentStyle(node)
+      if (level <= 2) return <h2 className={cls} style={style}>{children}</h2>
+      if (level === 3) return <h3 className={cls} style={style}>{children}</h3>
+      return <h4 className={cls} style={style}>{children}</h4>
     }
     case 'bulletList':
       return <ul className={cn(indentClass(indentLevel), indentLevel !== undefined && 'inherited-bullet-list')}>{children}</ul>
@@ -136,6 +143,12 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
       // 모르는 블록은 내용만 살려서 보여준다.
       return <div>{children}</div>
   }
+}
+
+/** 작성자가 도구 모음으로 준 들여쓰기. 본문에서 추론하는 계층과는 별개다. */
+function blockIndentStyle(node: RichNode): { marginLeft: string } | undefined {
+  const value = indentStyle(safeIndent(node.attrs?.indent))
+  return value ? { marginLeft: value } : undefined
 }
 
 function hierarchyClass(node: RichNode, level?: number): string | undefined {

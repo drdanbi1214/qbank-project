@@ -86,14 +86,19 @@
     height: auto;
   }
 
+  /* 도구 모음의 제목 1·2·3 이 각각 h2·h3·h4 다(스키마 levels: [2,3,4]).
+     크기로 층을 만들고, 가운데만 색을 달리해 셋이 구분되게 한다. */
   .rich-text h1 {
-    @apply mt-5 text-lg font-bold;
+    @apply mt-5 text-2xl font-bold;
   }
   .rich-text h2 {
-    @apply mt-5 text-base font-bold;
+    @apply mt-6 text-2xl font-bold;
   }
   .rich-text h3 {
-    @apply mt-5 text-[15px] font-bold text-brand-700 dark:text-brand-300;
+    @apply mt-5 text-lg font-bold text-brand-700 dark:text-brand-300;
+  }
+  .rich-text h4 {
+    @apply mt-4 text-[15px] font-bold;
   }
 
   .rich-text ul {

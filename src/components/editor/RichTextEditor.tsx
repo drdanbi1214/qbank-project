@@ -10,6 +10,7 @@ import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
 import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
+import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
 import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
@@ -93,6 +94,7 @@ export function RichTextEditor({
       TextStyle,
       Color,
       FontSize,
+      BlockIndent,
       TableKit.configure({ table: { resizable: false } }),
       StoredImage,
       YamaEmbed,
@@ -333,6 +335,20 @@ function Toolbar({
               </option>
             ))}
           </select>
+          <ToolButton
+            label="내어쓰기 (Shift+Tab)"
+            active={false}
+            onClick={() => editor.chain().focus().outdentBlock().run()}
+          >
+            <span className="text-xs">⇤</span>
+          </ToolButton>
+          <ToolButton
+            label="들여쓰기 (Tab)"
+            active={false}
+            onClick={() => editor.chain().focus().indentBlock().run()}
+          >
+            <span className="text-xs">⇥</span>
+          </ToolButton>
           <ToolButton
             label="글머리 목록"
             active={editor.isActive('bulletList')}
