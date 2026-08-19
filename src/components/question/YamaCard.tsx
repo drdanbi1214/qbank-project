@@ -191,8 +191,21 @@ function YamaBody({
         </span>
       </div>
 
-      <div className="grid gap-2.5 lg:grid-cols-2">
+      {/*
+        읽을 때는 열 흐름(메이슨리)으로 깐다. 카드가 자기 높이만 써서 짧은 문제
+        옆에 빈 공간이 생기지 않는다.
+
+        편집할 때는 격자로 되돌린다. 카드 안에 편집기가 있어서, 해설을 타이핑하면
+        카드가 세로로 자라는데 열 흐름에서는 그때마다 뒤 카드들이 다른 열로 튄다.
+        격자는 행 단위라 그 행만 커지고 다른 카드가 움직이지 않는다.
+      */}
+      <div
+        className={cn(
+          editing ? 'grid gap-2.5 lg:grid-cols-2' : 'lg:columns-2 lg:gap-x-2.5',
+        )}
+      >
         <QuestionCard
+          className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
           kind="anchor"
           questionId={question.id}
           examLabel={`${examLabel(question.examId)} ${question.questionNumber}번`}
@@ -212,6 +225,7 @@ function YamaBody({
         {cards.map((row) => (
           <QuestionCard
             key={row.id}
+            className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
             kind="variant"
             questionId={row.id}
             examLabel={`${examLabel(row.examId)} ${row.questionNumber}번`}
@@ -287,6 +301,7 @@ function YamaBody({
  * 본문을 반복할 이유가 없다.
  */
 function QuestionCard({
+  className,
   kind,
   questionId,
   examLabel,
@@ -302,6 +317,7 @@ function QuestionCard({
   onAdd,
   onDetach,
 }: {
+  className?: string
   kind: 'anchor' | 'variant'
   questionId: string
   examLabel: string
@@ -327,6 +343,7 @@ function QuestionCard({
         kind === 'anchor'
           ? 'border-slate-300 shadow-sm dark:border-slate-600'
           : 'border-slate-200 dark:border-slate-700',
+        className,
       )}
     >
       <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
