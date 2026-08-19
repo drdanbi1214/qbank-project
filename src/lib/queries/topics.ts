@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
+import { toAuthor, type Author } from '@/lib/queries/solutions'
 import { emptyDoc, parseRichDoc, toJson, type RichDoc, type RichNode } from '@/types/richtext'
 
 /**
@@ -24,6 +25,8 @@ export type Topic = {
   requiredPermission: string
   createdBy: string | null
   updatedBy: string | null
+  /** 처음 쓴 사람. 프로필이 없으면 null */
+  author: Author | null
   updatedAt: string
 }
 
@@ -38,10 +41,13 @@ type TopicRow = {
   updated_by: string | null
   updated_at: string
   topic_units?: { unit_id: string }[] | null
+  profiles?: { id: string; display_name: string; avatar_url: string | null } | null
 }
 
 const TOPIC_SELECT =
-  'id, subject_id, unit_id, title, content, required_permission, created_by, updated_by, updated_at, topic_units (unit_id)'
+  `id, subject_id, unit_id, title, content, required_permission, created_by, updated_by, updated_at,
+   topic_units (unit_id),
+   profiles!topics_created_by_fkey (id, display_name, avatar_url)`
 
 function toTopic(row: TopicRow): Topic {
   return {
@@ -54,6 +60,7 @@ function toTopic(row: TopicRow): Topic {
     requiredPermission: row.required_permission,
     createdBy: row.created_by,
     updatedBy: row.updated_by,
+    author: row.created_by ? toAuthor(row.profiles ?? null, row.created_by) : null,
     updatedAt: row.updated_at,
   }
 }
