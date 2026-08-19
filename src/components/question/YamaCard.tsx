@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
@@ -137,6 +137,24 @@ function YamaBody({
     [taxonomy],
   )
 
+  /**
+   * 이미지가 있는 카드를 뒤로 보낸다.
+   *
+   * 열 흐름은 DOM 순서대로 채우면서 높이를 맞춘다. 그래서 X-ray 가 붙은 긴
+   * 카드가 앞에 있으면 그것만으로 첫 열이 절반을 넘겨 거기서 끊기고, 남은 짧은
+   * 카드들이 둘째 열로 몰려 아래가 크게 빈다. 긴 것을 마지막에 두면 짧은
+   * 카드들이 먼저 쌓이고 긴 것이 옆 열에 서서 빈 곳이 거의 없어진다.
+   *
+   * 편집 중에는 격자라 순서를 건드릴 이유가 없다. 쓰던 카드가 갑자기 자리를
+   * 옮기면 오히려 헷갈린다.
+   */
+  const orderedCards = useMemo(() => {
+    if (editing) return cards
+    const hasImage = (row: ClusterSibling) =>
+      row.stemBlocks.some((block) => block.type === 'image')
+    return [...cards].sort((a, b) => Number(hasImage(a)) - Number(hasImage(b)))
+  }, [cards, editing])
+
   // 해설은 항상 그룹에 붙인다. 그룹 없이 문제에 붙이면 나중에 판본을 묶어도
   // 해설이 따라가지 않는다. 테마에 꽂힌 야마는 어차피 묶을 대상이므로 미리 만든다.
   useEffect(() => {
@@ -222,7 +240,7 @@ function YamaBody({
           onDetach={detach}
         />
 
-        {cards.map((row) => (
+        {orderedCards.map((row) => (
           <QuestionCard
             key={row.id}
             className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
