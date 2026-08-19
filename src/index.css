@@ -76,6 +76,16 @@
     @apply mt-2;
   }
 
+  /* 테마 본문의 야마 카드에 붙는 해설. 카드 안에 들어가는 작은 상자라
+     풀이 화면보다 한 단계 더 촘촘하게 둔다. */
+  .rich-text.topic-solution-rich-text {
+    @apply text-[13px] leading-[1.65];
+  }
+
+  .rich-text.topic-solution-rich-text > * + * {
+    @apply mt-1.5;
+  }
+
   /* 풀이 이미지 중 작성자가 크기를 직접 조절하지 않은 것(고정 width가 없는
      것)은 높이 상한(max-h-96) 대신 카드 폭을 그대로 채운다. E조스터디처럼
      시험지 페이지를 통째로 캡처해 올린 풀이가 카드 폭보다 훨씬 좁게 보이던

@@ -152,7 +152,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
           ✎ 고치기
         </button>
       )}
-      <RichTextViewer doc={solution.content} className="text-[13px]" />
+      <RichTextViewer doc={solution.content} className="topic-solution-rich-text" />
     </div>
   )
 }
