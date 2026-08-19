@@ -122,10 +122,13 @@ function YamaBody({
   )
 
   const [adding, setAdding] = useState<VariantType | null>(null)
-  // 읽을 때는 해설을 접어둔다. 게시물을 훑는 중에 전부 펼쳐져 있으면 길다.
-  const [openSolution, setOpenSolution] = useState(false)
+  // 변주는 펼치면 해설이 바로 나온다. 원본만 따로 눌러야 하면 앞뒤가 안 맞고,
+  // 해설 자리가 아예 안 보여 어디에 쓰는지 알 수 없다. 그래서 기본으로 연다.
+  const [openSolution, setOpenSolution] = useState(true)
   const [solutionGroupId, setSolutionGroupId] = useState<string | null>(groupId)
-  const [busy, setBusy] = useState(false)
+  // 편집 화면에서 그룹을 준비하는 동안에는 해설을 그리지 않는다. 준비 전에
+  // 그리면 그룹 없이 문제에 붙는 풀이가 만들어질 수 있다.
+  const preparing = canCluster && solutionGroupId === null
 
   const examLabel = useCallback(
     (examId: string) => {
@@ -136,28 +139,28 @@ function YamaBody({
     [taxonomy],
   )
 
-  // 해설은 항상 그룹에 붙인다. 그룹 없이 문제에 붙이면 나중에 판본을 묶어도
-  // 해설이 따라가지 않는다.
-  const toggleSolution = useCallback(() => {
-    if (openSolution) {
-      setOpenSolution(false)
-      return
-    }
-    if (solutionGroupId || !canCluster) {
-      setOpenSolution(true)
-      return
-    }
-    setBusy(true)
+  /**
+   * 해설은 항상 그룹에 붙인다. 그룹 없이 문제에 직접 붙이면 나중에 판본을 묶어도
+   * 해설이 따라가지 않는다.
+   *
+   * 테마에 꽂힌 야마는 어차피 "비슷한 문제를 모아 하나로 설명한다" 는 대상이므로,
+   * 편집 화면에서 카드를 열 때 그룹을 미리 만들어 둔다. 혼자짜리 그룹은 배너에
+   * 아무것도 더하지 않아 무해하다.
+   */
+  useEffect(() => {
+    if (!canCluster || solutionGroupId) return
+    let active = true
     void ensureGroup()
       .then((id) => {
-        setSolutionGroupId(id)
-        setOpenSolution(true)
+        if (active) setSolutionGroupId(id)
       })
       .catch((caught: unknown) => {
-        window.alert(caught instanceof Error ? caught.message : '해설을 열지 못했습니다.')
+        console.error('야마 그룹을 준비하지 못했습니다.', caught)
       })
-      .finally(() => setBusy(false))
-  }, [openSolution, solutionGroupId, canCluster, ensureGroup])
+    return () => {
+      active = false
+    }
+  }, [canCluster, solutionGroupId, ensureGroup])
 
   return (
     <div
@@ -182,8 +185,7 @@ function YamaBody({
         <span className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            onClick={toggleSolution}
-            disabled={busy}
+            onClick={() => setOpenSolution((value) => !value)}
             className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
           >
             {openSolution ? '해설 접기' : '해설 보기'}
@@ -229,6 +231,11 @@ function YamaBody({
             <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               해설
             </h4>
+            {preparing ? (
+              <div className="flex justify-center py-6">
+                <Spinner className="h-4 w-4" />
+              </div>
+            ) : (
             <SolutionList
               questionId={question.id}
               groupId={solutionGroupId}
@@ -237,6 +244,7 @@ function YamaBody({
               unitId={question.unitId}
               unitSource={question.unitSource}
             />
+            )}
             {identical.length > 0 && (
               <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 동일 출제&nbsp;
