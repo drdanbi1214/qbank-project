@@ -2203,6 +2203,7 @@ export type Database = {
           updated_at: string | null
           updated_by: string | null
           variant_type: string | null
+          variant_note: string | null
           view_count: number | null
         }
         Insert: {
@@ -2365,6 +2366,7 @@ export type Database = {
       }
       cluster_detach: { Args: { p_question_id: string }; Returns: undefined }
       cluster_ensure_group: { Args: { p_question_id: string }; Returns: string }
+      cluster_set_note: { Args: { p_question_id: string; p_note: string }; Returns: undefined }
       circled_answer: { Args: { a: number[] }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {

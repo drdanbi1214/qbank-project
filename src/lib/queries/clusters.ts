@@ -36,6 +36,8 @@ export type ClusterSibling = {
   questionCode: string | null
   unitId: string | null
   unitSource: 'ai_suggested' | 'human_confirmed' | null
+  /** 대표와 무엇이 다른지 한 줄. 없으면 기본 문구를 쓴다. */
+  variantNote: string | null
 }
 
 type SiblingRow = {
@@ -48,10 +50,11 @@ type SiblingRow = {
   question_code: string | null
   unit_id: string | null
   unit_source: string | null
+  variant_note: string | null
 }
 
 const SIBLING_SELECT =
-  'id, exam_id, question_number, variant_type, stem_blocks, choices, question_code, unit_id, unit_source'
+  'id, exam_id, question_number, variant_type, stem_blocks, choices, question_code, unit_id, unit_source, variant_note'
 
 /**
  * 같은 클러스터의 다른 문제들.
@@ -92,6 +95,7 @@ export async function fetchClusterSiblings(
           row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed'
             ? row.unit_source
             : null,
+        variantNote: row.variant_note,
       },
     ]
   })
@@ -190,6 +194,15 @@ export async function ensureClusterGroup(questionId: string): Promise<string> {
   })
   if (error) throw error
   return data as string
+}
+
+/** 변주가 대표와 무엇이 다른지 한 줄 메모를 남긴다. 빈 문자열이면 지운다. */
+export async function setVariantNote(questionId: string, note: string): Promise<void> {
+  const { error } = await supabase.rpc('cluster_set_note', {
+    p_question_id: questionId,
+    p_note: note,
+  })
+  if (error) throw error
 }
 
 /**

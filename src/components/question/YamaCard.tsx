@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { fetchQuestionById, type SolveQuestion } from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
-import type { ClusterSibling, VariantType } from '@/lib/queries/clusters'
+import { setVariantNote, type ClusterSibling, type VariantType } from '@/lib/queries/clusters'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -125,6 +125,9 @@ function YamaBody({
   // 변주는 펼치면 해설이 바로 나온다. 원본만 따로 눌러야 하면 앞뒤가 안 맞고,
   // 해설 자리가 아예 안 보여 어디에 쓰는지 알 수 없다. 그래서 기본으로 연다.
   const [openSolution, setOpenSolution] = useState(true)
+  // 동일 출제 판본을 눌렀을 때 띄우는 팝업. 내용이 같아 본문에 펼칠 이유는
+  // 없지만, 실제 시험지에 어떻게 실렸는지 확인하고 싶을 때가 있다.
+  const [peeking, setPeeking] = useState<ClusterSibling | null>(null)
   const [solutionGroupId, setSolutionGroupId] = useState<string | null>(groupId)
   // 편집 화면에서 그룹을 준비하는 동안에는 해설을 그리지 않는다. 준비 전에
   // 그리면 그룹 없이 문제에 붙는 풀이가 만들어질 수 있다.
@@ -246,13 +249,18 @@ function YamaBody({
             />
             )}
             {identical.length > 0 && (
-              <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                동일 출제&nbsp;
-                <b className="font-semibold text-slate-800 dark:text-slate-100">
-                  {identical
-                    .map((row) => `${examLabel(row.examId)} ${row.questionNumber}번`)
-                    .join(' · ')}
-                </b>
+              <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                동일 출제
+                {identical.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => setPeeking(row)}
+                    className="rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700 hover:border-brand-400 hover:text-brand-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {examLabel(row.examId)} {row.questionNumber}번
+                  </button>
+                ))}
               </p>
             )}
           </section>
@@ -289,6 +297,16 @@ function YamaBody({
             + 거의 비슷한 문제
           </Button>
         </div>
+      )}
+
+      {peeking && (
+        <QuestionPeek
+          row={peeking}
+          groupId={groupId}
+          subjectId={subjectId}
+          title={`${examLabel(peeking.examId)} ${peeking.questionNumber}번`}
+          onClose={() => setPeeking(null)}
+        />
       )}
 
       {adding && taxonomy && (
@@ -339,6 +357,9 @@ function VariantRow({
   onDetach: () => void
 }) {
   const [open, setOpen] = useState(false)
+  // 메모는 서버에 바로 저장되므로 화면 값을 따로 들고 있는다.
+  const [note, setNote] = useState(row.variantNote ?? '')
+  const [editingNote, setEditingNote] = useState(false)
 
   return (
     <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
@@ -354,15 +375,44 @@ function VariantRow({
         <span className="font-semibold text-slate-700 dark:text-slate-200">
           {examLabel(row.examId)} {row.questionNumber}번
         </span>
-        <span className="text-amber-700 dark:text-amber-400">지문이 조금 다릅니다</span>
+        <span className="text-amber-700 dark:text-amber-400">
+          {note || '지문이 조금 다릅니다'}
+        </span>
       </button>
 
       {open && (
         <div className="gap-3 border-t border-slate-200 p-2.5 dark:border-slate-700 lg:grid lg:grid-cols-2">
           <section className="rounded-md border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
-            <h5 className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            <h5 className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
               문제
+              {canCluster && !editingNote && (
+                <button
+                  type="button"
+                  onClick={() => setEditingNote(true)}
+                  className="font-normal normal-case tracking-normal text-slate-400 underline hover:text-slate-600"
+                >
+                  차이 메모
+                </button>
+              )}
             </h5>
+            {editingNote && (
+              <input
+                autoFocus
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                onBlur={() => {
+                  setEditingNote(false)
+                  void setVariantNote(row.id, note).catch((caught: unknown) => {
+                    window.alert(caught instanceof Error ? caught.message : '메모를 저장하지 못했습니다.')
+                  })
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                }}
+                placeholder="예: 묻는 방향이 반대입니다 / 숫자만 바뀜"
+                className="mb-1.5 w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs dark:border-amber-800 dark:bg-amber-950/30"
+              />
+            )}
             <div className="text-sm font-semibold leading-relaxed">
               <StemBlocks blocks={row.stemBlocks} />
             </div>
@@ -401,6 +451,92 @@ function VariantRow({
           </section>
         </div>
       )}
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+
+/**
+ * 동일 출제 판본 훑어보기.
+ *
+ * 내용이 같아 본문에 펼칠 이유는 없지만, 그 학번 시험지에 실제로 어떻게 실렸는지
+ * 확인하고 싶을 때가 있다. 문제 아래에 풀이까지 이어 붙여 이 자리에서 끝낸다.
+ */
+function QuestionPeek({
+  row,
+  groupId,
+  subjectId,
+  title,
+  onClose,
+}: {
+  row: ClusterSibling
+  groupId: string | null
+  subjectId: string | null
+  title: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-12"
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
+      >
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
+          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+            동일 출제
+          </span>
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="ml-auto text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-3 p-4">
+          <section>
+            <StemBlocks blocks={row.stemBlocks} />
+            <ol className="mt-2 space-y-0.5 text-sm">
+              {row.choices.map((choice) => (
+                <li key={choice.no} className="text-slate-700 dark:text-slate-300">
+                  {choice.text}
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="border-t border-slate-200 pt-3 dark:border-slate-700">
+            <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              해설
+            </h4>
+            <SolutionList
+              questionId={row.id}
+              groupId={groupId}
+              choiceCount={row.choices.length}
+              subjectId={subjectId}
+              unitId={row.unitId}
+              unitSource={row.unitSource}
+            />
+          </section>
+        </div>
+      </div>
     </div>
   )
 }
