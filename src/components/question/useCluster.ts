@@ -40,14 +40,24 @@ export function useCluster(questionId: string, initialGroupId: string | null) {
 
   useEffect(load, [load])
 
-  const identical = useMemo(
-    () => (siblings ?? []).filter((row) => row.variantType === 'identical'),
+  /**
+   * 격자에 깔리는 카드들. 기준 문제는 여기 없고 화면에서 맨 앞에 따로 그린다.
+   * same_as 가 null 인 형제 = 자기 자신이 카드인 판본이다.
+   */
+  const cards = useMemo(
+    () => (siblings ?? []).filter((row) => row.sameAs === null),
     [siblings],
   )
-  const modified = useMemo(
-    () => (siblings ?? []).filter((row) => row.variantType === 'modified'),
-    [siblings],
-  )
+
+  /** 카드 id → 그 카드와 글자까지 같은 판본들 */
+  const identicalOf = useMemo(() => {
+    const map = new Map<string, ClusterSibling[]>()
+    for (const row of siblings ?? []) {
+      if (!row.sameAs) continue
+      map.set(row.sameAs, [...(map.get(row.sameAs) ?? []), row])
+    }
+    return map
+  }, [siblings])
 
   /**
    * 붙이기.
@@ -57,8 +67,8 @@ export function useCluster(questionId: string, initialGroupId: string | null) {
    * id 로 직접 다시 읽는다.
    */
   const attach = useCallback(
-    async (targetId: string, variant: VariantType) => {
-      const nextGroupId = await attachToCluster({ anchorId: questionId, targetId, variant })
+    async (targetId: string, variant: VariantType, anchorId: string = questionId) => {
+      const nextGroupId = await attachToCluster({ anchorId, targetId, variant })
       setGroupId(nextGroupId)
       refresh(nextGroupId)
     },
@@ -86,5 +96,5 @@ export function useCluster(questionId: string, initialGroupId: string | null) {
     return id
   }, [questionId])
 
-  return { groupId, siblings, identical, modified, attach, detach, ensureGroup }
+  return { groupId, siblings, cards, identicalOf, attach, detach, ensureGroup }
 }

@@ -2204,6 +2204,7 @@ export type Database = {
           updated_by: string | null
           variant_type: string | null
           variant_note: string | null
+          same_as: string | null
           view_count: number | null
         }
         Insert: {

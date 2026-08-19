@@ -15,7 +15,9 @@ type Props = {
  * 일이 아니다.
  */
 export function ClusterPanel({ questionId, initialGroupId, examLabelOf }: Props) {
-  const { siblings, identical, modified } = useCluster(questionId, initialGroupId)
+  const { siblings, cards, identicalOf } = useCluster(questionId, initialGroupId)
+  // 이 문제 자신과 글자까지 같은 판본. 배너 한 줄로만 알린다.
+  const identical = identicalOf.get(questionId) ?? []
 
   if (siblings === null || siblings.length === 0) return null
 
@@ -33,7 +35,7 @@ export function ClusterPanel({ questionId, initialGroupId, examLabelOf }: Props)
         </p>
       )}
 
-      {modified.map((row) => (
+      {cards.map((row) => (
         <details
           key={row.id}
           className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50"

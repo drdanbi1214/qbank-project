@@ -38,6 +38,8 @@ export type ClusterSibling = {
   unitSource: 'ai_suggested' | 'human_confirmed' | null
   /** 대표와 무엇이 다른지 한 줄. 없으면 기본 문구를 쓴다. */
   variantNote: string | null
+  /** 이 문제와 글자까지 같은 카드. null 이면 자기가 카드다. */
+  sameAs: string | null
 }
 
 type SiblingRow = {
@@ -51,10 +53,11 @@ type SiblingRow = {
   unit_id: string | null
   unit_source: string | null
   variant_note: string | null
+  same_as: string | null
 }
 
 const SIBLING_SELECT =
-  'id, exam_id, question_number, variant_type, stem_blocks, choices, question_code, unit_id, unit_source, variant_note'
+  'id, exam_id, question_number, variant_type, stem_blocks, choices, question_code, unit_id, unit_source, variant_note, same_as'
 
 /**
  * 같은 클러스터의 다른 문제들.
@@ -96,6 +99,7 @@ export async function fetchClusterSiblings(
             ? row.unit_source
             : null,
         variantNote: row.variant_note,
+        sameAs: row.same_as,
       },
     ]
   })
