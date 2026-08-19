@@ -92,20 +92,32 @@ export async function fetchCompletedAssignmentQuestionIds(
   return (data ?? []).map((row) => ({ questionId: row.question_id, completedAt: row.completed_at }))
 }
 
-/** 이미 누군가에게 배정된 문항 id 전체. 한 문항은 한 명에게만 배정되므로
- * 이 목록에 있는 문항은 배정 화면에서 선택 대상으로 보여주지 않는다. */
-export async function fetchAssignedQuestionIds(): Promise<Set<string>> {
+/**
+ * 이 공개범위 안에서 이미 배정된 문항 id.
+ *
+ * 배정은 스터디별로 따로 논다. 합본3 이 잡고 있는 문항이라도 레옵스 배정
+ * 화면에서는 고를 수 있어야 하므로, 지금 고른 공개범위와 같은 배정만 센다.
+ */
+export async function fetchAssignedQuestionIds(
+  requiredPermission: string | null,
+): Promise<Set<string>> {
   // 배정은 문항 수만큼 늘어난다. 한 번에 다 받으면 PostgREST 반환 상한에
   // 걸려 조용히 잘리고, 이미 배정된 문항이 '배정 가능' 으로 보이게 된다.
   // 나눠 받아 전체 개수와 맞을 때까지 돈다.
   const PAGE = 500
   const ids: string[] = []
   for (let from = 0; ; from += PAGE) {
-    const { data, error, count } = await supabase
+    let query = supabase
       .from('assignments')
       .select('question_id', { count: 'exact' })
       .order('question_id', { ascending: true })
       .range(from, from + PAGE - 1)
+    query =
+      requiredPermission === null
+        ? query.is('required_permission', null)
+        : query.eq('required_permission', requiredPermission)
+
+    const { data, error, count } = await query
     if (error) throw error
 
     const page = data ?? []
@@ -115,7 +127,13 @@ export async function fetchAssignedQuestionIds(): Promise<Set<string>> {
   return new Set(ids)
 }
 
-/** 문항 일괄 배정. 이미 다른 사람에게 배정된 문항(레이스 컨디션 등)은 건너뛴다. */
+/**
+ * 문항 일괄 배정. 이미 같은 스터디 안에서 배정된 문항(레이스 컨디션 등)은 건너뛴다.
+ *
+ * 배정은 스터디별로 따로 논다. 합본3 이 잡고 있는 문항이라도 레옵스는 자기
+ * 몫으로 다시 배정할 수 있다. 공개범위를 비운 배정(null)만 스터디에 매이지
+ * 않은 것으로 보고 문항당 하나로 묶는다.
+ */
 export async function assignQuestions(params: {
   questionIds: string[]
   assigneeId: string
@@ -136,7 +154,7 @@ export async function assignQuestions(params: {
 
   const { data, error } = await supabase
     .from('assignments')
-    .upsert(rows, { onConflict: 'question_id', ignoreDuplicates: true })
+    .upsert(rows, { onConflict: 'question_id,required_permission', ignoreDuplicates: true })
     .select('id')
 
   if (error) throw error

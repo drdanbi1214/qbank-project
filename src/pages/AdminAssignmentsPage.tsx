@@ -83,7 +83,8 @@ export function AdminAssignmentsPage() {
 
   useEffect(() => {
     let active = true
-    void fetchAssignedQuestionIds()
+    // 배정은 스터디별로 따로 논다. 공개범위를 바꾸면 가려야 할 문항도 달라진다.
+    void fetchAssignedQuestionIds(requiredPermission || null)
       .then((ids) => {
         if (active) setAssignedQuestionIds(ids)
       })
@@ -91,7 +92,7 @@ export function AdminAssignmentsPage() {
     return () => {
       active = false
     }
-  }, [progressNonce])
+  }, [progressNonce, requiredPermission])
 
   useEffect(() => {
     if (!examId) return
@@ -159,8 +160,9 @@ export function AdminAssignmentsPage() {
         <header className="mb-4">
           <h1 className="text-xl font-bold">배정 관리</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            시험을 고르고 문항을 선택해 담당자에게 배정합니다. 한 문항은 한
-            명에게만 배정되며, 이미 배정된 문항은 목록에 표시되지 않습니다.
+            시험을 고르고 문항을 선택해 담당자에게 배정합니다. 배정은 공개범위
+            (스터디)별로 따로 관리되며, 고른 공개범위에서 이미 배정된 문항은
+            목록에 표시되지 않습니다.
           </p>
         </header>
 
