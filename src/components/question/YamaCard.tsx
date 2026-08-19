@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { useCluster } from '@/components/question/useCluster'
-import { SolutionList } from '@/components/solution/SolutionList'
+import { TopicSolutionBox } from '@/components/question/TopicSolutionBox'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
@@ -202,9 +202,6 @@ function YamaBody({
           identical={identicalOf.get(question.id) ?? []}
           solutionGroupId={solutionGroupId}
           preparing={preparing}
-          subjectId={subjectId}
-          unitId={question.unitId}
-          unitSource={question.unitSource}
           canCluster={canCluster}
           examLabelOf={examLabel}
           onPeek={setPeeking}
@@ -225,9 +222,6 @@ function YamaBody({
             // 카드마다 자기 해설을 갖는다. 공유 해설은 기준 카드에만 붙는다.
             solutionGroupId={null}
             preparing={false}
-            subjectId={subjectId}
-            unitId={row.unitId}
-            unitSource={row.unitSource}
             canCluster={canCluster}
             examLabelOf={examLabel}
             onPeek={setPeeking}
@@ -251,7 +245,6 @@ function YamaBody({
         <QuestionPeek
           row={peeking}
           groupId={solutionGroupId}
-          subjectId={subjectId}
           title={`${examLabel(peeking.examId)} ${peeking.questionNumber}번`}
           onClose={() => setPeeking(null)}
         />
@@ -303,9 +296,6 @@ function QuestionCard({
   identical,
   solutionGroupId,
   preparing,
-  subjectId,
-  unitId,
-  unitSource,
   canCluster,
   examLabelOf,
   onPeek,
@@ -321,9 +311,6 @@ function QuestionCard({
   identical: ClusterSibling[]
   solutionGroupId: string | null
   preparing: boolean
-  subjectId: string | null
-  unitId: string | null
-  unitSource: 'ai_suggested' | 'human_confirmed' | null
   canCluster: boolean
   examLabelOf: (examId: string) => string
   onPeek: (row: ClusterSibling) => void
@@ -436,25 +423,13 @@ function QuestionCard({
         </p>
       )}
 
-      <div className="mt-2.5 rounded-md border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/50">
-        <h5 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-          해설
-        </h5>
-        {preparing ? (
-          <div className="flex justify-center py-4">
-            <Spinner className="h-4 w-4" />
-          </div>
-        ) : (
-          <SolutionList
-            questionId={questionId}
-            groupId={solutionGroupId}
-            choiceCount={choices.length}
-            subjectId={subjectId}
-            unitId={unitId}
-            unitSource={unitSource}
-          />
-        )}
-      </div>
+      {preparing ? (
+        <div className="mt-2.5 flex justify-center py-3">
+          <Spinner className="h-4 w-4" />
+        </div>
+      ) : (
+        <TopicSolutionBox questionId={questionId} groupId={solutionGroupId} />
+      )}
     </section>
   )
 }
@@ -470,13 +445,11 @@ function QuestionCard({
 function QuestionPeek({
   row,
   groupId,
-  subjectId,
   title,
   onClose,
 }: {
   row: ClusterSibling
   groupId: string | null
-  subjectId: string | null
   title: string
   onClose: () => void
 }) {
@@ -525,17 +498,7 @@ function QuestionPeek({
             </ol>
           </section>
           <section className="border-t border-slate-200 pt-3 dark:border-slate-700">
-            <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-              해설
-            </h4>
-            <SolutionList
-              questionId={row.id}
-              groupId={groupId}
-              choiceCount={row.choices.length}
-              subjectId={subjectId}
-              unitId={row.unitId}
-              unitSource={row.unitSource}
-            />
+            <TopicSolutionBox questionId={row.id} groupId={groupId} />
           </section>
         </div>
       </div>

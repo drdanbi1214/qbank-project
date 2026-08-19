@@ -18,6 +18,7 @@ import {
   type Topic,
 } from '@/lib/queries/topics'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
+import { TopicScopeProvider } from '@/components/question/TopicContext'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
 import type { RichDoc } from '@/types/richtext'
@@ -259,6 +260,10 @@ export function TopicsPage() {
                 <span>최종 수정 {formatShortDate(selected.updatedAt)}</span>
               </div>
 
+              <TopicScopeProvider
+                authorId={selected.createdBy}
+                requiredPermission={selected.requiredPermission}
+              >
               {editing && session ? (
                 <LazyRichTextEditor
                   key={selected.id}
@@ -276,6 +281,7 @@ export function TopicsPage() {
               ) : (
                 <RichTextViewer doc={selected.content} />
               )}
+              </TopicScopeProvider>
             </div>
           )}
         </article>
