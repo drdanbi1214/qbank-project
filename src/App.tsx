@@ -8,7 +8,6 @@ import { DataProvider } from '@/lib/data'
 import { NotificationProvider } from '@/lib/notifications'
 import { ThemeProvider } from '@/lib/theme'
 import { AdminAssignmentsPage } from '@/pages/AdminAssignmentsPage'
-import { AdminGroupsPage } from '@/pages/AdminGroupsPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminLabelingPage } from '@/pages/AdminLabelingPage'
 import { AdminQuestionsPage } from '@/pages/AdminQuestionsPage'
@@ -102,7 +101,6 @@ export default function App() {
                             <Route path="/admin/labeling" element={<AdminLabelingPage />} />
                             <Route path="/admin/review" element={<AdminReviewPage />} />
                             <Route path="/admin/upload" element={<AdminUploadPage />} />
-                            <Route path="/admin/groups" element={<AdminGroupsPage />} />
                             <Route path="/admin/users" element={<AdminUsersPage />} />
                             <Route path="/admin/visibility" element={<AdminVisibilityPage />} />
                             <Route path="/admin/reports" element={<AdminReportsPage />} />

@@ -13,11 +13,6 @@ const TOOLS: { to: string | null; title: string; description: string; phase?: st
     description: '단원이 비어 있는 문항을 모아 한 번에 분류합니다.',
   },
   {
-    to: '/admin/groups',
-    title: '중복 그룹 관리',
-    description: '여러 학번에 같은 문제가 나온 경우 묶습니다. 유사도로 후보를 찾습니다.',
-  },
-  {
     to: '/admin/assignments',
     title: '배정 관리',
     description: '문항을 골라 담당자에게 배정하고 진행률을 확인합니다.',
