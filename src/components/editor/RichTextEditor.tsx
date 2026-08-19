@@ -10,6 +10,7 @@ import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
 import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
 import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
+import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
@@ -103,6 +104,7 @@ export function RichTextEditor({
       StoredImage,
       YamaEmbed,
       TheoryEmbed,
+      Footnote,
       MathInline,
       MathBlock,
       Placeholder.configure({ placeholder }),
@@ -458,6 +460,15 @@ function Toolbar({
         onClick={() => editor.chain().focus().setMathInline('').run()}
       >
         <span className="font-serif italic">x</span>
+      </ToolButton>
+      <ToolButton
+        label="각주"
+        active={editor.isActive('footnote')}
+        onClick={() => editor.chain().focus().insertFootnote().run()}
+      >
+        <span className="text-xs">
+          가<sup className="text-[9px] font-bold">1</sup>
+        </span>
       </ToolButton>
       {!compact && (
         <ToolButton

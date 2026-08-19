@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useId, useState, type ReactNode } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
@@ -41,6 +41,8 @@ export function RichTextViewer({
   activeMarkId,
 }: Props) {
   const [zoomed, setZoomed] = useState<string | null>(null)
+  // 한 화면에 뷰어가 여러 개 뜨므로 각주 앵커 id 가 겹치지 않게 접두사를 둔다.
+  const anchorPrefix = useId()
   const cursor = { pos: 0 }
 
   const context: RenderContext = {
@@ -48,14 +50,32 @@ export function RichTextViewer({
     onMarkClick,
     activeMarkId: activeMarkId ?? null,
     onZoom: setZoomed,
+    footnotes: [],
+    anchorPrefix,
   }
   const indentLevels = hierarchicalIndent ? inferIndentLevels(doc.content) : []
 
+  // 본문을 먼저 만들어야 context.footnotes 가 채워진다. renderNode 는 컴포넌트가
+  // 아니라 그냥 함수라 이 자리에서 바로 실행된다.
+  const body = doc.content.map((node, index) => (
+    <Fragment key={index}>{renderNode(node, cursor, context, indentLevels[index])}</Fragment>
+  ))
+
   return (
     <div className={cn('rich-text', hierarchicalIndent && 'hierarchical-rich-text', className)}>
-      {doc.content.map((node, index) => (
-        <Fragment key={index}>{renderNode(node, cursor, context, indentLevels[index])}</Fragment>
-      ))}
+      {body}
+      {context.footnotes.length > 0 && (
+        <div className="footnote-list">
+          {context.footnotes.map((text, index) => (
+            <div key={index} id={`${anchorPrefix}-note-${index + 1}`} className="flex gap-1.5">
+              <a href={`#${anchorPrefix}-ref-${index + 1}`} className="footnote-back shrink-0">
+                {index + 1}.
+              </a>
+              <span>{text}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {zoomed && <ImageZoomModal src={zoomed} caption={null} onClose={() => setZoomed(null)} />}
     </div>
   )
@@ -66,6 +86,9 @@ type RenderContext = {
   onMarkClick?: (id: string) => void
   activeMarkId: string | null
   onZoom: (src: string) => void
+  /** 본문을 훑는 동안 나온 순서대로 쌓인다. 아래쪽 각주 목록이 이걸 쓴다. */
+  footnotes: string[]
+  anchorPrefix: string
 }
 
 type Cursor = { pos: number }
@@ -204,6 +227,18 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       const alt = typeof node.attrs?.alt === 'string' ? node.attrs.alt : null
       const width = imageWidthOf(node.attrs?.width)
       return src ? <ViewerImage path={src} alt={alt} width={width} onZoom={context.onZoom} /> : null
+    }
+    case 'footnote': {
+      const text = typeof node.attrs?.text === 'string' ? node.attrs.text : ''
+      context.footnotes.push(text)
+      const number = context.footnotes.length
+      return (
+        <sup id={`${context.anchorPrefix}-ref-${number}`}>
+          <a href={`#${context.anchorPrefix}-note-${number}`} title={text} className="footnote-ref">
+            {number}
+          </a>
+        </sup>
+      )
     }
     case 'mathInline':
       return <Formula latex={latexOf(node)} display={false} />

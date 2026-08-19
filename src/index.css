@@ -185,6 +185,17 @@
     @apply text-brand-600 underline underline-offset-2 dark:text-brand-300;
   }
 
+  /* 각주. .rich-text a 의 밑줄을 이겨야 해서 태그까지 붙여 지정한다. */
+  .rich-text a.footnote-ref {
+    @apply rounded bg-brand-100 px-1 text-[10px] font-bold text-brand-700 no-underline dark:bg-brand-900/50 dark:text-brand-200;
+  }
+  .rich-text a.footnote-back {
+    @apply font-bold text-brand-700 no-underline dark:text-brand-300;
+  }
+  .rich-text .footnote-list {
+    @apply mt-4 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-400;
+  }
+
   .rich-text mark {
     @apply rounded bg-amber-200 px-0.5 text-inherit dark:bg-amber-500/40;
   }
