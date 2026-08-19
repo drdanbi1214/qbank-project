@@ -4,11 +4,14 @@ import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Spinner } from '@/components/ui/Spinner'
 import { fetchTopic, fetchTopicsForQuestion, type TopicForQuestion } from '@/lib/queries/topics'
 import type { RichDoc } from '@/types/richtext'
+import { cn } from '@/utils/cn'
 
 type Props = {
   questionId: string
   /** 레옵스 스터디원에게만 보인다 */
   enabled: boolean
+  /** 풀이 목록 안에 딸려 들어갈 때. 소속이 드러나도록 안쪽으로 들여 그린다. */
+  nested?: boolean
 }
 
 /**
@@ -18,7 +21,7 @@ type Props = {
  * 풀다가 세 스크롤짜리 이론이 튀어나오면 흐름이 끊긴다. 세 줄 미리보기를 두고
  * 펼칠 때 본문을 가져온다.
  */
-export function TopicPanel({ questionId, enabled }: Props) {
+export function TopicPanel({ questionId, enabled, nested = false }: Props) {
   const [topics, setTopics] = useState<TopicForQuestion[] | null>(null)
 
   useEffect(() => {
@@ -39,7 +42,12 @@ export function TopicPanel({ questionId, enabled }: Props) {
   if (!enabled || topics === null || topics.length === 0) return null
 
   return (
-    <section className="space-y-2">
+    <section className={cn('space-y-2', nested && 'border-l-2 border-emerald-300 pl-3')}>
+      {nested && (
+        <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+          이 문제가 실린 테마
+        </p>
+      )}
       {topics.map((topic) => (
         <TopicCard key={topic.id} topic={topic} />
       ))}
@@ -70,7 +78,7 @@ function TopicCard({ topic }: { topic: TopicForQuestion }) {
   }, [open, content, topic.id])
 
   return (
-    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
+    <div className="rounded-lg border border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/20">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-xs font-semibold text-white">
           테마
@@ -100,7 +108,7 @@ function TopicCard({ topic }: { topic: TopicForQuestion }) {
       )}
 
       {open && (
-        <div className="border-t border-emerald-200 px-3 py-3 dark:border-emerald-900">
+        <div className="border-t border-emerald-300 px-3 py-3 dark:border-emerald-800">
           {loading || !content ? (
             <div className="flex justify-center py-4">
               <Spinner className="h-4 w-4" />

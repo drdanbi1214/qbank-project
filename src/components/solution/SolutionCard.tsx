@@ -112,7 +112,7 @@ export function SolutionCard({
   }
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    <article className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
       <header className="mb-3 flex flex-wrap items-center gap-2">
         {isBest && (
           <span className="rounded bg-brand-600 px-1.5 py-0.5 text-xs font-semibold text-white">

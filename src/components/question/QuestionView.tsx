@@ -624,14 +624,19 @@ export function QuestionView({
           </div>
 
           {revealed && tab === 'solutions' && canViewStudySolutions && (
-            <SolutionList
-              questionId={question.id}
-              groupId={question.groupId}
-              choiceCount={question.choices.length}
-              subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
-              unitId={question.unitId}
-              unitSource={question.unitSource}
-            />
+            <div className="space-y-3">
+              <SolutionList
+                questionId={question.id}
+                groupId={question.groupId}
+                choiceCount={question.choices.length}
+                subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
+                unitId={question.unitId}
+                unitSource={question.unitSource}
+              />
+              {/* 이 문제가 어느 테마에 실렸는지. 풀이 목록과 한 덩어리로 두어
+                  소속이 드러나게 한다. */}
+              <TopicPanel questionId={question.id} enabled={canViewTopics} nested />
+            </div>
           )}
           <div className={tab === 'note' ? undefined : 'hidden'} aria-hidden={tab !== 'note'}>
             <PersonalNoteTab questionId={question.id} groupId={question.groupId} />
@@ -641,14 +646,6 @@ export function QuestionView({
           )}
           {revealed && tab === 'senior' && canViewSeniorSolution && (
             <SeniorSolutionPanel questionId={question.id} />
-          )}
-
-          {/* 해설을 읽고 난 다음에 이론이 온다. 문제를 푸는 중에는 힌트가 되므로
-              정답이 공개된 뒤에만 보여준다. */}
-          {revealed && (
-            <div className="mt-4">
-              <TopicPanel questionId={question.id} enabled={canViewTopics} />
-            </div>
           )}
         </div>
       )}

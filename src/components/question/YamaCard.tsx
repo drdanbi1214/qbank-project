@@ -360,7 +360,7 @@ function QuestionCard({
         'rounded-lg border bg-white p-3 dark:bg-slate-900',
         kind === 'anchor'
           ? 'border-slate-300 shadow-sm dark:border-slate-600'
-          : 'border-slate-200 dark:border-slate-700',
+          : 'border-slate-300 dark:border-slate-600',
         className,
       )}
     >
