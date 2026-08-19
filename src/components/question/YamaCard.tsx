@@ -1,52 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { StemBlocks } from '@/components/question/StemBlocks'
-import { ClusterPanel } from '@/components/question/ClusterPanel'
+import { QuestionLookup } from '@/components/question/QuestionLookup'
+import { useCluster } from '@/components/question/useCluster'
 import { SolutionList } from '@/components/solution/SolutionList'
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchQuestionById } from '@/lib/queries/questions'
+import { fetchQuestionById, type SolveQuestion } from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
-import type { SolveQuestion } from '@/lib/queries/questions'
+import type { ClusterSibling, VariantType } from '@/lib/queries/clusters'
 import { cn } from '@/utils/cn'
 
 type Props = {
   questionId: string | null
   /** 편집기에서 노드가 선택된 상태 */
   selected?: boolean
-  /** 편집기에서만 넘어온다. 있으면 빼기 버튼과 묶기 버튼을 보여준다. */
+  /** 편집기에서만 넘어온다. 있으면 빼기·묶기 버튼을 보여준다. */
   onRemove?: () => void
 }
 
+const VARIANT_LABEL: Record<VariantType, string> = {
+  identical: '완전히 동일한 문제',
+  modified: '거의 비슷한 문제',
+}
+
 /**
- * 테마 본문 안에 그려지는 야마 카드. 편집기와 뷰어가 같은 것을 쓴다.
+ * 테마 본문 안에 그려지는 야마 카드.
  *
- * 문제를 못 가져오면 자리표시자를 그린다. 지워졌거나, 시험이 아직 draft 거나,
- * 보는 사람에게 그 학번 열람 권한이 없는 경우다(questions_solve 뷰가 걸러낸다).
- * 본문 흐름이 끊기지 않게 자리는 남긴다.
+ * 좌(문제) · 우(해설) 로 나누고, 유사 문제는 아래에 전체 폭으로 깐다. 변주는
+ * 문제 전체를 봐야 하는데 좁은 칼럼에 넣으면 원본과 무엇이 다른지 비교가 되지
+ * 않는다. 넓은 화면에서만 2단이고 좁으면 세로로 쌓인다.
+ *
+ * 문제를 못 가져오면 자리표시자를 그린다. 지워졌거나, 시험이 draft 거나, 보는
+ * 사람에게 그 학번 열람 권한이 없는 경우다. 본문 흐름은 끊기지 않는다.
  */
 export function YamaCard({ questionId, selected = false, onRemove }: Props) {
   const { taxonomy } = useData()
-  const { isAdmin, hasPermission } = useAuth()
-  // 묶기는 이론을 쓰는 자리에서만 한다. 읽기만 할 때는 배너와 변주만 보인다.
-  const canCluster = Boolean(onRemove) && (isAdmin || hasPermission('study_legendob'))
-  // id 가 없으면 조회할 것도 없으므로 처음부터 자리표시자 상태로 둔다.
-  // 이펙트 안에서 동기적으로 setState 하지 않기 위한 초기값 분기다.
   const [question, setQuestion] = useState<SolveQuestion | null | 'missing'>(
     questionId ? null : 'missing',
   )
-  // 읽는 사람용. 게시물을 보다가 해설을 그 자리에서 펼친다. 풀이 화면으로
-  // 나갔다 오면 읽던 흐름이 끊긴다.
-  const [showSolution, setShowSolution] = useState(false)
 
   useEffect(() => {
     if (!questionId) return
     let active = true
     void fetchQuestionById(questionId)
       .then((found) => {
-        if (!active) return
-        setQuestion(found ?? 'missing')
+        if (active) setQuestion(found ?? 'missing')
       })
       .catch(() => {
         if (active) setQuestion('missing')
@@ -56,18 +57,9 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
     }
   }, [questionId])
 
-  const subjectIdOf = (examId: string) =>
-    taxonomy?.examById.get(examId)?.subjectId ?? null
-
-  const examLabel = (examId: string) => {
-    const exam = taxonomy?.examById.get(examId)
-    const subjectName = exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined
-    return examShortLabel(exam, subjectName)
-  }
-
   if (question === null) {
     return (
-      <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+      <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
         <Spinner className="h-4 w-4" />
       </div>
     )
@@ -77,7 +69,7 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
     return (
       <div
         className={cn(
-          'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400',
+          'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400',
           selected && 'ring-2 ring-brand-500',
         )}
       >
@@ -96,20 +88,90 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
   }
 
   return (
+    <YamaBody
+      question={question}
+      selected={selected}
+      subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
+      onRemove={onRemove}
+    />
+  )
+}
+
+// -----------------------------------------------------------------------------
+
+/** 문제를 받아온 뒤의 본문. 훅 순서가 흔들리지 않도록 컴포넌트를 나눴다. */
+function YamaBody({
+  question,
+  selected,
+  subjectId,
+  onRemove,
+}: {
+  question: SolveQuestion
+  selected: boolean
+  subjectId: string | null
+  onRemove?: () => void
+}) {
+  const { taxonomy } = useData()
+  const { isAdmin, hasPermission } = useAuth()
+  const editing = Boolean(onRemove)
+  const canCluster = editing && (isAdmin || hasPermission('study_legendob'))
+
+  const { groupId, identical, modified, attach, detach, ensureGroup } = useCluster(
+    question.id,
+    question.groupId,
+  )
+
+  const [adding, setAdding] = useState<VariantType | null>(null)
+  // 읽을 때는 해설을 접어둔다. 게시물을 훑는 중에 전부 펼쳐져 있으면 길다.
+  const [openSolution, setOpenSolution] = useState(false)
+  const [solutionGroupId, setSolutionGroupId] = useState<string | null>(groupId)
+  const [busy, setBusy] = useState(false)
+
+  const examLabel = useCallback(
+    (examId: string) => {
+      const exam = taxonomy?.examById.get(examId)
+      const name = exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined
+      return examShortLabel(exam, name)
+    },
+    [taxonomy],
+  )
+
+  // 해설은 항상 그룹에 붙인다. 그룹 없이 문제에 붙이면 나중에 판본을 묶어도
+  // 해설이 따라가지 않는다.
+  const toggleSolution = useCallback(() => {
+    if (openSolution) {
+      setOpenSolution(false)
+      return
+    }
+    if (solutionGroupId || !canCluster) {
+      setOpenSolution(true)
+      return
+    }
+    setBusy(true)
+    void ensureGroup()
+      .then((id) => {
+        setSolutionGroupId(id)
+        setOpenSolution(true)
+      })
+      .catch((caught: unknown) => {
+        window.alert(caught instanceof Error ? caught.message : '해설을 열지 못했습니다.')
+      })
+      .finally(() => setBusy(false))
+  }, [openSolution, solutionGroupId, canCluster, ensureGroup])
+
+  return (
     <div
       className={cn(
-        'rounded-lg border-l-2 border-emerald-500 bg-emerald-50/40 px-3 py-3 dark:bg-emerald-950/20',
+        'rounded-lg border-l-2 border-emerald-500 bg-emerald-50/40 px-3 py-2.5 dark:bg-emerald-950/20',
         selected && 'ring-2 ring-brand-500',
       )}
     >
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-        {/* 드래그 핸들은 이 배지에만 둔다. 카드 전체가 핸들이면 안쪽 입력창에서
-            글자를 고를 때 카드가 끌려간다. */}
         <span
-          data-drag-handle={onRemove ? '' : undefined}
+          data-drag-handle={editing ? '' : undefined}
           className={cn(
             'rounded bg-emerald-600 px-1.5 py-0.5 font-semibold text-white',
-            onRemove && 'cursor-grab active:cursor-grabbing',
+            editing && 'cursor-grab active:cursor-grabbing',
           )}
         >
           야마
@@ -118,15 +180,14 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
           {examLabel(question.examId)} {question.questionNumber}번
         </span>
         <span className="ml-auto flex items-center gap-2">
-          {!canCluster && (
-            <button
-              type="button"
-              onClick={() => setShowSolution((value) => !value)}
-              className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
-            >
-              {showSolution ? '해설 접기' : '해설 보기'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={toggleSolution}
+            disabled={busy}
+            className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+          >
+            {openSolution ? '해설 접기' : '해설 보기'}
+          </button>
           <Link
             to={`/solve?question=${question.id}`}
             className="text-brand-600 hover:underline dark:text-brand-300"
@@ -145,48 +206,193 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
         </span>
       </div>
 
-      <StemBlocks blocks={question.stemBlocks} />
+      {/* 좌 문제 / 우 해설. 해설을 접으면 문제가 전체 폭을 쓴다. */}
+      <div className={cn('gap-3', openSolution && 'lg:grid lg:grid-cols-2')}>
+        <section className="rounded-lg border border-slate-300 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-900">
+          <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            문제
+          </h4>
+          <div className="text-[15px] font-semibold leading-relaxed">
+            <StemBlocks blocks={question.stemBlocks} />
+          </div>
+          <ol className="mt-1.5 space-y-0.5 text-sm">
+            {question.choices.map((choice) => (
+              <li key={choice.no} className="text-slate-700 dark:text-slate-300">
+                {choice.text}
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      <ol className="mt-2 space-y-1 text-sm">
-        {question.choices.map((choice) => (
-          <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-            {choice.text}
-          </li>
-        ))}
-      </ol>
+        {openSolution && (
+          <section className="mt-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 lg:mt-0">
+            <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              해설
+            </h4>
+            <SolutionList
+              questionId={question.id}
+              groupId={solutionGroupId}
+              choiceCount={question.choices.length}
+              subjectId={subjectId}
+              unitId={question.unitId}
+              unitSource={question.unitSource}
+            />
+            {identical.length > 0 && (
+              <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                동일 출제&nbsp;
+                <b className="font-semibold text-slate-800 dark:text-slate-100">
+                  {identical
+                    .map((row) => `${examLabel(row.examId)} ${row.questionNumber}번`)
+                    .join(' · ')}
+                </b>
+              </p>
+            )}
+          </section>
+        )}
+      </div>
 
-      {/* 읽는 중에는 해설을 이 자리에서 펼친다. 묶인 판본 전체가 공유하는
-          해설과, 이 문제에만 붙은 해설이 함께 나온다. */}
-      {showSolution && !canCluster && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-          <SolutionList
-            questionId={question.id}
-            groupId={question.groupId}
-            choiceCount={question.choices.length}
-            subjectId={subjectIdOf(question.examId)}
-            unitId={question.unitId}
-            unitSource={question.unitSource}
-          />
+      {modified.length > 0 && (
+        <>
+          <h4 className="mb-1.5 mt-3 flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+            유사 문제
+            <span className="rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+              {modified.length}
+            </span>
+          </h4>
+          {modified.map((row) => (
+            <VariantRow
+              key={row.id}
+              row={row}
+              examLabel={examLabel}
+              subjectId={subjectId}
+              canCluster={canCluster}
+              onDetach={() => detach(row.id)}
+            />
+          ))}
+        </>
+      )}
+
+      {canCluster && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Button variant="secondary" size="sm" onClick={() => setAdding('identical')}>
+            + 완전히 동일한 문제
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setAdding('modified')}>
+            + 거의 비슷한 문제
+          </Button>
         </div>
       )}
 
-      {/* 같은 논점을 묻는 다른 학번 판본을 여기서 모은다. 이론을 쓰면서 비슷한
-          문제를 묶어 함께 설명하는 것이 이 기능의 주된 쓰임이다. */}
-      <div className="mt-3">
-        <ClusterPanel
-          questionId={question.id}
-          examId={question.examId}
-          initialGroupId={question.groupId}
-          subjectId={subjectIdOf(question.examId)}
-          examLabelOf={examLabel}
-          canCluster={canCluster}
-          solutionContext={{
-            choiceCount: question.choices.length,
-            unitId: question.unitId,
-            unitSource: question.unitSource,
-          }}
-        />
-      </div>
+      {adding && taxonomy && (
+        <div className="mt-2 rounded-lg border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
+          <h4 className="mb-2 text-sm font-semibold">{VARIANT_LABEL[adding]} 추가</h4>
+          <QuestionLookup
+            exams={taxonomy.exams}
+            subjectId={subjectId}
+            excludeExamId={question.examId}
+            excludeQuestionId={question.id}
+            rejectGrouped
+            examLabelOf={examLabel}
+            confirmLabel="이 문제로 확정"
+            onCancel={() => setAdding(null)}
+            onPick={(found) => {
+              void attach(found.id, adding)
+                .then(() => setAdding(null))
+                .catch((caught: unknown) => {
+                  window.alert(caught instanceof Error ? caught.message : '묶지 못했습니다.')
+                })
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+
+/**
+ * 유사 문제 한 줄.
+ *
+ * 접혀 있어도 학번·번호와 차이 설명이 보여 훑기에 충분하다. 펼치면 원본과 같은
+ * 규칙으로 좌(문제)·우(그 변주의 해설)가 된다.
+ */
+function VariantRow({
+  row,
+  examLabel,
+  subjectId,
+  canCluster,
+  onDetach,
+}: {
+  row: ClusterSibling
+  examLabel: (examId: string) => string
+  subjectId: string | null
+  canCluster: boolean
+  onDetach: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left text-xs"
+      >
+        <span className="text-slate-400">{open ? '▾' : '▸'}</span>
+        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+          변주
+        </span>
+        <span className="font-semibold text-slate-700 dark:text-slate-200">
+          {examLabel(row.examId)} {row.questionNumber}번
+        </span>
+        <span className="text-amber-700 dark:text-amber-400">지문이 조금 다릅니다</span>
+      </button>
+
+      {open && (
+        <div className="gap-3 border-t border-slate-200 p-2.5 dark:border-slate-700 lg:grid lg:grid-cols-2">
+          <section className="rounded-md border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+            <h5 className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              문제
+            </h5>
+            <div className="text-sm font-semibold leading-relaxed">
+              <StemBlocks blocks={row.stemBlocks} />
+            </div>
+            <ol className="mt-1 space-y-0.5 text-[13px]">
+              {row.choices.map((choice) => (
+                <li key={choice.no} className="text-slate-700 dark:text-slate-300">
+                  {choice.text}
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="mt-2.5 rounded-md border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900 lg:mt-0">
+            <h5 className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              이 변주의 해설
+            </h5>
+            {/* groupId 를 주지 않아 이 문제에만 붙는다. 원본을 풀 때는 안 보이고
+                이 판본을 풀 때 공유 해설과 함께 나온다. */}
+            <SolutionList
+              questionId={row.id}
+              groupId={null}
+              choiceCount={row.choices.length}
+              subjectId={subjectId}
+              unitId={row.unitId}
+              unitSource={row.unitSource}
+            />
+            {canCluster && (
+              <button
+                type="button"
+                onClick={onDetach}
+                className="mt-2 text-[11px] text-slate-400 underline hover:text-rose-600 dark:hover:text-rose-400"
+              >
+                이 문제 묶기 풀기
+              </button>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   )
 }

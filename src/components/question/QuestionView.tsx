@@ -98,12 +98,6 @@ export function QuestionView({
   const canViewSeniorSolution = hasPermission('senior_solution_view')
   // 이론 카드는 레전드옵세스터디원과 관리자만. 레옵스 밖에서는 아예 조회하지 않는다.
   const canViewTopics = isAdmin || hasPermission('study_legendob')
-  // 야마를 붙일 후보 시험을 같은 과목으로 좁히려면 과목 id 가 필요하다.
-  const subjectId = useMemo(
-    () => taxonomy?.exams.find((exam) => exam.id === question.examId)?.subjectId ?? null,
-    [taxonomy, question.examId],
-  )
-
   const [selected, setSelected] = useState<number[]>([])
   const [answer, setAnswer] = useState<AnswerPayload | null>(null)
   const [stats, setStats] = useState<QuestionStats | null>(null)
@@ -526,14 +520,8 @@ export function QuestionView({
 
           <ClusterPanel
             questionId={question.id}
-            examId={question.examId}
             initialGroupId={question.groupId}
-            subjectId={subjectId}
             examLabelOf={examLabelOf}
-            // 묶기는 테마 본문의 야마 카드에서만 한다. 여기서는 출제 이력과
-            // 변주만 읽는다 — 비슷한 문제를 모으는 일은 이론을 쓰면서 하는 것이
-            // 이 기능의 의도다.
-            canCluster={false}
           />
 
           {answer.officialExplanation && answer.officialExplanation.length > 0 && (
