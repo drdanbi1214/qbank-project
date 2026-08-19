@@ -9,6 +9,7 @@ import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
 import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
+import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
@@ -40,6 +41,8 @@ type Props = {
    * 넘기지 않으면 버튼 자체가 없다 — 테마 편집에서만 쓴다.
    */
   onRequestYama?: () => Promise<string | null>
+  /** 이론 넣기 버튼. 부모가 이론 고르기 화면을 띄우고 문서 id 를 돌려준다. */
+  onRequestTheory?: () => Promise<string | null>
 }
 
 export function RichTextEditor({
@@ -54,6 +57,7 @@ export function RichTextEditor({
   onUploadError,
   uploadImageFile = uploadImage,
   onRequestYama,
+  onRequestTheory,
 }: Props) {
   // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
   const userIdRef = useRef(userId)
@@ -98,6 +102,7 @@ export function RichTextEditor({
       TableKit.configure({ table: { resizable: false } }),
       StoredImage,
       YamaEmbed,
+      TheoryEmbed,
       MathInline,
       MathBlock,
       Placeholder.configure({ placeholder }),
@@ -166,6 +171,7 @@ export function RichTextEditor({
         onPickImage={insertImages}
         extra={toolbarExtra}
         onRequestYama={onRequestYama}
+        onRequestTheory={onRequestTheory}
       />
       <div className="px-3 py-2">
         <EditorContent editor={editor} />
@@ -219,12 +225,14 @@ function Toolbar({
   onPickImage,
   extra,
   onRequestYama,
+  onRequestTheory,
 }: {
   editor: Editor
   compact: boolean
   onPickImage: (view: EditorView, files: File[]) => void
   extra?: ReactNode
   onRequestYama?: () => Promise<string | null>
+  onRequestTheory?: () => Promise<string | null>
 }) {
   // 서식 버튼의 활성 상태는 선택 영역이 바뀔 때마다 달라진다.
   const [, forceRender] = useState(0)
@@ -253,6 +261,19 @@ function Toolbar({
           }}
         >
           <span className="px-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">야마</span>
+        </ToolButton>
+      )}
+      {onRequestTheory && (
+        <ToolButton
+          label="이론 넣기"
+          active={false}
+          onClick={() => {
+            void onRequestTheory().then((documentId) => {
+              if (documentId) editor.chain().focus().insertTheory(documentId).run()
+            })
+          }}
+        >
+          <span className="px-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">이론</span>
         </ToolButton>
       )}
       <ToolButton

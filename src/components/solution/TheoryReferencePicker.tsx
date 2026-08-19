@@ -23,18 +23,23 @@ export function TheoryReferencePicker({ subjectId, value, onChange, userId }: Pr
   const [allenOpen, setAllenOpen] = useState(false)
   const [lectureOpen, setLectureOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [documents, setDocuments] = useState<TheoryDocument[]>([])
-  const [loading, setLoading] = useState(false)
+  // null = 아직 안 불러옴. 별도의 loading 상태를 두면 효과 안에서 곧바로
+  // setState 를 부르게 되어 React Compiler 가 막는다.
+  const [loaded, setLoaded] = useState<TheoryDocument[] | null>(null)
   const [preview, setPreview] = useState<TheoryDocument | null>(null)
   const [lectureName, setLectureName] = useState('')
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!allenOpen || !subjectId || documents.length > 0) return
-    setLoading(true)
-    void fetchTheoryDocuments(subjectId).then(setDocuments).finally(() => setLoading(false))
-  }, [allenOpen, subjectId, documents.length])
+    if (!allenOpen || !subjectId || loaded !== null) return
+    void fetchTheoryDocuments(subjectId)
+      .then(setLoaded)
+      .catch(() => setLoaded([]))
+  }, [allenOpen, subjectId, loaded])
+
+  const documents = useMemo(() => loaded ?? [], [loaded])
+  const loading = allenOpen && loaded === null
 
   const results = useMemo<Result[]>(() => {
     const keyword = query.trim().toLowerCase()

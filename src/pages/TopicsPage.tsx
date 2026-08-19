@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries/topics'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { TopicScopeProvider } from '@/components/question/TopicContext'
+import { TheoryPicker } from '@/components/question/TheoryPicker'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
 import type { RichDoc } from '@/types/richtext'
@@ -94,6 +95,23 @@ export function TopicsPage() {
     setPicking(false)
     resolvePick.current?.(id)
     resolvePick.current = null
+  }, [])
+
+  // 이론 넣기도 같은 방식이다. 이미 올라와 있는 이론 문서를 찾아 본문에 꽂는다.
+  const [pickingTheory, setPickingTheory] = useState(false)
+  const resolveTheory = useRef<((id: string | null) => void) | null>(null)
+
+  const requestTheory = useCallback(() => {
+    setPickingTheory(true)
+    return new Promise<string | null>((resolve) => {
+      resolveTheory.current = resolve
+    })
+  }, [])
+
+  const finishTheory = useCallback((id: string | null) => {
+    setPickingTheory(false)
+    resolveTheory.current?.(id)
+    resolveTheory.current = null
   }, [])
 
   const save = useCallback(() => {
@@ -278,6 +296,7 @@ export function TopicsPage() {
                   minHeight="30rem"
                   onUploadError={setError}
                   onRequestYama={requestYama}
+                  onRequestTheory={requestTheory}
                 />
               ) : (
                 <RichTextViewer doc={selected.content} />
@@ -287,6 +306,10 @@ export function TopicsPage() {
           )}
         </article>
       </div>
+
+      {pickingTheory && (
+        <TheoryPicker subjectId={subjectId} onPick={finishTheory} onCancel={() => finishTheory(null)} />
+      )}
 
       {picking && taxonomy && (
         <div

@@ -109,7 +109,8 @@ function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewP
                 title="끌어서 크기 조절"
                 className={cn(
                   'absolute -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-white bg-brand-500 shadow transition-opacity dark:border-slate-900',
-                  selected ? 'opacity-100' : 'opacity-0 hover:opacity-100',
+                  // 예전에는 완전히 투명해서 크기를 조절할 수 있다는 걸 몰랐다.
+                  selected ? 'opacity-100' : 'opacity-40 hover:opacity-100',
                 )}
               />
             )}

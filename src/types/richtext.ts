@@ -122,6 +122,8 @@ const LEAF_TYPES = new Set([
   // 반드시 여기 있어야 한다 — 빠지면 크기를 2로 세어 뒤따르는 인라인 코멘트의
   // anchor_from/anchor_to 가 전부 밀린다.
   'yamaEmbed',
+  // 테마 본문에 끼워 넣는 이론 문서. 야마와 같은 이유로 여기 있어야 한다.
+  'theoryEmbed',
 ])
 
 export function isLeafNode(type: string): boolean {

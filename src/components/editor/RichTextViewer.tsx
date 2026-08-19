@@ -2,6 +2,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
+import { TheoryCard } from '@/components/question/TheoryCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { indentStyle, safeIndent } from '@/components/editor/extensions/indent'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
@@ -208,6 +209,15 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       return <Formula latex={latexOf(node)} display={false} />
     case 'mathBlock':
       return <Formula latex={latexOf(node)} />
+    case 'theoryEmbed': {
+      const documentId =
+        typeof node.attrs?.documentId === 'string' ? node.attrs.documentId : null
+      return (
+        <div className="my-3">
+          <TheoryCard documentId={documentId} />
+        </div>
+      )
+    }
     case 'yamaEmbed': {
       const questionId =
         typeof node.attrs?.questionId === 'string' ? node.attrs.questionId : null
