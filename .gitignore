@@ -32,3 +32,7 @@ dist-ssr
 scripts/data/
 convert_file/
 .vercel
+
+# 작업용 산출물과 원본 백업. 실제 기출 이미지가 들어가므로 공개 저장소에 올리면 안 된다.
+tmp/
+예시 문제들/
