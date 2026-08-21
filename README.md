@@ -61,6 +61,11 @@ R2 자격 증명과 관리용 migration secret은 브라우저 번들에 포함�
 실제 로그인 화면 검증을 마치기 전에는 수행하지 않는다. 상세 절차는
 [Worker 운영 문서](cloudflare/storage-worker/README.md)를 참고한다.
 
+Supabase 사본은 `20260821183000_freeze_supabase_storage_backup.sql`에서 일반
+사용자의 Storage 쓰기 정책을 제거하고, restrictive INSERT/UPDATE/DELETE 거부
+정책으로 고정한 읽기 전용 스냅샷이다. 브라우저의 서명 읽기는 유지되고, 명시적인
+복구 작업에 사용하는 `service_role`만 RLS 우회 권한을 유지한다.
+
 ## 데이터베이스
 
 마이그레이션은 `supabase/migrations` 에 있고 순서대로 적용됩니다.

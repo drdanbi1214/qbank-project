@@ -58,3 +58,9 @@ R2 읽기나 업로드에 운영 문제가 있으면 Vercel의 `VITE_STORAGE_PRO
 
 Supabase 원본 삭제는 이 문서의 롤백 경로를 포기하는 파괴적 작업이다. 실제 로그인
 화면에서 이미지와 PDF를 표본 확인하고 별도 백업을 확보하기 전에는 삭제하지 않는다.
+
+R2 전환 뒤 Supabase 사본은
+`20260821183000_freeze_supabase_storage_backup.sql`을 적용해 읽기 전용으로
+고정한다. 이 마이그레이션은 클라이언트 쓰기 정책을 제거하고 restrictive
+INSERT/UPDATE/DELETE 거부 정책을 추가해, permissive 정책이 실수로 생겨도 쓰기를
+차단한다. 읽기 fallback과 `service_role`을 이용한 명시적 복구는 계속 가능하다.
