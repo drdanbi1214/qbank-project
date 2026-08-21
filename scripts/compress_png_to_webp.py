@@ -19,7 +19,8 @@ def load_env():
     return load_supabase_credentials()
 
 BASE, KEY = load_env()
-H = {'Authorization': f'Bearer {KEY}', 'apikey': KEY}
+# 신형 sb_secret 키는 JWT가 아니므로 Authorization에 넣지 않는다.
+H = {'apikey': KEY}
 
 RETRY_WAITS = (2, 5, 15)
 

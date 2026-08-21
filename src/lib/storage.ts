@@ -8,28 +8,126 @@ import { supabase } from '@/lib/supabase'
 const SIGNED_TTL_SEC = 60 * 60
 const cache = new Map<string, { url: string; expiresAt: number }>()
 
+const STORAGE_PROVIDER = import.meta.env.VITE_STORAGE_PROVIDER ?? 'supabase'
+const R2_GATEWAY_URL = import.meta.env.VITE_R2_GATEWAY_URL?.replace(/\/$/, '')
+const READ_FALLBACK = import.meta.env.VITE_STORAGE_READ_FALLBACK === 'true'
+const UPLOAD_FALLBACK = import.meta.env.VITE_STORAGE_UPLOAD_FALLBACK === 'true'
+
+function parseStoragePath(storagePath: string): { bucket: string; path: string } | null {
+  const [bucket, ...rest] = storagePath.replace(/^\/+/, '').split('/')
+  const path = rest.join('/')
+  return bucket && path ? { bucket, path } : null
+}
+
+function encodeStoragePath(storagePath: string): string {
+  return storagePath.split('/').map((part) => encodeURIComponent(part)).join('/')
+}
+
+async function getSupabaseSignedUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
+  const parsed = parseStoragePath(storagePath)
+  if (!parsed) return null
+
+  const { data, error } = await supabase.storage.from(parsed.bucket).createSignedUrl(parsed.path, SIGNED_TTL_SEC)
+  if (error || !data) {
+    console.error('Supabase 이미지 URL을 만들지 못했습니다.', storagePath, error)
+    return null
+  }
+  return {
+    url: data.signedUrl,
+    expiresAt: Date.now() + (SIGNED_TTL_SEC - 60) * 1000,
+  }
+}
+
+async function getR2SignedUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
+  if (!R2_GATEWAY_URL) return null
+  const { data } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (!accessToken) return null
+
+  const response = await fetch(`${R2_GATEWAY_URL}/v1/sign`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ storagePath }),
+  })
+  if (!response.ok) {
+    console.error('R2 이미지 URL을 만들지 못했습니다.', storagePath, response.status)
+    return null
+  }
+
+  const result = await response.json() as { url?: unknown; expiresAt?: unknown }
+  if (typeof result.url !== 'string' || typeof result.expiresAt !== 'number') return null
+  return { url: result.url, expiresAt: Math.max(Date.now(), result.expiresAt - 30_000) }
+}
+
 export async function getSignedUrl(storagePath: string): Promise<string | null> {
   if (/^https?:\/\//.test(storagePath)) return storagePath
 
   const cached = cache.get(storagePath)
   if (cached && cached.expiresAt > Date.now()) return cached.url
 
-  const [bucket, ...rest] = storagePath.replace(/^\/+/, '').split('/')
-  const path = rest.join('/')
-  if (!bucket || !path) return null
+  let signed = STORAGE_PROVIDER === 'r2' ? await getR2SignedUrl(storagePath) : await getSupabaseSignedUrl(storagePath)
+  if (!signed && STORAGE_PROVIDER === 'r2' && READ_FALLBACK) {
+    signed = await getSupabaseSignedUrl(storagePath)
+  }
+  if (!signed) return null
 
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, SIGNED_TTL_SEC)
-  if (error || !data) {
-    console.error('이미지 URL 을 만들지 못했습니다.', storagePath, error)
-    return null
+  cache.set(storagePath, signed)
+  return signed.url
+}
+
+async function uploadToSupabase(
+  bucket: string,
+  path: string,
+  body: Blob,
+  contentType: string,
+): Promise<void> {
+  const { error } = await supabase.storage.from(bucket).upload(path, body, {
+    cacheControl: '3600',
+    contentType,
+  })
+  if (error) throw error
+}
+
+/** 환경변수로 선택된 비공개 스토리지에 같은 `<bucket>/<path>` 키로 업로드한다. */
+export async function uploadStoredObject(
+  bucket: string,
+  path: string,
+  body: Blob,
+  contentType: string,
+): Promise<void> {
+  if (STORAGE_PROVIDER !== 'r2') {
+    await uploadToSupabase(bucket, path, body, contentType)
+    return
   }
 
-  // 만료 직전에 다시 발급받도록 여유를 둔다.
-  cache.set(storagePath, {
-    url: data.signedUrl,
-    expiresAt: Date.now() + (SIGNED_TTL_SEC - 60) * 1000,
-  })
-  return data.signedUrl
+  try {
+    if (!R2_GATEWAY_URL) throw new Error('VITE_R2_GATEWAY_URL이 설정되지 않았습니다.')
+    const { data } = await supabase.auth.getSession()
+    const accessToken = data.session?.access_token
+    if (!accessToken) throw new Error('로그인이 만료되었습니다. 다시 로그인해주세요.')
+
+    const storagePath = `${bucket}/${path}`
+    const response = await fetch(`${R2_GATEWAY_URL}/v1/uploads/${encodeStoragePath(storagePath)}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': contentType,
+      },
+      body,
+    })
+    if (!response.ok) {
+      const result = await response.json().catch(() => null) as { error?: unknown } | null
+      const reason = typeof result?.error === 'string' ? result.error : `HTTP ${response.status}`
+      throw new Error(`R2 업로드 실패: ${reason}`)
+    }
+  } catch (error) {
+    if (!UPLOAD_FALLBACK) throw error
+    console.warn('R2 업로드 실패로 Supabase Storage에 임시 저장합니다.', error)
+    await uploadToSupabase(bucket, path, body, contentType)
+  }
 }
 
 export function useSignedUrl(storagePath: string | null | undefined): string | null {

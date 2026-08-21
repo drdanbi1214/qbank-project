@@ -32,6 +32,7 @@ import zipfile
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlparse
 
+from object_storage import ObjectStorage
 from supabase_credentials import load_supabase_credentials
 
 try:
@@ -50,7 +51,8 @@ def load_env() -> tuple[str, str]:
 
 class Client:
     def __init__(self, url: str, key: str):
-        self.url, self.headers = url, {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        self.url, self.headers = url, {"apikey": key, "Content-Type": "application/json"}
+        self.storage = ObjectStorage(url, key)
 
     def get(self, table: str, params: dict) -> list[dict]:
         response = requests.get(f"{self.url}/rest/v1/{table}", headers=self.headers, params=params, timeout=60)
@@ -64,9 +66,7 @@ class Client:
         return response.json()
 
     def upload(self, path: str, data: bytes, mime: str) -> None:
-        response = requests.post(f"{self.url}/storage/v1/object/{BUCKET}/{path}", headers={**self.headers, "Content-Type": mime, "x-upsert": "true"}, data=data, timeout=120)
-        if response.status_code not in (200, 201):
-            raise RuntimeError(f"이미지 업로드 실패: {path} ({response.status_code})")
+        self.storage.upload(BUCKET, path, data, mime)
 
 
 def clean_title(path: str) -> str:

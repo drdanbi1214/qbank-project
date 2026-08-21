@@ -43,6 +43,7 @@ import re
 import sys
 from collections import defaultdict
 
+from object_storage import ObjectStorage
 from supabase_credentials import load_supabase_credentials
 
 try:
@@ -64,7 +65,8 @@ class Client:
 
     def __init__(self, base_url: str, key: str):
         self.base_url = base_url
-        self.headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        self.headers = {"apikey": key, "Content-Type": "application/json"}
+        self.storage = ObjectStorage(base_url, key)
 
     def get(self, path: str, params: dict) -> list[dict]:
         r = requests.get(f"{self.base_url}/rest/v1/{path}", headers=self.headers, params=params, timeout=30)
@@ -91,26 +93,7 @@ class Client:
             raise RuntimeError(f"DELETE {path} 실패 {r.status_code}: {r.text[:300]}")
 
     def upload_storage(self, bucket: str, path: str, data: bytes, content_type: str) -> bool:
-        # Storage는 간헐적으로 연결을 끊거나 응답을 지연시킨다. x-upsert라 같은
-        # 파일 재시도는 안전하며, 모두 실패하면 문항 DB 행을 쓰기 전에 중단한다.
-        last_error = ""
-        for attempt in range(3):
-            try:
-                r = requests.post(
-                    f"{self.base_url}/storage/v1/object/{bucket}/{path}",
-                    data=data,
-                    headers={**self.headers, "Content-Type": content_type, "x-upsert": "true", "Connection": "close"},
-                    timeout=(15, 45),
-                )
-                # Storage 신규 업로드는 환경에 따라 200 또는 201을 돌려준다.
-                if r.status_code in (200, 201):
-                    return True
-                last_error = f"HTTP {r.status_code}: {r.text[:200]}"
-            except requests.RequestException as exc:
-                last_error = str(exc)
-            if attempt < 2:
-                print(f"  저장소 재시도 {attempt + 1}/2: {path}", flush=True)
-        raise RuntimeError(f"이미지 업로드 실패 ({path}): {last_error}")
+        return self.storage.upload(bucket, path, data, content_type)
 
 
 def resolve_subject(client: Client, name: str) -> dict:

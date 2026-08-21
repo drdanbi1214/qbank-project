@@ -154,6 +154,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "announcements_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
         ]
       }
       answer_votes: {
@@ -260,14 +267,14 @@ export type Database = {
           {
             foreignKeyName: "assignments_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "assignments_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "questions_solve"
             referencedColumns: ["id"]
           },
@@ -380,6 +387,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      content_deletion_audit: {
+        Row: {
+          actor_id: string | null
+          application_name: string | null
+          client_role: string | null
+          deleted_at: string
+          id: string
+          request_id: string | null
+          row_data: Json
+          row_id: string
+          session_user_name: string
+          table_name: string
+          transaction_id: number
+          trigger_depth: number
+        }
+        Insert: {
+          actor_id?: string | null
+          application_name?: string | null
+          client_role?: string | null
+          deleted_at?: string
+          id?: string
+          request_id?: string | null
+          row_data: Json
+          row_id: string
+          session_user_name: string
+          table_name: string
+          transaction_id: number
+          trigger_depth: number
+        }
+        Update: {
+          actor_id?: string | null
+          application_name?: string | null
+          client_role?: string | null
+          deleted_at?: string
+          id?: string
+          request_id?: string | null
+          row_data?: Json
+          row_id?: string
+          session_user_name?: string
+          table_name?: string
+          transaction_id?: number
+          trigger_depth?: number
+        }
+        Relationships: []
       }
       daily_question_sets: {
         Row: {
@@ -721,20 +773,20 @@ export type Database = {
           cohort: string
           created_at: string
           created_by: string | null
+          curriculum: string | null
           duration_min: number | null
-          exam_date: string | null
           exam_code: string | null
+          exam_date: string | null
           exam_name: string
           exam_subject_label: string | null
           format: string | null
           id: string
-          curriculum: string | null
           overview: string | null
           required_permission: string | null
           restored_questions: number | null
+          source_file_url: string | null
           source_page_end: number | null
           source_page_start: number | null
-          source_file_url: string | null
           status: string
           subject_id: string
           total_questions: number | null
@@ -744,20 +796,20 @@ export type Database = {
           cohort: string
           created_at?: string
           created_by?: string | null
+          curriculum?: string | null
           duration_min?: number | null
-          exam_date?: string | null
           exam_code?: string | null
+          exam_date?: string | null
           exam_name?: string
           exam_subject_label?: string | null
           format?: string | null
           id?: string
-          curriculum?: string | null
           overview?: string | null
           required_permission?: string | null
           restored_questions?: number | null
+          source_file_url?: string | null
           source_page_end?: number | null
           source_page_start?: number | null
-          source_file_url?: string | null
           status?: string
           subject_id: string
           total_questions?: number | null
@@ -767,20 +819,20 @@ export type Database = {
           cohort?: string
           created_at?: string
           created_by?: string | null
+          curriculum?: string | null
           duration_min?: number | null
-          exam_date?: string | null
           exam_code?: string | null
+          exam_date?: string | null
           exam_name?: string
           exam_subject_label?: string | null
           format?: string | null
           id?: string
-          curriculum?: string | null
           overview?: string | null
           required_permission?: string | null
           restored_questions?: number | null
+          source_file_url?: string | null
           source_page_end?: number | null
           source_page_start?: number | null
-          source_file_url?: string | null
           status?: string
           subject_id?: string
           total_questions?: number | null
@@ -883,6 +935,60 @@ export type Database = {
             columns: ["solution_id"]
             isOneToOne: false
             referencedRelation: "solutions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lecture_sources: {
+        Row: {
+          created_at: string
+          curriculum: string | null
+          id: string
+          professor: string | null
+          sort_order: number
+          source_key: string | null
+          subject_id: string
+          theory_document_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          curriculum?: string | null
+          id?: string
+          professor?: string | null
+          sort_order?: number
+          source_key?: string | null
+          subject_id: string
+          theory_document_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          curriculum?: string | null
+          id?: string
+          professor?: string | null
+          sort_order?: number
+          source_key?: string | null
+          subject_id?: string
+          theory_document_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_sources_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_sources_theory_document_id_fkey"
+            columns: ["theory_document_id"]
+            isOneToOne: false
+            referencedRelation: "theory_documents"
             referencedColumns: ["id"]
           },
         ]
@@ -1148,6 +1254,46 @@ export type Database = {
           },
         ]
       }
+      question_lecture_sources: {
+        Row: {
+          lecture_source_id: string
+          question_id: string
+          sort_order: number
+        }
+        Insert: {
+          lecture_source_id: string
+          question_id: string
+          sort_order?: number
+        }
+        Update: {
+          lecture_source_id?: string
+          question_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_lecture_sources_lecture_source_id_fkey"
+            columns: ["lecture_source_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_lecture_sources_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_lecture_sources_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_solve"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_sets: {
         Row: {
           created_at: string
@@ -1209,6 +1355,7 @@ export type Database = {
           question_number: number
           question_type: string
           restorer_note: string | null
+          same_as: string | null
           set_id: string | null
           source_tags: string[]
           status: string
@@ -1219,6 +1366,7 @@ export type Database = {
           unit_source: string | null
           updated_at: string
           updated_by: string | null
+          variant_note: string | null
           variant_type: string
           view_count: number
           yama_answer: number[] | null
@@ -1242,6 +1390,7 @@ export type Database = {
           question_number: number
           question_type?: string
           restorer_note?: string | null
+          same_as?: string | null
           set_id?: string | null
           source_tags?: string[]
           status?: string
@@ -1252,6 +1401,7 @@ export type Database = {
           unit_source?: string | null
           updated_at?: string
           updated_by?: string | null
+          variant_note?: string | null
           variant_type?: string
           view_count?: number
           yama_answer?: number[] | null
@@ -1275,6 +1425,7 @@ export type Database = {
           question_number?: number
           question_type?: string
           restorer_note?: string | null
+          same_as?: string | null
           set_id?: string | null
           source_tags?: string[]
           status?: string
@@ -1285,6 +1436,7 @@ export type Database = {
           unit_source?: string | null
           updated_at?: string
           updated_by?: string | null
+          variant_note?: string | null
           variant_type?: string
           view_count?: number
           yama_answer?: number[] | null
@@ -1309,6 +1461,20 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "question_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_same_as_fkey"
+            columns: ["same_as"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_same_as_fkey"
+            columns: ["same_as"]
+            isOneToOne: false
+            referencedRelation: "questions_solve"
             referencedColumns: ["id"]
           },
           {
@@ -1956,6 +2122,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "topic_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_solve"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "topic_questions_topic_id_fkey"
             columns: ["topic_id"]
             isOneToOne: false
@@ -2040,13 +2213,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "topics_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "topics_required_permission_fkey"
             columns: ["required_permission"]
             isOneToOne: false
@@ -2065,6 +2231,13 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topics_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2193,6 +2366,7 @@ export type Database = {
           question_number: number | null
           question_type: string | null
           restorer_note: string | null
+          same_as: string | null
           set_id: string | null
           source_tags: string[] | null
           status: string | null
@@ -2202,9 +2376,8 @@ export type Database = {
           unit_source: string | null
           updated_at: string | null
           updated_by: string | null
-          variant_type: string | null
           variant_note: string | null
-          same_as: string | null
+          variant_type: string | null
           view_count: number | null
         }
         Insert: {
@@ -2222,6 +2395,7 @@ export type Database = {
           question_number?: number | null
           question_type?: string | null
           restorer_note?: string | null
+          same_as?: string | null
           set_id?: string | null
           source_tags?: string[] | null
           status?: string | null
@@ -2231,6 +2405,7 @@ export type Database = {
           unit_source?: string | null
           updated_at?: string | null
           updated_by?: string | null
+          variant_note?: string | null
           variant_type?: string | null
           view_count?: number | null
         }
@@ -2249,6 +2424,7 @@ export type Database = {
           question_number?: number | null
           question_type?: string | null
           restorer_note?: string | null
+          same_as?: string | null
           set_id?: string | null
           source_tags?: string[] | null
           status?: string | null
@@ -2258,6 +2434,7 @@ export type Database = {
           unit_source?: string | null
           updated_at?: string | null
           updated_by?: string | null
+          variant_note?: string | null
           variant_type?: string | null
           view_count?: number | null
         }
@@ -2281,6 +2458,20 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "question_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_same_as_fkey"
+            columns: ["same_as"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_same_as_fkey"
+            columns: ["same_as"]
+            isOneToOne: false
+            referencedRelation: "questions_solve"
             referencedColumns: ["id"]
           },
           {
@@ -2308,38 +2499,35 @@ export type Database = {
       }
     }
     Functions: {
-      admin_get_deletion_audit: {
-        Args: { p_audit_id: string }
-        Returns: Json
+      admin_get_deletion_audit: { Args: { p_audit_id: string }; Returns: Json }
+      admin_list_assignment_members: {
+        Args: never
+        Returns: {
+          cohort: string
+          display_name: string
+          id: string
+        }[]
       }
       admin_list_deletion_audit: {
         Args: { p_limit?: number }
         Returns: {
-          actor_display_name: string | null
-          actor_id: string | null
-          client_role: string | null
+          actor_display_name: string
+          actor_id: string
+          client_role: string
           deleted_at: string
           id: string
-          request_id: string | null
+          request_id: string
           row_id: string
           table_name: string
           transaction_id: number
           trigger_depth: number
         }[]
       }
-      admin_list_assignment_members: {
-        Args: never
-        Returns: {
-          cohort: string | null
-          display_name: string
-          id: string
-        }[]
-      }
       admin_list_members: {
         Args: never
         Returns: {
           attempt_count: number
-          avatar_url: string | null
+          avatar_url: string
           created_at: string
           display_name: string
           email: string
@@ -2349,6 +2537,15 @@ export type Database = {
           permission_keys: string[]
           role: string
           solution_count: number
+        }[]
+      }
+      admin_list_storage_objects: {
+        Args: { p_after?: string; p_bucket: string; p_limit?: number }
+        Returns: {
+          mime_type: string
+          object_name: string
+          size_bytes: number
+          updated_at: string
         }[]
       }
       admin_resolve_report: {
@@ -2375,6 +2572,12 @@ export type Database = {
         Args: { editor_answer: number[]; yama_answer: number[] }
         Returns: boolean
       }
+      authorize_storage_object: {
+        Args: { p_bucket: string; p_object_name: string; p_operation?: string }
+        Returns: boolean
+      }
+      can_cluster: { Args: never; Returns: boolean }
+      can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
       can_read_lecture_file: {
         Args: { p_object_name: string }
         Returns: boolean
@@ -2383,24 +2586,25 @@ export type Database = {
         Args: { p_object_name: string }
         Returns: boolean
       }
-      can_cluster: { Args: never; Returns: boolean }
-      can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
       can_view_exam: { Args: { p_exam_id: string }; Returns: boolean }
       can_view_question: { Args: { p_question_id: string }; Returns: boolean }
       can_view_solution: { Args: { p_solution_id: string }; Returns: boolean }
       can_view_solution_target: {
-        Args: { p_group_id: string | null; p_question_id: string | null }
+        Args: { p_group_id: string; p_question_id: string }
         Returns: boolean
       }
       can_write: { Args: never; Returns: boolean }
+      circled_answer: { Args: { a: number[] }; Returns: string }
       cluster_attach: {
         Args: { p_anchor_id: string; p_target_id: string; p_variant: string }
         Returns: string
       }
       cluster_detach: { Args: { p_question_id: string }; Returns: undefined }
       cluster_ensure_group: { Args: { p_question_id: string }; Returns: string }
-      cluster_set_note: { Args: { p_question_id: string; p_note: string }; Returns: undefined }
-      circled_answer: { Args: { a: number[] }; Returns: string }
+      cluster_set_note: {
+        Args: { p_note: string; p_question_id: string }
+        Returns: undefined
+      }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {
         Args: {
@@ -2439,10 +2643,6 @@ export type Database = {
           total: number
         }[]
       }
-      get_my_profile: {
-        Args: never
-        Returns: Database["public"]["Tables"]["profiles"]["Row"][]
-      }
       get_daily_challenge_leaderboard: {
         Args: { p_limit?: number }
         Returns: Json
@@ -2471,21 +2671,37 @@ export type Database = {
           unit_name: string
         }[]
       }
+      get_my_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          cohort: string | null
+          created_at: string
+          dedupe_identical: boolean
+          default_solution_permission: string | null
+          display_name: string
+          email: string | null
+          font_scale: number
+          id: string
+          is_suspended: boolean
+          one_liner: string | null
+          role: string
+          theme: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_my_question_states: {
         Args: { p_question_ids: string[] }
         Returns: {
           attempts: number
           is_correct: boolean
           question_id: string
-        }[]
-      }
-      list_profile_cards: {
-        Args: never
-        Returns: {
-          avatar_url: string | null
-          display_name: string
-          id: string
-          one_liner: string | null
         }[]
       }
       get_my_summary: { Args: never; Returns: Json }
@@ -2509,6 +2725,15 @@ export type Database = {
         }[]
       }
       get_question_for_edit: { Args: { p_question_id: string }; Returns: Json }
+      get_question_lecture_sources: {
+        Args: { p_question_id: string }
+        Returns: {
+          id: string
+          professor: string
+          theory_document_id: string
+          title: string
+        }[]
+      }
       get_question_stats: { Args: { p_question_id: string }; Returns: Json }
       get_wrong_notes: {
         Args: {
@@ -2535,15 +2760,6 @@ export type Database = {
         Args: { p_permission_key: string }
         Returns: boolean
       }
-      get_question_lecture_sources: {
-        Args: { p_question_id: string }
-        Returns: {
-          id: string
-          professor: string | null
-          theory_document_id: string | null
-          title: string
-        }[]
-      }
       has_permission: { Args: { p_permission_key: string }; Returns: boolean }
       increment_discussion_view: {
         Args: { p_discussion_id: string }
@@ -2555,10 +2771,23 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
+      list_profile_cards: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+          one_liner: string
+        }[]
+      }
       normalize_search_text: { Args: { input: string }; Returns: string }
       normalize_stem: { Args: { blocks: Json }; Returns: string }
       question_code: {
         Args: { q: Database["public"]["Tables"]["questions"]["Row"] }
+        Returns: string
+      }
+      question_code_for: {
+        Args: { p_exam_id: string; p_question_number: number }
         Returns: string
       }
       reset_progress: {
@@ -2584,15 +2813,6 @@ export type Database = {
         Returns: undefined
       }
       richtext_plain: { Args: { doc: Json }; Returns: string }
-      topics_for_question: {
-        Args: { p_question_id: string }
-        Returns: {
-          id: string
-          title: string
-          subject_id: string
-          content: Json
-        }[]
-      }
       search_questions: {
         Args: {
           p_cohort?: string
@@ -2621,6 +2841,15 @@ export type Database = {
           p_time_spent_sec?: number
         }
         Returns: Json
+      }
+      topics_for_question: {
+        Args: { p_question_id: string }
+        Returns: {
+          content: Json
+          id: string
+          subject_id: string
+          title: string
+        }[]
       }
     }
     Enums: {

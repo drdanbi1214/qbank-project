@@ -60,6 +60,7 @@ import sys
 import uuid
 from collections import defaultdict
 
+from object_storage import ObjectStorage
 from supabase_credentials import load_supabase_credentials
 
 try:
@@ -99,7 +100,8 @@ class Client:
 
     def __init__(self, base_url: str, key: str):
         self.base_url = base_url
-        self.headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        self.headers = {"apikey": key, "Content-Type": "application/json"}
+        self.storage = ObjectStorage(base_url, key)
 
     def get(self, path: str, params: dict) -> list[dict]:
         r = requests.get(f"{self.base_url}/rest/v1/{path}", headers=self.headers, params=params, timeout=30)
@@ -122,13 +124,7 @@ class Client:
             raise RuntimeError(f"POST {path} 실패 {r.status_code}: {r.text[:500]}")
 
     def upload_storage(self, bucket: str, path: str, data: bytes, content_type: str) -> bool:
-        r = requests.post(
-            f"{self.base_url}/storage/v1/object/{bucket}/{path}",
-            data=data,
-            headers={**self.headers, "Content-Type": content_type, "x-upsert": "true"},
-            timeout=120,
-        )
-        return r.status_code in (200, 201)
+        return self.storage.upload(bucket, path, data, content_type)
 
 
 def text_to_doc(text: str) -> dict:

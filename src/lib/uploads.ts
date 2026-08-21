@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { uploadStoredObject } from '@/lib/storage'
 
 /**
  * 본문 이미지 업로드.
@@ -97,11 +97,7 @@ async function uploadImageTo(
   if (blob.size > limitBytes) throw new Error(limitLabel)
 
   const path = `${userId}/${crypto.randomUUID()}.${extension}`
-  const { error } = await supabase.storage.from(bucket).upload(path, blob, {
-    cacheControl: '3600',
-    contentType: type,
-  })
-  if (error) throw error
+  await uploadStoredObject(bucket, path, blob, type)
 
   return `${bucket}/${path}`
 }
@@ -114,8 +110,7 @@ export async function uploadLectureFile(file: File, userId: string): Promise<str
   if (file.size > 50 * 1024 * 1024) throw new Error('강의록 파일은 50MB 까지 가능합니다.')
   const extension = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'file'
   const path = `${userId}/${crypto.randomUUID()}.${extension}`
-  const { error } = await supabase.storage.from('solution-lecture-files').upload(path, file, { cacheControl: '3600', contentType: file.type || 'application/octet-stream' })
-  if (error) throw error
+  await uploadStoredObject('solution-lecture-files', path, file, file.type || 'application/octet-stream')
   return `solution-lecture-files/${path}`
 }
 

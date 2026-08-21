@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "gen:types": "supabase gen types typescript --linked > src/types/database.ts",
-    "db:push": "supabase db push --linked"
+    "db:push": "supabase db push --linked",
+    "typecheck:worker": "tsc -p cloudflare/storage-worker/tsconfig.json",
+    "worker:dry-run": "wrangler deploy --config cloudflare/storage-worker/wrangler.jsonc --dry-run",
+    "worker:deploy": "wrangler deploy --config cloudflare/storage-worker/wrangler.jsonc"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",
@@ -27,6 +30,7 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260821.1",
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/katex": "^0.16.8",
@@ -41,6 +45,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.65.0",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "wrangler": "^4.125.0"
   }
 }

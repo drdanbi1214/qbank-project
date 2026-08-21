@@ -3,6 +3,10 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_PUBLISHABLE_KEY: string
+  readonly VITE_STORAGE_PROVIDER?: 'supabase' | 'r2'
+  readonly VITE_R2_GATEWAY_URL?: string
+  readonly VITE_STORAGE_READ_FALLBACK?: string
+  readonly VITE_STORAGE_UPLOAD_FALLBACK?: string
 }
 
 interface ImportMeta {

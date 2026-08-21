@@ -25,6 +25,7 @@ import re
 import sys
 import uuid
 
+from object_storage import ObjectStorage
 from supabase_credentials import load_supabase_credentials
 
 try:
@@ -45,6 +46,7 @@ def upload_images(base_url: str, key: str, folder: str, prefix: str) -> dict[int
     if not folder or not os.path.isdir(folder):
         return mapping
 
+    storage = ObjectStorage(base_url, key)
     for name in sorted(os.listdir(folder)):
         if not name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
             continue
@@ -58,21 +60,9 @@ def upload_images(base_url: str, key: str, folder: str, prefix: str) -> dict[int
         content_type = mimetypes.guess_type(name)[0] or "image/png"
 
         with open(os.path.join(folder, name), "rb") as fh:
-            response = requests.post(
-                f"{base_url}/storage/v1/object/question-images/{path}",
-                data=fh.read(),
-                headers={
-                    "apikey": key,
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": content_type,
-                    "x-upsert": "true",
-                },
-                timeout=60,
-            )
-        if response.status_code == 200:
+            uploaded = storage.upload("question-images", path, fh.read(), content_type)
+        if uploaded:
             mapping.setdefault(number, []).append(f"question-images/{path}")
-        else:
-            print(f"  이미지 업로드 실패 {name}: {response.status_code} {response.text[:120]}")
 
     return mapping
 
@@ -161,7 +151,6 @@ def main() -> None:
         json=rows,
         headers={
             "apikey": key,
-            "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
             "Prefer": "return=minimal,resolution=merge-duplicates",
         },

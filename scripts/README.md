@@ -4,6 +4,37 @@
 완전 자동은 목표가 아니다. 사람이 검수하기 쉬운 중간 결과를 만드는 데 집중하고,
 마지막 확인은 웹의 `관리자 > PDF 검수` 화면에서 한다.
 
+## 스토리지 provider
+
+DB에는 실제 URL이 아니라 `버킷/경로`만 저장한다. 관리 스크립트의 업로드 대상은
+`scripts/.env`의 `OBJECT_STORAGE_PROVIDER`로 선택한다.
+
+```env
+# 전체 R2 복사·검증 전에는 반드시 supabase
+OBJECT_STORAGE_PROVIDER=supabase
+R2_BUCKET_NAME=qbank-storage
+R2_ACCOUNT_ID=<Cloudflare account id>
+```
+
+R2 API 키는 저장소나 `.env`에 넣지 않고 macOS 키체인에 저장한다.
+
+```bash
+security add-generic-password -U -a qbank-project \
+  -s qbank-project-r2-access-key-id -w '<R2 access key id>'
+security add-generic-password -U -a qbank-project \
+  -s qbank-project-r2-secret-access-key -w '<R2 secret access key>'
+```
+
+이전 도구는 기본 dry-run이며 Supabase 원본을 삭제하는 기능이 없다.
+
+```bash
+# 가장 작은 버킷 확인
+python3 scripts/migrate_storage_to_r2.py --bucket topic-images
+
+# R2 계정 설정 후 복사 + R2 재다운로드 SHA-256 검증
+python3 scripts/migrate_storage_to_r2.py --bucket topic-images --apply --verify
+```
+
 ## 지금 쓰는 방식 (권장)
 
 문항 본문/보기/정답은 이제 다른 AI 채팅창이 `convert_file/` 에

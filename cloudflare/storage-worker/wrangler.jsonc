@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qbank-storage-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-21",
+  "workers_dev": true,
+  "vars": {
+    "SUPABASE_URL": "https://xwxuscnfpwihqjtufuet.supabase.co",
+    "ALLOWED_ORIGINS": "https://qbank-project-three.vercel.app,http://localhost:5173,http://127.0.0.1:5173",
+    "SIGNED_URL_TTL_SECONDS": "300"
+  },
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "qbank-storage"
+    }
+  ]
+}
