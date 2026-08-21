@@ -9,20 +9,14 @@ Content-Type 을 보고 렌더링한다.
 """
 import os, sys, json, subprocess, tempfile, urllib.request, urllib.error, pathlib, time
 
+from supabase_credentials import load_supabase_credentials
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BACKUP = ROOT / 'tmp' / 'png-backup'
 QUALITY = 95
 
 def load_env():
-    env = ROOT / 'scripts' / '.env'
-    if env.exists():
-        for line in env.read_text(encoding='utf-8').splitlines():
-            if '=' in line and not line.strip().startswith('#'):
-                k, v = line.split('=', 1)
-                os.environ.setdefault(k.strip(), v.strip())
-    url, key = os.environ.get('SUPABASE_URL'), os.environ.get('SUPABASE_SERVICE_KEY')
-    if not (url and key): sys.exit('SUPABASE_URL / SUPABASE_SERVICE_KEY 필요')
-    return url.rstrip('/'), key
+    return load_supabase_credentials()
 
 BASE, KEY = load_env()
 H = {'Authorization': f'Bearer {KEY}', 'apikey': KEY}

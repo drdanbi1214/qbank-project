@@ -4,8 +4,6 @@ export type Member = {
   id: string
   displayName: string
   cohort: string | null
-  role: string
-  isSuspended: boolean
 }
 
 export const NICKNAME_MIN = 2
@@ -41,11 +39,7 @@ export const ONE_LINER_MAX = 60
 
 /** 프로필 보기 화면에 쓰는 전체 사용자 목록 (정지되지 않은 계정). */
 export async function fetchProfileCards(): Promise<ProfileCard[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, avatar_url, one_liner')
-    .eq('is_suspended', false)
-    .order('display_name')
+  const { data, error } = await supabase.rpc('list_profile_cards')
 
   if (error) throw error
   return (data ?? []).map((row) => ({
@@ -58,18 +52,12 @@ export async function fetchProfileCards(): Promise<ProfileCard[]> {
 
 /** 배정 대상으로 고를 수 있는 사용자 (정지되지 않은 계정) */
 export async function fetchMembers(): Promise<Member[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, cohort, role, is_suspended')
-    .eq('is_suspended', false)
-    .order('display_name')
+  const { data, error } = await supabase.rpc('admin_list_assignment_members')
 
   if (error) throw error
   return (data ?? []).map((row) => ({
     id: row.id,
     displayName: row.display_name,
     cohort: row.cohort,
-    role: row.role,
-    isSuspended: row.is_suspended,
   }))
 }

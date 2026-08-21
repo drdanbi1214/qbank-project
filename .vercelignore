@@ -1,0 +1,13 @@
+.git
+.env*
+node_modules
+dist
+tmp
+convert_file
+예시 문제들
+scripts
+supabase
+docs
+*.zip
+*.pdf
+SPEC.md

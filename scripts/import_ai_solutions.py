@@ -60,6 +60,8 @@ import sys
 import uuid
 from collections import defaultdict
 
+from supabase_credentials import load_supabase_credentials
+
 try:
     import requests
 except ImportError:
@@ -88,27 +90,7 @@ TRACKS = {
 
 
 def load_env() -> tuple[str, str]:
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_KEY")
-
-    # 프로젝트 루트에서 `python3 scripts/...`로 실행해도 scripts/.env를 찾는다.
-    script_env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    for env_path in (".env", script_env):
-        if url and key:
-            break
-        if not os.path.exists(env_path):
-            continue
-        with open(env_path, encoding="utf-8") as fh:
-            for line in fh:
-                if "=" in line and not line.strip().startswith("#"):
-                    name, value = line.strip().split("=", 1)
-                    os.environ.setdefault(name, value)
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_SERVICE_KEY")
-
-    if not url or not key:
-        sys.exit("SUPABASE_URL 과 SUPABASE_SERVICE_KEY 를 .env 에 넣어야 한다")
-    return url.rstrip("/"), key
+    return load_supabase_credentials()
 
 
 class Client:

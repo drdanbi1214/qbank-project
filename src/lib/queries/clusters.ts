@@ -292,14 +292,10 @@ export async function fetchClusterRoles(
 
 /** 개인 설정. 켜져 있으면 완전 동일 문제를 목록에서 하나만 보여준다. */
 export async function fetchCollapseSetting(): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('dedupe_identical')
-    .eq('id', (await supabase.auth.getUser()).data.user?.id ?? '')
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('get_my_profile')
 
   if (error) throw error
-  return data?.dedupe_identical ?? true
+  return data?.[0]?.dedupe_identical ?? true
 }
 
 export async function setCollapseSetting(enabled: boolean): Promise<void> {

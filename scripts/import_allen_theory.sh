@@ -6,8 +6,9 @@
 # 비뇨기과/예방의학/응급의학과/의료법규는 대응하는 과목이 없어 제외한다.
 #
 # 사용법:
-#   SUPABASE_URL=... SUPABASE_SERVICE_KEY=... bash scripts/import_allen_theory.sh          # 미리보기
-#   SUPABASE_URL=... SUPABASE_SERVICE_KEY=... bash scripts/import_allen_theory.sh --apply  # 실제 등록
+#   bash scripts/import_allen_theory.sh          # 미리보기
+#   bash scripts/import_allen_theory.sh --apply  # 실제 등록
+# secret 키는 supabase_credentials.py가 macOS 키체인에서 읽는다.
 set -euo pipefail
 
 ZIP="convert_file/알렌 전체 .zip"

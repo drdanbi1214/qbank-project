@@ -2,15 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 
 const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
-if (!url || !anonKey) {
+if (!url || !publishableKey) {
   throw new Error(
-    'VITE_SUPABASE_URL 과 VITE_SUPABASE_ANON_KEY 를 .env.local 에 설정해주세요.',
+    'VITE_SUPABASE_URL 과 VITE_SUPABASE_PUBLISHABLE_KEY 를 .env.local 에 설정해주세요.',
   )
 }
 
-export const supabase = createClient<Database>(url, anonKey, {
+export const supabase = createClient<Database>(url, publishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

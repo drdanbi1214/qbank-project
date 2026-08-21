@@ -121,11 +121,14 @@ python3 scripts/import_ai_solutions.py senior_solutions.csv --kind senior --imag
 cd scripts
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # SUPABASE_URL, SUPABASE_SERVICE_KEY 채우기
+cp .env.example .env      # SUPABASE_URL만 채우기
 ```
 
-`SUPABASE_SERVICE_KEY` 는 service_role 키다. RLS 를 우회하므로 절대 저장소나
-브라우저에 넣지 않는다. 이 폴더의 `.env` 는 `.gitignore` 로 막아두었다.
+운영용 `sb_secret_…` 키는 macOS 키체인의 서비스
+`qbank-project-supabase-secret`, 계정 `qbank-project`에 저장한다. 스크립트는
+키체인을 우선 사용한다. CI나 macOS가 아닌 환경에서는
+`SUPABASE_SECRET_KEY` 환경변수로만 주입한다. secret 키는 RLS를 우회하므로
+브라우저·저장소·명령행 인자에 넣지 않는다.
 
 ## Notion 이론 일괄 등록 (`import_notion_theory.py`)
 

@@ -2308,11 +2308,38 @@ export type Database = {
       }
     }
     Functions: {
+      admin_get_deletion_audit: {
+        Args: { p_audit_id: string }
+        Returns: Json
+      }
+      admin_list_deletion_audit: {
+        Args: { p_limit?: number }
+        Returns: {
+          actor_display_name: string | null
+          actor_id: string | null
+          client_role: string | null
+          deleted_at: string
+          id: string
+          request_id: string | null
+          row_id: string
+          table_name: string
+          transaction_id: number
+          trigger_depth: number
+        }[]
+      }
+      admin_list_assignment_members: {
+        Args: never
+        Returns: {
+          cohort: string | null
+          display_name: string
+          id: string
+        }[]
+      }
       admin_list_members: {
         Args: never
         Returns: {
           attempt_count: number
-          avatar_url: string
+          avatar_url: string | null
           created_at: string
           display_name: string
           email: string
@@ -2360,6 +2387,11 @@ export type Database = {
       can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
       can_view_exam: { Args: { p_exam_id: string }; Returns: boolean }
       can_view_question: { Args: { p_question_id: string }; Returns: boolean }
+      can_view_solution: { Args: { p_solution_id: string }; Returns: boolean }
+      can_view_solution_target: {
+        Args: { p_group_id: string | null; p_question_id: string | null }
+        Returns: boolean
+      }
       can_write: { Args: never; Returns: boolean }
       cluster_attach: {
         Args: { p_anchor_id: string; p_target_id: string; p_variant: string }
@@ -2407,6 +2439,10 @@ export type Database = {
           total: number
         }[]
       }
+      get_my_profile: {
+        Args: never
+        Returns: Database["public"]["Tables"]["profiles"]["Row"][]
+      }
       get_daily_challenge_leaderboard: {
         Args: { p_limit?: number }
         Returns: Json
@@ -2441,6 +2477,15 @@ export type Database = {
           attempts: number
           is_correct: boolean
           question_id: string
+        }[]
+      }
+      list_profile_cards: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          display_name: string
+          id: string
+          one_liner: string | null
         }[]
       }
       get_my_summary: { Args: never; Returns: Json }

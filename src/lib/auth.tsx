@@ -45,17 +45,13 @@ export type ProfilePatch = Partial<
 const AuthContext = createContext<AuthState | null>(null)
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('get_my_profile')
 
   if (error) {
     console.error('프로필을 불러오지 못했습니다.', error)
     return null
   }
-  return data
+  return data?.find((row) => row.id === userId) ?? null
 }
 
 async function fetchPermissions(userId: string): Promise<PermissionKey[]> {
@@ -191,13 +187,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .update(patch)
         .eq('id', userId)
-        .select('*')
+        .select('id')
         .single()
       if (error) {
         await refreshProfile()
         throw error
       }
-      setProfile(data)
+      const saved = await fetchProfile(data.id)
+      if (!saved) {
+        await refreshProfile()
+        throw new Error('저장한 프로필을 다시 불러오지 못했습니다.')
+      }
+      setProfile(saved)
     },
     [session?.user.id, refreshProfile],
   )

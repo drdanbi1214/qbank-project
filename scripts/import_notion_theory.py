@@ -32,6 +32,8 @@ import zipfile
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlparse
 
+from supabase_credentials import load_supabase_credentials
+
 try:
     import requests
 except ImportError:
@@ -43,18 +45,7 @@ LINK_OR_BOLD = re.compile(r"(\*\*.+?\*\*|\[[^]]+\]\([^)]+\))")
 
 
 def load_env() -> tuple[str, str]:
-    url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
-    for path in (".env", os.path.join(os.path.dirname(__file__), ".env")):
-        if url and key or not os.path.exists(path):
-            continue
-        for line in open(path, encoding="utf-8"):
-            if "=" in line and not line.lstrip().startswith("#"):
-                name, value = line.strip().split("=", 1)
-                os.environ.setdefault(name, value)
-        url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
-    if not url or not key:
-        sys.exit("SUPABASE_URL, SUPABASE_SERVICE_KEY가 필요하다")
-    return url.rstrip("/"), key
+    return load_supabase_credentials()
 
 
 class Client:
