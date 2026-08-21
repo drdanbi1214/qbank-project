@@ -12,17 +12,15 @@ DB에는 실제 URL이 아니라 `버킷/경로`만 저장한다. 관리 스크�
 ```env
 # 전체 R2 복사·검증 전에는 반드시 supabase
 OBJECT_STORAGE_PROVIDER=supabase
-R2_BUCKET_NAME=qbank-storage
-R2_ACCOUNT_ID=<Cloudflare account id>
+R2_MIGRATION_GATEWAY_URL=https://qbank-storage-gateway.<account>.workers.dev
 ```
 
-R2 API 키는 저장소나 `.env`에 넣지 않고 macOS 키체인에 저장한다.
+관리 스크립트용 비밀키는 저장소나 `.env`에 넣지 않고 macOS 키체인에 저장한다.
+이 키는 해당 Worker와 R2 버킷의 읽기·쓰기만 허용하며 삭제 API는 제공하지 않는다.
 
 ```bash
 security add-generic-password -U -a qbank-project \
-  -s qbank-project-r2-access-key-id -w '<R2 access key id>'
-security add-generic-password -U -a qbank-project \
-  -s qbank-project-r2-secret-access-key -w '<R2 secret access key>'
+  -s qbank-project-r2-migration-secret -w '<migration secret>'
 ```
 
 이전 도구는 기본 dry-run이며 Supabase 원본을 삭제하는 기능이 없다.

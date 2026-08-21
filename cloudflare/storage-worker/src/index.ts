@@ -3,6 +3,7 @@ interface Env {
   SUPABASE_URL: string
   SUPABASE_PUBLISHABLE_KEY: string
   URL_SIGNING_SECRET: string
+  MIGRATION_SECRET: string
   ALLOWED_ORIGINS: string
   SIGNED_URL_TTL_SECONDS?: string
 }
@@ -155,6 +156,13 @@ async function verifyObjectSignature(
     bytes,
     encoder.encode(`GET\n${key}\n${expires}`),
   )
+}
+
+async function verifyMigrationSecret(env: Env, provided: string): Promise<boolean> {
+  if (encoder.encode(provided).byteLength < 32) return false
+  const message = encoder.encode('qbank-r2-migration')
+  const providedSignature = await crypto.subtle.sign('HMAC', await hmacKey(provided), message)
+  return crypto.subtle.verify('HMAC', await hmacKey(env.MIGRATION_SECRET), providedSignature, message)
 }
 
 async function authorize(
@@ -350,6 +358,57 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
   return json({ storagePath: path.key }, 201, { ...cors, 'Cache-Control': 'no-store' })
 }
 
+async function handleInternalObject(request: Request, env: Env, url: URL): Promise<Response> {
+  // This endpoint is for local administration scripts only.  It deliberately
+  // has no CORS response and no delete method.  Its secret is independent from
+  // both Supabase and Cloudflare account credentials.
+  if (request.headers.has('Origin')) return json({ error: 'browser_requests_not_allowed' }, 403)
+  const provided = request.headers.get('X-Qbank-Migration-Secret') ?? ''
+  if (!(await verifyMigrationSecret(env, provided))) return json({ error: 'unauthorized' }, 401)
+
+  const path = parsePathname(url.pathname, '/v1/internal/objects/')
+  if (!path) return json({ error: 'invalid_storage_path' }, 400)
+
+  if (request.method === 'HEAD') {
+    const object = await env.STORAGE.head(path.key)
+    if (!object) return new Response(null, { status: 404 })
+    const headers = objectHeaders(object, {})
+    headers.set('Content-Length', String(object.size))
+    const sha256 = object.customMetadata?.sha256
+    if (sha256) headers.set('X-Qbank-Sha256', sha256)
+    return new Response(null, { status: 200, headers })
+  }
+
+  if (request.method === 'GET') {
+    const object = await env.STORAGE.get(path.key)
+    if (!object?.body) return json({ error: 'object_not_found' }, 404)
+    const headers = objectHeaders(object, {})
+    headers.set('Content-Length', String(object.size))
+    const sha256 = object.customMetadata?.sha256
+    if (sha256) headers.set('X-Qbank-Sha256', sha256)
+    return new Response(object.body, { status: 200, headers })
+  }
+
+  const rule = BUCKET_LIMITS[path.bucket]
+  const contentType = (request.headers.get('Content-Type') ?? '').split(';', 1)[0].trim().toLowerCase()
+  if (!rule.contentTypes.has(contentType)) return json({ error: 'content_type_not_allowed' }, 415)
+  const contentLength = Number(request.headers.get('Content-Length'))
+  if (!Number.isSafeInteger(contentLength) || contentLength <= 0) {
+    return json({ error: 'content_length_required' }, 411)
+  }
+  if (contentLength > rule.maxBytes) return json({ error: 'file_too_large' }, 413)
+  if (!request.body) return json({ error: 'empty_body' }, 400)
+
+  const sha256 = request.headers.get('X-Content-Sha256') ?? ''
+  if (!/^[a-f0-9]{64}$/.test(sha256)) return json({ error: 'sha256_required' }, 400)
+
+  await env.STORAGE.put(path.key, request.body, {
+    httpMetadata: { contentType, cacheControl: 'private, max-age=300' },
+    customMetadata: { sha256, uploadedVia: 'qbank-migration-gateway' },
+  })
+  return json({ storagePath: path.key }, 201, { 'Cache-Control': 'no-store' })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -367,6 +426,12 @@ export default {
     }
     if (request.method === 'PUT' && url.pathname.startsWith('/v1/uploads/')) {
       return handleUpload(request, env, url)
+    }
+    if (
+      (request.method === 'GET' || request.method === 'HEAD' || request.method === 'PUT')
+      && url.pathname.startsWith('/v1/internal/objects/')
+    ) {
+      return handleInternalObject(request, env, url)
     }
     return json({ error: 'not_found' }, 404)
   },

@@ -2,12 +2,14 @@
 
 DB에는 계속 ``<logical-bucket>/<path>``만 저장한다. 실제 저장소는
 ``OBJECT_STORAGE_PROVIDER=supabase|r2``로 고르며 기본값은 안전하게
-Supabase다. R2 자격 증명은 환경변수 또는 macOS 키체인에서만 읽는다.
+Supabase다. R2 관리용 비밀키는 macOS 키체인에서만 읽고 Worker가 바인딩된
+비공개 버킷에 전달한다. Cloudflare 계정 API 키는 필요 없다.
 """
 
 from __future__ import annotations
 
 import os
+import hashlib
 import subprocess
 import sys
 import time
@@ -17,8 +19,7 @@ from dataclasses import dataclass
 import requests
 
 KEYCHAIN_ACCOUNT = "qbank-project"
-R2_ACCESS_KEY_SERVICE = "qbank-project-r2-access-key-id"
-R2_SECRET_KEY_SERVICE = "qbank-project-r2-secret-access-key"
+R2_MIGRATION_SECRET_SERVICE = "qbank-project-r2-migration-secret"
 
 
 def _keychain_value(service: str) -> str | None:
@@ -44,49 +45,35 @@ def _keychain_value(service: str) -> str | None:
 
 @dataclass(frozen=True)
 class R2Settings:
-    account_id: str
-    bucket_name: str
-    access_key_id: str
-    secret_access_key: str
+    gateway_url: str
+    migration_secret: str
 
     @classmethod
     def load(cls) -> "R2Settings":
-        account_id = os.environ.get("R2_ACCOUNT_ID", "").strip()
-        bucket_name = os.environ.get("R2_BUCKET_NAME", "qbank-storage").strip()
-        access_key_id = (
-            os.environ.get("R2_ACCESS_KEY_ID", "").strip()
-            or _keychain_value(R2_ACCESS_KEY_SERVICE)
+        gateway_url = os.environ.get("R2_MIGRATION_GATEWAY_URL", "").strip().rstrip("/")
+        migration_secret = (
+            os.environ.get("R2_MIGRATION_SECRET", "").strip()
+            or _keychain_value(R2_MIGRATION_SECRET_SERVICE)
             or ""
         )
-        secret_access_key = (
-            os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
-            or _keychain_value(R2_SECRET_KEY_SERVICE)
-            or ""
-        )
-        if not all((account_id, bucket_name, access_key_id, secret_access_key)):
+        if not gateway_url or len(migration_secret.encode()) < 32:
             raise RuntimeError(
-                "R2_ACCOUNT_ID, R2_BUCKET_NAME과 R2 API 키(환경변수 또는 macOS 키체인)가 필요합니다."
+                "R2_MIGRATION_GATEWAY_URL과 macOS 키체인의 R2 migration secret이 필요합니다."
             )
-        return cls(account_id, bucket_name, access_key_id, secret_access_key)
+        return cls(gateway_url, migration_secret)
 
 
 class R2Backend:
     def __init__(self, settings: R2Settings | None = None):
-        try:
-            import boto3
-            from botocore.exceptions import ClientError
-        except ImportError as exc:
-            raise RuntimeError("boto3가 필요합니다. pip install -r scripts/requirements.txt") from exc
-
         self.settings = settings or R2Settings.load()
-        self.client_error = ClientError
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=f"https://{self.settings.account_id}.r2.cloudflarestorage.com",
-            aws_access_key_id=self.settings.access_key_id,
-            aws_secret_access_key=self.settings.secret_access_key,
-            region_name="auto",
-        )
+
+    def _url(self, logical_bucket: str, path: str) -> str:
+        key = urllib.parse.quote(f"{logical_bucket}/{path}", safe="/")
+        return f"{self.settings.gateway_url}/v1/internal/objects/{key}"
+
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {"X-Qbank-Migration-Secret": self.settings.migration_secret}
 
     def upload(
         self,
@@ -97,35 +84,46 @@ class R2Backend:
         *,
         sha256: str | None = None,
     ) -> None:
-        metadata = {"source": "qbank"}
-        if sha256:
-            metadata["sha256"] = sha256
-        self.client.put_object(
-            Bucket=self.settings.bucket_name,
-            Key=f"{logical_bucket}/{path}",
-            Body=data,
-            ContentType=content_type,
-            CacheControl="private, max-age=300",
-            Metadata=metadata,
+        digest = sha256 or hashlib.sha256(data).hexdigest()
+        response = requests.put(
+            self._url(logical_bucket, path),
+            headers={
+                **self._headers,
+                "Content-Type": content_type,
+                "X-Content-Sha256": digest,
+            },
+            data=data,
+            timeout=(15, 180),
         )
+        if response.status_code not in (200, 201):
+            raise RuntimeError(
+                f"R2 업로드 실패 {response.status_code}: {response.text[:300]}"
+            )
 
     def head(self, logical_bucket: str, path: str) -> dict | None:
-        try:
-            return self.client.head_object(
-                Bucket=self.settings.bucket_name,
-                Key=f"{logical_bucket}/{path}",
-            )
-        except self.client_error as exc:
-            if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
-                return None
-            raise
+        response = requests.head(
+            self._url(logical_bucket, path),
+            headers=self._headers,
+            timeout=60,
+        )
+        if response.status_code == 404:
+            return None
+        if not response.ok:
+            raise RuntimeError(f"R2 HEAD 실패 {response.status_code}: {response.text[:200]}")
+        return {
+            "ContentLength": int(response.headers.get("Content-Length") or 0),
+            "Metadata": {"sha256": response.headers.get("X-Qbank-Sha256", "")},
+        }
 
     def download(self, logical_bucket: str, path: str) -> bytes:
-        response = self.client.get_object(
-            Bucket=self.settings.bucket_name,
-            Key=f"{logical_bucket}/{path}",
+        response = requests.get(
+            self._url(logical_bucket, path),
+            headers=self._headers,
+            timeout=(15, 180),
         )
-        return response["Body"].read()
+        if not response.ok:
+            raise RuntimeError(f"R2 다운로드 실패 {response.status_code}: {response.text[:200]}")
+        return response.content
 
 
 class ObjectStorage:

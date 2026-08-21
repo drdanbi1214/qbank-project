@@ -10,6 +10,9 @@ const cache = new Map<string, { url: string; expiresAt: number }>()
 
 const STORAGE_PROVIDER = import.meta.env.VITE_STORAGE_PROVIDER ?? 'supabase'
 const R2_GATEWAY_URL = import.meta.env.VITE_R2_GATEWAY_URL?.replace(/\/$/, '')
+const R2_CANARY_BUCKETS = new Set(
+  (import.meta.env.VITE_R2_CANARY_BUCKETS ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+)
 const READ_FALLBACK = import.meta.env.VITE_STORAGE_READ_FALLBACK === 'true'
 const UPLOAD_FALLBACK = import.meta.env.VITE_STORAGE_UPLOAD_FALLBACK === 'true'
 
@@ -21,6 +24,10 @@ function parseStoragePath(storagePath: string): { bucket: string; path: string }
 
 function encodeStoragePath(storagePath: string): string {
   return storagePath.split('/').map((part) => encodeURIComponent(part)).join('/')
+}
+
+function usesR2(bucket: string): boolean {
+  return STORAGE_PROVIDER === 'r2' || R2_CANARY_BUCKETS.has(bucket)
 }
 
 async function getSupabaseSignedUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
@@ -68,8 +75,11 @@ export async function getSignedUrl(storagePath: string): Promise<string | null> 
   const cached = cache.get(storagePath)
   if (cached && cached.expiresAt > Date.now()) return cached.url
 
-  let signed = STORAGE_PROVIDER === 'r2' ? await getR2SignedUrl(storagePath) : await getSupabaseSignedUrl(storagePath)
-  if (!signed && STORAGE_PROVIDER === 'r2' && READ_FALLBACK) {
+  const parsed = parseStoragePath(storagePath)
+  if (!parsed) return null
+  const useR2 = usesR2(parsed.bucket)
+  let signed = useR2 ? await getR2SignedUrl(storagePath) : await getSupabaseSignedUrl(storagePath)
+  if (!signed && useR2 && READ_FALLBACK) {
     signed = await getSupabaseSignedUrl(storagePath)
   }
   if (!signed) return null
@@ -98,7 +108,7 @@ export async function uploadStoredObject(
   body: Blob,
   contentType: string,
 ): Promise<void> {
-  if (STORAGE_PROVIDER !== 'r2') {
+  if (!usesR2(bucket)) {
     await uploadToSupabase(bucket, path, body, contentType)
     return
   }
