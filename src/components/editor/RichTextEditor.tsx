@@ -22,6 +22,7 @@ import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
 import {
   NOTE_HIGHLIGHTS,
   NOTE_TEXT_COLORS,
+  snapCellShade,
   snapHighlightColor,
   snapTextColor,
 } from '@/components/editor/palette'
@@ -177,6 +178,16 @@ export function RichTextEditor({
       transformPastedHTML(html) {
         if (!/style=|<font/i.test(html)) return html
         const parsed = new DOMParser().parseFromString(html, 'text/html')
+
+        // 표 셀 배경이 먼저다. 형광펜으로 넘기면 글자 뒤에만 색이 깔려서
+        // 원본처럼 칸 전체가 칠해지지 않는다.
+        for (const cell of parsed.querySelectorAll<HTMLElement>('td[style], th[style]')) {
+          const background = cell.style.backgroundColor
+          if (!background) continue
+          const shade = snapCellShade(background)
+          cell.style.backgroundColor = ''
+          if (shade) cell.setAttribute('data-shade', shade)
+        }
 
         for (const element of parsed.querySelectorAll<HTMLElement>('[style]')) {
           const { color, backgroundColor } = element.style

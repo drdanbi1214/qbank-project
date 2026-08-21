@@ -200,8 +200,16 @@
     @apply rounded bg-amber-200 px-0.5 text-inherit dark:bg-amber-500/40;
   }
 
+  /*
+   * 기본은 내용에 맞춰 열을 잡는다(table-auto). 라벨 열처럼 글자가 적은 칸이
+   * 반씩 차지하는 걸 막는다. 사람이 폭을 끌어 정하면 colgroup 에 width 가
+   * 생기고, 그때부터는 그 값을 지켜야 하므로 table-fixed 로 바꾼다.
+   */
   .rich-text table {
-    @apply w-full table-fixed border-collapse text-sm;
+    @apply w-full table-auto border-collapse text-sm;
+  }
+  .rich-text table:has(col[style*='width']) {
+    @apply table-fixed;
   }
   .rich-text th,
   .rich-text td {

@@ -148,3 +148,31 @@ export function snapHighlightColor(value: string): string | null {
   if (saturation < 0.12 || lightness > 0.96 || lightness < 0.08) return null
   return nearest(hue, HIGHLIGHT_TARGETS)
 }
+
+/**
+ * 표 셀 배경 팔레트의 색상. index.css 의 data-shade 규칙과 짝이다.
+ * 회색은 색상이 없으므로 채도로만 가른다.
+ */
+const CELL_SHADE_TARGETS: { shade: string; hue: number }[] = [
+  { shade: 'yellow', hue: 48 },
+  { shade: 'green', hue: 152 },
+  { shade: 'blue', hue: 200 },
+  { shade: 'pink', hue: 327 },
+]
+
+/**
+ * 붙여넣은 셀 배경을 팔레트 값으로 맞춘다.
+ *
+ * 셀 배경은 형광펜과 다르다. 형광펜으로 넘기면 글자 뒤에만 색이 깔려서
+ * 원본처럼 칸 전체가 칠해지지 않는다.
+ */
+export function snapCellShade(value: string): string | null {
+  const rgb = toRgb(value)
+  if (!rgb) return null
+  const { hue, saturation, lightness } = toHsl(rgb)
+  if (lightness > 0.97) return null // 흰 바탕은 배경 없음
+  if (saturation < 0.12) return lightness < 0.9 ? 'gray' : null
+  return CELL_SHADE_TARGETS.reduce((best, target) =>
+    hueGap(hue, target.hue) < hueGap(hue, best.hue) ? target : best,
+  ).shade
+}
