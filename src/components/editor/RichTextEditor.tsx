@@ -14,7 +14,7 @@ import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
-import type { RichDoc } from '@/types/richtext'
+import { imageWidthOf, type RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -78,8 +78,13 @@ export function RichTextEditor({
       const pos = at ?? state.selection.from
       view.dispatch(state.tr.insert(pos, node).scrollIntoView())
 
-      void uploadImageRef.current(file, userIdRef.current)
-        .then((path) => replacePlaceholder(view, uploadId, path))
+      // 폭을 안 정해 두면 max-h-96 으로 눌려서 원본보다 작게 들어간다.
+      // 원본 픽셀 폭을 같이 실어 보내고, 편집기보다 넓으면 CSS(max-w-full)가 줄인다.
+      void Promise.all([
+        uploadImageRef.current(file, userIdRef.current),
+        naturalWidthOf(file),
+      ])
+        .then(([path, width]) => replacePlaceholder(view, uploadId, path, width))
         .catch((caught: unknown) => {
           removePlaceholder(view, uploadId)
           errorRef.current?.(
@@ -183,13 +188,31 @@ export function RichTextEditor({
 }
 
 /** 업로드가 끝난 자리표시자를 실제 경로로 교체한다. */
-function replacePlaceholder(view: EditorView, uploadId: string, src: string) {
+/** 붙여넣은 이미지의 원본 픽셀 폭. 못 읽으면 null 이라 예전처럼 그린다. */
+async function naturalWidthOf(file: File): Promise<number | null> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const width = bitmap.width
+    bitmap.close()
+    return imageWidthOf(width)
+  } catch {
+    return null
+  }
+}
+
+function replacePlaceholder(
+  view: EditorView,
+  uploadId: string,
+  src: string,
+  width: number | null,
+) {
   const found = findPlaceholder(view, uploadId)
   if (!found) return
   view.dispatch(
     view.state.tr.setNodeMarkup(found.pos, undefined, {
       ...found.attrs,
       src,
+      width: width ?? found.attrs.width,
       uploadId: null,
     }),
   )
@@ -267,7 +290,7 @@ function Toolbar({
       )}
       {onRequestTheory && (
         <ToolButton
-          label="이론 넣기"
+          label="알렌 넣기"
           active={false}
           onClick={() => {
             void onRequestTheory().then((documentId) => {
@@ -275,7 +298,7 @@ function Toolbar({
             })
           }}
         >
-          <span className="px-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">이론</span>
+          <span className="px-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">알렌</span>
         </ToolButton>
       )}
       <ToolButton

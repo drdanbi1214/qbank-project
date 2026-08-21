@@ -63,7 +63,7 @@ export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
           selected && 'ring-2 ring-brand-500',
         )}
       >
-        이 이론은 지금 볼 수 없습니다. 문서가 지워졌거나 열람 권한이 없습니다.
+        이 알렌 문서는 지금 볼 수 없습니다. 문서가 지워졌거나 열람 권한이 없습니다.
         {onRemove && (
           <button
             type="button"
@@ -94,7 +94,7 @@ export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
             onRemove && 'cursor-grab active:cursor-grabbing',
           )}
         >
-          이론
+          알렌
         </span>
         <span className="font-medium text-slate-800 dark:text-slate-100">{document.title}</span>
         <span className="ml-auto flex items-center gap-2">

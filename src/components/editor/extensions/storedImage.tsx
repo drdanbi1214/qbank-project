@@ -73,6 +73,17 @@ function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewP
     updateAttributes({ width: Math.max(MIN_IMAGE_WIDTH, Math.round(maxWidth() * fraction)) })
   }
 
+  /**
+   * 원본 픽셀 크기로 되돌린다.
+   *
+   * 폭을 null 로 지우면 "폭 미지정" 취급이라 max-h-96 으로 눌린다. 그건 원본이
+   * 아니라 오히려 축소다. 실제 이미지의 naturalWidth 를 넣어야 원본이 된다.
+   */
+  function resetToNatural() {
+    const natural = imageWidthOf(imageRef.current?.naturalWidth)
+    updateAttributes({ width: natural })
+  }
+
   return (
     <NodeViewWrapper as="div" className="my-2">
       <div ref={frameRef} className="relative">
@@ -123,7 +134,7 @@ function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewP
                 <SizeButton onClick={() => setFraction(0.35)}>작게</SizeButton>
                 <SizeButton onClick={() => setFraction(0.6)}>중간</SizeButton>
                 <SizeButton onClick={() => setFraction(1)}>꽉 차게</SizeButton>
-                <SizeButton onClick={() => updateAttributes({ width: null })}>원본</SizeButton>
+                <SizeButton onClick={resetToNatural}>원본</SizeButton>
                 {width && <span className="pl-1 tabular-nums opacity-70">{width}px</span>}
               </div>
             )}

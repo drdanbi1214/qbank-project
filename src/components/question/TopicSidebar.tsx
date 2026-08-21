@@ -85,17 +85,17 @@ export function TopicSidebar({ topics, subjectId, topicId, units }: Props) {
       <input
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
-        placeholder="테마 찾기 (제목·본문)"
+        placeholder="주제 찾기 (제목·본문)"
         className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
       />
 
       {topics.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-          아직 테마가 없습니다.
+          아직 주제가 없습니다.
         </p>
       ) : matched.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-          "{keyword.trim()}" 에 맞는 테마가 없습니다.
+          "{keyword.trim()}" 에 맞는 주제가 없습니다.
         </p>
       ) : (
         groups.map((group) => {

@@ -187,7 +187,7 @@ export function SearchPage() {
           {topicHits.length > 0 && (
             <section className="mb-5">
               <h2 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                레옵스 테마 {topicHits.length}개
+                레옵스 주제 {topicHits.length}개
               </h2>
               <ul className="space-y-2">
                 {topicHits.map((topic) => (

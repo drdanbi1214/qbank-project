@@ -45,7 +45,7 @@ export function TopicPanel({ questionId, enabled, nested = false }: Props) {
     <section className={cn('space-y-2', nested && 'border-l-2 border-emerald-300 pl-3')}>
       {nested && (
         <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-          이 문제가 실린 테마
+          이 문제가 실린 주제
         </p>
       )}
       {topics.map((topic) => (
@@ -81,7 +81,7 @@ function TopicCard({ topic }: { topic: TopicForQuestion }) {
     <div className="rounded-lg border border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/20">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-xs font-semibold text-white">
-          테마
+          주제
         </span>
         <span className="font-medium text-slate-800 dark:text-slate-100">{topic.title}</span>
         <span className="ml-auto flex items-center gap-2 text-xs">

@@ -54,7 +54,7 @@ export function TopicsPage() {
     void fetchTopics(subjectId)
       .then(setTopics)
       .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : '테마를 불러오지 못했습니다.')
+        setError(caught instanceof Error ? caught.message : '주제를 불러오지 못했습니다.')
         setTopics([])
       })
   }, [subjectId])
@@ -144,7 +144,7 @@ export function TopicsPage() {
 
   const remove = useCallback(() => {
     if (!selected) return
-    if (!window.confirm(`"${selected.title}" 테마를 지웁니다. 되돌릴 수 없습니다.`)) return
+    if (!window.confirm(`"${selected.title}" 주제를 지웁니다. 되돌릴 수 없습니다.`)) return
     setBusy(true)
     void deleteTopic(selected.id)
       .then(() => {
@@ -175,7 +175,7 @@ export function TopicsPage() {
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <h1 className="text-xl font-bold">{subject?.name ?? ''}</h1>
         <Button size="sm" className="ml-auto" onClick={() => setCreating(true)}>
-          새 테마
+          새 주제
         </Button>
       </div>
 
@@ -191,9 +191,13 @@ export function TopicsPage() {
           userId={userId}
           units={subjectUnits}
           onCancel={() => setCreating(false)}
-          onCreated={(id) => {
+          onCreated={(id, createdUnitId) => {
             setCreating(false)
             load()
+            // 갓 만든 주제는 본문이 비어 있다. 읽기 화면을 한 번 거칠 이유가 없어
+            // 바로 편집으로 들어간다. 편집 버튼과 같은 준비를 여기서 해 둔다.
+            setEditedUnitId(createdUnitId)
+            setEditing(true)
             navigate(`/topics/${subjectId}/${id}`)
           }}
         />
@@ -210,7 +214,7 @@ export function TopicsPage() {
         <article className="min-w-0">
           {!selected ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              왼쪽에서 테마를 고르거나 새로 만드세요.
+              왼쪽에서 주제를 고르거나 새로 만드세요.
             </p>
           ) : (
             <div className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
@@ -361,7 +365,7 @@ function CreateForm({
   userId: string
   units: Unit[]
   onCancel: () => void
-  onCreated: (id: string) => void
+  onCreated: (id: string, unitId: string | null) => void
 }) {
   const [title, setTitle] = useState('')
   const [unitId, setUnitId] = useState<string>('')
@@ -390,7 +394,7 @@ function CreateForm({
     }
     setBusy(true)
     void createTopic({ subjectId, unitId: unitId || null, title: trimmed, userId })
-      .then(onCreated)
+      .then((id) => onCreated(id, unitId || null))
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '만들지 못했습니다.')
       })
@@ -418,7 +422,7 @@ function CreateForm({
           onKeyDown={(event) => {
             if (event.key === 'Enter') submit()
           }}
-          placeholder="테마 제목 (예: 심부전의 약물치료)"
+          placeholder="주제 제목 (예: 심부전의 약물치료)"
           className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
         />
         <Button size="sm" onClick={submit} disabled={busy}>
@@ -433,7 +437,7 @@ function CreateForm({
 
       {keyword.length >= 2 && similar.length > 0 && (
         <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          비슷한 테마가 이미 있습니다 — {similar.map((row) => row.title).join(', ')}. 같은 주제라면
+          비슷한 주제가 이미 있습니다 — {similar.map((row) => row.title).join(', ')}. 같은 주제라면
           기존 것에 이어서 쓰는 편이 낫습니다.
         </p>
       )}

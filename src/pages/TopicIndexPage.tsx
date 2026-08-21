@@ -31,7 +31,7 @@ export function TopicIndexPage() {
       })
       .catch((caught: unknown) => {
         if (active) {
-          setError(caught instanceof Error ? caught.message : '테마를 불러오지 못했습니다.')
+          setError(caught instanceof Error ? caught.message : '주제를 불러오지 못했습니다.')
           setCounts(new Map())
         }
       })
@@ -94,7 +94,7 @@ export function TopicIndexPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-semibold">{subject.name}</span>
                   <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                    테마 {counts.get(subject.id) ?? 0}개
+                    주제 {counts.get(subject.id) ?? 0}개
                   </span>
                 </span>
                 <Icon name="chevron-right" size={18} className="text-slate-400" />

@@ -77,7 +77,7 @@ export function TheoryPicker({ subjectId, onPick, onCancel }: Props) {
         onClick={(event) => event.stopPropagation()}
         className="w-full max-w-2xl rounded-xl border border-slate-300 bg-white p-4 shadow-xl dark:border-slate-600 dark:bg-slate-900"
       >
-        <h3 className="mb-2 text-sm font-semibold">본문에 넣을 이론 고르기</h3>
+        <h3 className="mb-2 text-sm font-semibold">본문에 넣을 알렌 고르기</h3>
 
         <div className="mb-3 flex gap-2">
           <input
@@ -98,7 +98,7 @@ export function TheoryPicker({ subjectId, onPick, onCancel }: Props) {
           </div>
         ) : results.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-            찾은 이론이 없습니다.
+            찾은 알렌 문서가 없습니다.
           </p>
         ) : (
           <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto rounded border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
