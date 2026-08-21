@@ -13,6 +13,7 @@ Supabase 원본은 어떤 옵션에서도 삭제하지 않는다. JSONL manifest
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import mimetypes
@@ -128,8 +129,16 @@ def main() -> None:
     parser.add_argument("--apply", action="store_true", help="R2에 실제 업로드")
     parser.add_argument("--verify", action="store_true", help="R2에서 다시 받아 SHA-256 전수 검증")
     parser.add_argument("--force", action="store_true", help="완료 manifest와 같은 객체도 다시 처리")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=6,
+        help="동시 복사 수(기본 6, 1~16). manifest 기록은 메인 스레드에서 직렬 처리",
+    )
     parser.add_argument("--manifest", default="tmp/r2-migration-manifest.jsonl")
     args = parser.parse_args()
+    if not 1 <= args.workers <= 16:
+        parser.error("--workers는 1~16 사이여야 합니다.")
 
     selected = tuple(args.bucket or BUCKETS)
     manifest_path = pathlib.Path(args.manifest)
@@ -150,6 +159,7 @@ def main() -> None:
     r2 = R2Backend()
     completed = load_completed(manifest_path)
     counts = {"skipped": 0, "uploaded": 0, "verified": 0, "failed": 0}
+    pending: list[tuple[int, SourceObject]] = []
 
     for index, item in enumerate(inventory, 1):
         previous = completed.get(item.storage_path)
@@ -162,7 +172,10 @@ def main() -> None:
         ):
             counts["skipped"] += 1
             continue
+        pending.append((index, item))
 
+    def copy_one(index_and_item: tuple[int, SourceObject]) -> tuple[int, SourceObject, dict, bool]:
+        index, item = index_and_item
         try:
             data = source.download(item)
             if item.size_bytes and len(data) != item.size_bytes:
@@ -178,9 +191,10 @@ def main() -> None:
             if args.apply and not already_present:
                 r2.upload(item.bucket, item.name, data, item.mime_type, sha256=digest)
                 status = "uploaded"
-                counts["uploaded"] += 1
+                uploaded = True
             else:
                 status = "already_present"
+                uploaded = False
 
             if args.verify:
                 copied = r2.download(item.bucket, item.name)
@@ -188,10 +202,10 @@ def main() -> None:
                 if copied_digest != digest:
                     raise RuntimeError("R2 SHA-256 불일치")
                 status = "verified"
-                counts["verified"] += 1
 
-            append_manifest(
-                manifest_path,
+            return (
+                index,
+                item,
                 {
                     "status": status,
                     "storage_path": item.storage_path,
@@ -200,20 +214,40 @@ def main() -> None:
                     "sha256": digest,
                     "mime_type": item.mime_type,
                 },
+                uploaded,
             )
-            print(f"[{index}/{len(inventory)}] {status}: {item.storage_path}")
         except Exception as exc:
-            counts["failed"] += 1
-            append_manifest(
-                manifest_path,
+            return (
+                index,
+                item,
                 {
                     **asdict(item),
                     "storage_path": item.storage_path,
                     "status": "failed",
                     "error": str(exc)[:500],
                 },
+                False,
             )
-            print(f"[{index}/{len(inventory)}] 실패: {item.storage_path}: {exc}", file=sys.stderr)
+
+    print(f"처리 예정: {len(pending):,}개 (건너뜀 {counts['skipped']:,}개, workers={args.workers})")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = [executor.submit(copy_one, entry) for entry in pending]
+        for future in concurrent.futures.as_completed(futures):
+            index, item, row, uploaded = future.result()
+            append_manifest(manifest_path, row)
+            status = row["status"]
+            if status == "failed":
+                counts["failed"] += 1
+                print(
+                    f"[{index}/{len(inventory)}] 실패: {item.storage_path}: {row['error']}",
+                    file=sys.stderr,
+                )
+                continue
+            if uploaded:
+                counts["uploaded"] += 1
+            if status == "verified":
+                counts["verified"] += 1
+            print(f"[{index}/{len(inventory)}] {status}: {item.storage_path}")
 
     print("결과:", ", ".join(f"{key}={value}" for key, value in counts.items()))
     if counts["failed"]:

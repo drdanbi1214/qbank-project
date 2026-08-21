@@ -10,8 +10,8 @@ DB에는 실제 URL이 아니라 `버킷/경로`만 저장한다. 관리 스크�
 `scripts/.env`의 `OBJECT_STORAGE_PROVIDER`로 선택한다.
 
 ```env
-# 전체 R2 복사·검증 전에는 반드시 supabase
-OBJECT_STORAGE_PROVIDER=supabase
+# 전체 R2 복사·검증 전에는 supabase, 전수 검증 후에는 r2
+OBJECT_STORAGE_PROVIDER=r2
 R2_MIGRATION_GATEWAY_URL=https://qbank-storage-gateway.<account>.workers.dev
 ```
 
@@ -31,6 +31,9 @@ python3 scripts/migrate_storage_to_r2.py --bucket topic-images
 
 # R2 계정 설정 후 복사 + R2 재다운로드 SHA-256 검증
 python3 scripts/migrate_storage_to_r2.py --bucket topic-images --apply --verify
+
+# 전체 버킷 복사·검증. 기본 6개 병렬이며 중단 후 같은 명령으로 재개 가능
+python3 scripts/migrate_storage_to_r2.py --apply --verify --workers 6
 ```
 
 ## 지금 쓰는 방식 (권장)
