@@ -9,6 +9,8 @@ import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import {
+  createTheoryDocument,
+  deleteTheoryDocument,
   fetchTheoryDocuments,
   renameTheoryDocument,
   swapTheoryOrder,
@@ -71,6 +73,38 @@ export function TheorySubjectPage() {
         load()
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : '이름을 바꾸지 못했습니다.')
+      }
+    },
+    [load],
+  )
+
+  const addChild = useCallback(
+    async (parentId: string | null, hasContent: boolean) => {
+      if (!subjectId || !session) return
+      try {
+        await createTheoryDocument({
+          subjectId,
+          parentId,
+          title: hasContent ? '새 이론' : '새 묶음',
+          hasContent,
+          userId: session.user.id,
+        })
+        load()
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : '만들지 못했습니다.')
+      }
+    },
+    [subjectId, session, load],
+  )
+
+  const removeDocument = useCallback(
+    async (document: TheoryDocument) => {
+      if (!window.confirm(`"${document.title}" 을(를) 지웁니다. 되돌릴 수 없습니다.`)) return
+      try {
+        await deleteTheoryDocument(document.id)
+        load()
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : '지우지 못했습니다.')
       }
     },
     [load],
@@ -144,7 +178,23 @@ export function TheorySubjectPage() {
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-3">
           <h1 className="text-xl font-bold">{activeSection?.title ?? `${subject.name} 이론`}</h1>
-          <Link to={`/study/${subject.id}`} className="shrink-0 text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">문제 학습</Link>
+          <div className="flex shrink-0 items-center gap-3">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setOutlineEditing((on) => !on)}
+                className={cn(
+                  'rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors',
+                  outlineEditing
+                    ? 'bg-brand-600 text-white'
+                    : 'border border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800',
+                )}
+              >
+                {outlineEditing ? '목차 편집 끝내기' : '목차 편집'}
+              </button>
+            )}
+            <Link to={`/study/${subject.id}`} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">문제 학습</Link>
+          </div>
         </div>
       </header>
 
@@ -154,26 +204,24 @@ export function TheorySubjectPage() {
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">아직 등록된 이론이 없습니다.</p>
         </div>
-      ) : usesSectionLanding && !activeSection ? (
+      ) : usesSectionLanding && !activeSection && !outlineEditing ? (
         <TheorySectionLanding subjectId={subject.id} subjectName={subject.name} sections={sectionRoots} documents={documents} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setOutlineEditing((on) => !on)}
-                className={cn(
-                  'mb-1 w-full rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
-                  outlineEditing
-                    ? 'bg-brand-600 text-white'
-                    : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800',
-                )}
-              >
-                {outlineEditing ? '목차 편집 끝내기' : '목차 편집'}
-              </button>
+            {outlineEditing && (
+              <div className="mb-1 flex gap-1 border-b border-slate-200 pb-1 dark:border-slate-700">
+                <button type="button" onClick={() => void addChild(activeSection?.id ?? null, false)}
+                  className="flex-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                  + 묶음
+                </button>
+                <button type="button" onClick={() => void addChild(activeSection?.id ?? null, true)}
+                  className="flex-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                  + 이론
+                </button>
+              </div>
             )}
-            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} editing={outlineEditing} onShift={shift} onMove={setMoving} onRename={rename} />)}
+            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} editing={outlineEditing} onShift={shift} onMove={setMoving} onRename={rename} onAdd={addChild} onDelete={removeDocument} />)}
           </nav>
 
           {selected && (
@@ -358,9 +406,11 @@ type OutlineTools = {
   onShift?: (document: TheoryDocument, direction: -1 | 1) => void
   onMove?: (document: TheoryDocument) => void
   onRename?: (document: TheoryDocument, title: string) => Promise<void>
+  onAdd?: (parentId: string, hasContent: boolean) => Promise<void>
+  onDelete?: (document: TheoryDocument) => Promise<void>
 }
 
-function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0, editing, onShift, onMove, onRename }: {
+function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0, editing, onShift, onMove, onRename, onAdd, onDelete }: {
   document: TheoryDocument; subjectId: string; selectedId?: string; childrenOf: (id: string) => TheoryDocument[]; expanded: Set<string>; onToggle: (id: string) => void; depth?: number
 } & OutlineTools) {
   const children = childrenOf(document.id)
@@ -404,10 +454,12 @@ function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded
           <OutlineButton label="위로" onClick={() => onShift?.(document, -1)}>↑</OutlineButton>
           <OutlineButton label="아래로" onClick={() => onShift?.(document, 1)}>↓</OutlineButton>
           <OutlineButton label="다른 곳으로 옮기기" onClick={() => onMove?.(document)}>⇥</OutlineButton>
+          <OutlineButton label="이 아래에 이론 추가" onClick={() => void onAdd?.(document.id, true)}>＋</OutlineButton>
+          <OutlineButton label="지우기" onClick={() => void onDelete?.(document)}>✕</OutlineButton>
         </span>
       )}
     </div>
-    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} onRename={onRename} />)}
+    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} onRename={onRename} onAdd={onAdd} onDelete={onDelete} />)}
   </div>
 }
 

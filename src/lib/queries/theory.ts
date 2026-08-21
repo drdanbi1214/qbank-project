@@ -123,3 +123,62 @@ export async function renameTheoryDocument(id: string, title: string): Promise<v
     .eq('id', id)
   if (error) throw error
 }
+
+/**
+ * 목차에 새 문서를 만든다.
+ *
+ * is_published 기본값이 false 인데 조회 정책이 is_published 를 요구하므로,
+ * 명시하지 않으면 만들자마자 안 보인다. 기존 이론이 전부 study_hapbon3 ·
+ * 공개 상태라 같은 조건으로 맞춘다.
+ *
+ * hasContent 는 이 문서가 글을 담는 항목인지, 목차만 나누는 묶음인지다.
+ */
+export async function createTheoryDocument(params: {
+  subjectId: string
+  parentId: string | null
+  title: string
+  hasContent: boolean
+  userId: string
+}): Promise<string> {
+  const title = params.title.trim()
+  if (title === '') throw new Error('제목을 입력해 주세요.')
+
+  let query = supabase.from('theory_documents').select('sort_order')
+  query = params.parentId === null
+    ? query.is('parent_id', null).eq('subject_id', params.subjectId)
+    : query.eq('parent_id', params.parentId)
+
+  const { data, error } = await query.order('sort_order', { ascending: false }).limit(1)
+  if (error) throw error
+
+  const { data: created, error: insertError } = await supabase
+    .from('theory_documents')
+    .insert({
+      subject_id: params.subjectId,
+      parent_id: params.parentId,
+      title,
+      content: toJson({ type: 'doc', content: [{ type: 'paragraph' }] } as RichDoc),
+      sort_order: ((data ?? [])[0]?.sort_order ?? 0) + 1,
+      has_content: params.hasContent,
+      is_published: true,
+      required_permission: 'study_hapbon3',
+      created_by: params.userId,
+    })
+    .select('id')
+    .single()
+  if (insertError) throw insertError
+  return created.id as string
+}
+
+/** 목차에서 문서를 지운다. 하위가 남아 있으면 목차에서 사라지므로 막는다. */
+export async function deleteTheoryDocument(id: string): Promise<void> {
+  const { count, error } = await supabase
+    .from('theory_documents')
+    .select('id', { count: 'exact', head: true })
+    .eq('parent_id', id)
+  if (error) throw error
+  if ((count ?? 0) > 0) throw new Error('하위 항목을 먼저 옮기거나 지워 주세요.')
+
+  const { error: deleteError } = await supabase.from('theory_documents').delete().eq('id', id)
+  if (deleteError) throw deleteError
+}
