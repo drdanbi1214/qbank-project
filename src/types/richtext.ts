@@ -133,6 +133,40 @@ export function isLeafNode(type: string): boolean {
 }
 
 /** 이미지 폭 조절의 하한. 더 작아지면 손잡이를 다시 잡기 어렵다. */
+/**
+ * 표 셀 배경 팔레트.
+ *
+ * 문서는 여러 사람이 나눠 쓰므로 자유 색상 대신 정해진 값만 쓴다. 형광펜과
+ * 같은 색을 써야 한 문서 안에서 색이 겉돌지 않는다.
+ */
+export const CELL_SHADES = ['yellow', 'green', 'blue', 'pink', 'gray'] as const
+export type CellShade = (typeof CELL_SHADES)[number]
+
+/** 표 테두리 종류. 표 단위로만 준다. */
+export const TABLE_BORDERS = ['none', 'bold'] as const
+export type TableBorder = (typeof TABLE_BORDERS)[number]
+
+/** 저장된 문서 JSON 은 남이 만든 것도 오므로 아는 값인지 확인하고 쓴다. */
+export function tableBorderOf(value: unknown): TableBorder | null {
+  return typeof value === 'string' && (TABLE_BORDERS as readonly string[]).includes(value)
+    ? (value as TableBorder)
+    : null
+}
+
+/** 셀 배경이 팔레트 안의 값인지. */
+export function cellShadeOf(value: unknown): CellShade | null {
+  return typeof value === 'string' && (CELL_SHADES as readonly string[]).includes(value)
+    ? (value as CellShade)
+    : null
+}
+
+/** 열 너비(px) 배열. 드래그로 조절한 값이라 숫자만 받는다. */
+export function colWidthsOf(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null
+  const widths = value.map((item) => (typeof item === 'number' && Number.isFinite(item) ? Math.round(item) : 0))
+  return widths.some((width) => width > 0) ? widths : null
+}
+
 export const MIN_IMAGE_WIDTH = 80
 export const MAX_IMAGE_WIDTH = 2000
 

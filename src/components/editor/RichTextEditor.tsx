@@ -5,6 +5,11 @@ import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
 import { Color, TextStyle } from '@tiptap/extension-text-style'
 import { TableKit } from '@tiptap/extension-table'
+import {
+  StyledTable,
+  StyledTableCell,
+  StyledTableHeader,
+} from '@/components/editor/extensions/tableStyle'
 import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
@@ -14,7 +19,7 @@ import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
-import { imageWidthOf, type RichDoc } from '@/types/richtext'
+import { CELL_SHADES, imageWidthOf, type RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -105,7 +110,15 @@ export function RichTextEditor({
       Color,
       FontSize,
       BlockIndent,
-      TableKit.configure({ table: { resizable: false } }),
+      // 표 노드는 꾸미기 속성을 붙인 것으로 갈아 끼운다. 열 너비는 드래그로 정한다.
+      TableKit.configure({
+        table: false,
+        tableCell: false,
+        tableHeader: false,
+      }),
+      StyledTable.configure({ resizable: true }),
+      StyledTableCell,
+      StyledTableHeader,
       StoredImage,
       YamaEmbed,
       TheoryEmbed,
@@ -185,6 +198,39 @@ export function RichTextEditor({
       </div>
     </div>
   )
+}
+
+
+/** 셀 배경 팔레트의 이름과 견본 색. index.css 의 data-shade 규칙과 짝이다. */
+const CELL_SHADE_LABELS: Record<string, string> = {
+  yellow: '노랑', green: '초록', blue: '파랑', pink: '분홍', gray: '회색',
+}
+const CELL_SHADE_SWATCH: Record<string, string> = {
+  yellow: 'bg-amber-200', green: 'bg-emerald-200', blue: 'bg-sky-200',
+  pink: 'bg-pink-200', gray: 'bg-slate-300',
+}
+
+/**
+ * 고른 셀 전체에 배경을 넣는다.
+ *
+ * updateAttributes 는 커서가 있는 노드 하나만 바꾸므로, 여러 칸을 고른
+ * 경우까지 덮으려면 셀 범위를 직접 훑어야 한다.
+ */
+function setCellShade(editor: Editor, shade: string | null) {
+  const { state } = editor
+  const positions: number[] = []
+  state.doc.nodesBetween(state.selection.from, state.selection.to, (node, pos) => {
+    if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') positions.push(pos)
+  })
+  if (positions.length === 0) return
+
+  const tr = state.tr
+  for (const pos of positions) {
+    const node = tr.doc.nodeAt(pos)
+    if (node) tr.setNodeMarkup(pos, undefined, { ...node.attrs, shade })
+  }
+  editor.view.dispatch(tr)
+  editor.commands.focus()
 }
 
 /** 업로드가 끝난 자리표시자를 실제 경로로 교체한다. */
@@ -464,10 +510,61 @@ function Toolbar({
                 −행
               </ToolButton>
               <ToolButton
+                label="머리글 행 켜기/끄기"
+                active={editor.isActive('tableHeader')}
+                onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+              >
+                머리글
+              </ToolButton>
+              <ToolButton
                 label="표 삭제"
                 onClick={() => editor.chain().focus().deleteTable().run()}
               >
                 표삭제
+              </ToolButton>
+
+              <Divider />
+              {/* 셀 배경. 커서가 있는 셀, 여러 칸을 고르면 고른 칸 전부에 들어간다. */}
+              {CELL_SHADES.map((shade) => (
+                <ToolButton
+                  key={shade}
+                  label={`셀 ${CELL_SHADE_LABELS[shade]}`}
+                  active={
+                    editor.isActive('tableCell', { shade }) ||
+                    editor.isActive('tableHeader', { shade })
+                  }
+                  onClick={() => setCellShade(editor, shade)}
+                >
+                  <span
+                    className={cn('block h-3.5 w-3.5 rounded-sm border border-black/20', CELL_SHADE_SWATCH[shade])}
+                  />
+                </ToolButton>
+              ))}
+              <ToolButton label="셀 배경 지우기" onClick={() => setCellShade(editor, null)}>
+                <span className="text-xs">✕</span>
+              </ToolButton>
+
+              <Divider />
+              <ToolButton
+                label="테두리 기본"
+                active={!editor.getAttributes('table').border}
+                onClick={() => editor.chain().focus().updateAttributes('table', { border: null }).run()}
+              >
+                <span className="text-xs">선</span>
+              </ToolButton>
+              <ToolButton
+                label="테두리 굵게"
+                active={editor.getAttributes('table').border === 'bold'}
+                onClick={() => editor.chain().focus().updateAttributes('table', { border: 'bold' }).run()}
+              >
+                <span className="text-xs font-bold">선</span>
+              </ToolButton>
+              <ToolButton
+                label="테두리 없음"
+                active={editor.getAttributes('table').border === 'none'}
+                onClick={() => editor.chain().focus().updateAttributes('table', { border: 'none' }).run()}
+              >
+                <span className="text-xs line-through opacity-60">선</span>
               </ToolButton>
             </>
           )}

@@ -7,7 +7,16 @@ import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { indentStyle, safeIndent } from '@/components/editor/extensions/indent'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
-import { imageWidthOf, isLeafNode, type RichDoc, type RichMark, type RichNode } from '@/types/richtext'
+import {
+  cellShadeOf,
+  colWidthsOf,
+  imageWidthOf,
+  isLeafNode,
+  tableBorderOf,
+  type RichDoc,
+  type RichMark,
+  type RichNode,
+} from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -152,7 +161,9 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
     case 'table':
       return (
         <div className="overflow-x-auto">
-          <table>
+          {/* 편집기에서 정한 열 너비·테두리를 읽기 화면에서도 그대로 살린다. */}
+          <table data-border={tableBorderOf(node.attrs?.border) ?? undefined}>
+            {colGroupOf(node)}
             <tbody>{children}</tbody>
           </table>
         </div>
@@ -160,9 +171,25 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
     case 'tableRow':
       return <tr>{children}</tr>
     case 'tableHeader':
-      return <th colSpan={spanOf(node, 'colspan')} rowSpan={spanOf(node, 'rowspan')}>{children}</th>
+      return (
+        <th
+          colSpan={spanOf(node, 'colspan')}
+          rowSpan={spanOf(node, 'rowspan')}
+          data-shade={cellShadeOf(node.attrs?.shade) ?? undefined}
+        >
+          {children}
+        </th>
+      )
     case 'tableCell':
-      return <td colSpan={spanOf(node, 'colspan')} rowSpan={spanOf(node, 'rowspan')}>{children}</td>
+      return (
+        <td
+          colSpan={spanOf(node, 'colspan')}
+          rowSpan={spanOf(node, 'rowspan')}
+          data-shade={cellShadeOf(node.attrs?.shade) ?? undefined}
+        >
+          {children}
+        </td>
+      )
     default:
       // 모르는 블록은 내용만 살려서 보여준다.
       return <div>{children}</div>
@@ -209,6 +236,34 @@ function inferIndentLevels(nodes: RichNode[]): number[] {
 function nodeText(node: RichNode): string {
   if (node.type === 'text') return node.text ?? ''
   return (node.content ?? []).map(nodeText).join('')
+}
+
+/**
+ * 편집기에서 드래그로 정한 열 너비를 <colgroup> 으로 옮긴다.
+ *
+ * Tiptap 은 너비를 첫 행 셀들의 colwidth 에 담아 둔다. 병합된 칸은 colspan
+ * 만큼 열을 차지하므로 그만큼 col 을 만들어야 열이 밀리지 않는다.
+ */
+function colGroupOf(node: RichNode) {
+  const firstRow = node.content?.find((child) => child.type === 'tableRow')
+  if (!firstRow?.content) return null
+
+  const cols: (number | null)[] = []
+  for (const cell of firstRow.content) {
+    const widths = colWidthsOf(cell.attrs?.colwidth)
+    // spanOf 는 1 이면 undefined 를 준다(속성 생략용). 열 수를 셀 때는 1 로 본다.
+    const span = spanOf(cell, 'colspan') ?? 1
+    for (let index = 0; index < span; index += 1) cols.push(widths?.[index] ?? null)
+  }
+  if (cols.every((width) => width === null)) return null
+
+  return (
+    <colgroup>
+      {cols.map((width, index) => (
+        <col key={index} style={width ? { width } : undefined} />
+      ))}
+    </colgroup>
+  )
 }
 
 function spanOf(node: RichNode, key: 'colspan' | 'rowspan'): number | undefined {

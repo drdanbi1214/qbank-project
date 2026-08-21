@@ -205,10 +205,50 @@
   }
   .rich-text th,
   .rich-text td {
-    @apply border border-slate-300 px-2 py-1 align-top dark:border-slate-600;
+    @apply relative border border-slate-300 px-2 py-1 align-top dark:border-slate-600;
   }
   .rich-text th {
     @apply bg-slate-100 text-left font-semibold dark:bg-slate-800;
+  }
+
+  /* 표 테두리 — 표 단위로 준다. 값이 없으면 위의 기본이 그대로 쓰인다. */
+  .rich-text table[data-border='none'] th,
+  .rich-text table[data-border='none'] td {
+    @apply border-transparent;
+  }
+  .rich-text table[data-border='bold'] th,
+  .rich-text table[data-border='bold'] td {
+    @apply border-2 border-slate-500 dark:border-slate-400;
+  }
+
+  /* 셀 배경 — 형광펜과 같은 계열로 맞춘다. th 기본 배경보다 우선해야 한다. */
+  .rich-text th[data-shade='yellow'],
+  .rich-text td[data-shade='yellow'] {
+    @apply bg-amber-100 dark:bg-amber-500/25;
+  }
+  .rich-text th[data-shade='green'],
+  .rich-text td[data-shade='green'] {
+    @apply bg-emerald-100 dark:bg-emerald-500/25;
+  }
+  .rich-text th[data-shade='blue'],
+  .rich-text td[data-shade='blue'] {
+    @apply bg-sky-100 dark:bg-sky-500/25;
+  }
+  .rich-text th[data-shade='pink'],
+  .rich-text td[data-shade='pink'] {
+    @apply bg-pink-100 dark:bg-pink-500/25;
+  }
+  .rich-text th[data-shade='gray'],
+  .rich-text td[data-shade='gray'] {
+    @apply bg-slate-200 dark:bg-slate-700;
+  }
+
+  /* 열 너비 드래그 손잡이 (편집 중에만 보인다) */
+  .rich-text .column-resize-handle {
+    @apply absolute -right-0.5 top-0 z-10 h-full w-1 cursor-col-resize bg-brand-500/70;
+  }
+  .rich-text.resize-cursor {
+    @apply cursor-col-resize;
   }
 
   /* 표 편집 중 선택된 셀 */
