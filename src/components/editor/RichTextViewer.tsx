@@ -4,6 +4,7 @@ import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
 import { TheoryCard } from '@/components/question/TheoryCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
+import { HIGHLIGHT_SET, TEXT_COLOR_SET } from '@/components/editor/palette'
 import { indentStyle, safeIndent } from '@/components/editor/extensions/indent'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
@@ -392,8 +393,12 @@ function applyMarks(children: ReactNode, marks: RichMark[]): ReactNode {
         return <s>{acc}</s>
       case 'code':
         return <code>{acc}</code>
-      case 'highlight':
-        return <mark style={{ backgroundColor: safeHighlightColor(mark.attrs?.color) }}>{acc}</mark>
+      case 'highlight': {
+        // 모르는 색이면 강조 자체를 그리지 않는다. 색 없는 <mark> 로 두면 CSS
+        // 기본값(노랑)이 먹어서 원본에 없던 형광펜이 생긴다.
+        const color = safeHighlightColor(mark.attrs?.color)
+        return color ? <mark style={{ backgroundColor: color }}>{acc}</mark> : acc
+      }
       case 'textStyle': {
         const color = safeTextColor(mark.attrs?.color)
         const fontSize = safeFontSize(mark.attrs?.fontSize)
@@ -416,17 +421,15 @@ function applyMarks(children: ReactNode, marks: RichMark[]): ReactNode {
   }, children)
 }
 
-/** 저장된 문서 JSON이 임의 CSS를 주입하지 못하도록 편집기에서 쓰는 색만 허용한다. */
+/**
+ * 저장된 문서 JSON 이 임의 CSS 를 주입하지 못하도록 팔레트 색만 허용한다.
+ * 붙여넣기 시점에 팔레트로 맞춰지므로(palette.ts) 여기서 걸리는 건 사실상
+ * 그 경로를 타지 않고 들어온 옛 문서뿐이다.
+ */
 function safeTextColor(value: unknown): string | undefined {
-  return value === '#cc1616' ? value : undefined
+  return typeof value === 'string' && TEXT_COLOR_SET.has(value) ? value : undefined
 }
 
 function safeHighlightColor(value: unknown): string | undefined {
-  const allowed = new Set([
-    'rgba(253, 224, 71, 0.55)',
-    'rgba(110, 231, 183, 0.55)',
-    'rgba(125, 211, 252, 0.55)',
-    'rgba(249, 168, 212, 0.55)',
-  ])
-  return typeof value === 'string' && allowed.has(value) ? value : undefined
+  return typeof value === 'string' && HIGHLIGHT_SET.has(value) ? value : undefined
 }

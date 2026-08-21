@@ -19,6 +19,12 @@ import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
+import {
+  NOTE_HIGHLIGHTS,
+  NOTE_TEXT_COLORS,
+  snapHighlightColor,
+  snapTextColor,
+} from '@/components/editor/palette'
 import { CELL_SHADES, imageWidthOf, type RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
@@ -160,6 +166,33 @@ export function RichTextEditor({
           insertImages(view, converted)
         })
         return true
+      },
+      /**
+       * 밖에서 가져온 색을 우리 팔레트로 맞춘다.
+       *
+       * 허용 목록에 없는 색은 뷰어에서 버려지는데, 그러면 파란 글씨가 색을 잃고
+       * 배경만 남아 원본에 없던 노란 형광펜이 생긴다. 파싱 전에 값 자체를
+       * 팔레트 색으로 바꿔 두면 저장되는 문서도 깨끗하다.
+       */
+      transformPastedHTML(html) {
+        if (!/style=|<font/i.test(html)) return html
+        const parsed = new DOMParser().parseFromString(html, 'text/html')
+
+        for (const element of parsed.querySelectorAll<HTMLElement>('[style]')) {
+          const { color, backgroundColor } = element.style
+          if (color) element.style.color = snapTextColor(color) ?? ''
+          if (backgroundColor) {
+            element.style.backgroundColor = snapHighlightColor(backgroundColor) ?? ''
+          }
+        }
+        // 오래된 자료는 색을 style 이 아니라 font 태그에 담아 온다.
+        for (const element of parsed.querySelectorAll<HTMLElement>('font[color]')) {
+          const snapped = snapTextColor(element.getAttribute('color') ?? '')
+          element.removeAttribute('color')
+          if (snapped) element.style.color = snapped
+        }
+
+        return parsed.body.innerHTML
       },
       handleDrop(view, event, _slice, moved) {
         if (moved) return false
@@ -371,19 +404,22 @@ function Toolbar({
           <span className={cn('h-4 w-4 rounded border border-black/10', className)} />
         </ToolButton>
       ))}
-      <ToolButton
-        label="빨간 글씨"
-        active={editor.isActive('textStyle', { color: NOTE_TEXT_RED })}
-        onClick={() => {
-          if (editor.isActive('textStyle', { color: NOTE_TEXT_RED })) {
-            editor.chain().focus().unsetColor().run()
-          } else {
-            editor.chain().focus().setColor(NOTE_TEXT_RED).run()
-          }
-        }}
-      >
-        <span className="font-semibold text-marker-red">A</span>
-      </ToolButton>
+      {NOTE_TEXT_COLORS.map(({ label, color, className }) => (
+        <ToolButton
+          key={color}
+          label={label}
+          active={editor.isActive('textStyle', { color })}
+          onClick={() => {
+            if (editor.isActive('textStyle', { color })) {
+              editor.chain().focus().unsetColor().run()
+            } else {
+              editor.chain().focus().setColor(color).run()
+            }
+          }}
+        >
+          <span className={cn('font-semibold', className)}>A</span>
+        </ToolButton>
+      ))}
 
       {!compact && (
         <>
@@ -617,14 +653,6 @@ function Toolbar({
   )
 }
 
-const NOTE_TEXT_RED = '#cc1616'
-
-const NOTE_HIGHLIGHTS = [
-  { label: '노랑 형광펜', color: 'rgba(253, 224, 71, 0.55)', className: 'bg-amber-300' },
-  { label: '초록 형광펜', color: 'rgba(110, 231, 183, 0.55)', className: 'bg-emerald-300' },
-  { label: '하늘 형광펜', color: 'rgba(125, 211, 252, 0.55)', className: 'bg-sky-300' },
-  { label: '분홍 형광펜', color: 'rgba(249, 168, 212, 0.55)', className: 'bg-pink-300' },
-] as const
 
 function Divider() {
   return <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
