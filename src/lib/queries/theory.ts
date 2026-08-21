@@ -111,3 +111,15 @@ export async function moveTheoryDocument(id: string, parentId: string | null): P
     .eq('id', id)
   if (moveError) throw moveError
 }
+
+/** 목차 제목 바꾸기. 본문 첫 제목과는 별개로, 목차에 뜨는 이름만 바꾼다. */
+export async function renameTheoryDocument(id: string, title: string): Promise<void> {
+  const trimmed = title.trim()
+  if (trimmed === '') throw new Error('제목을 비울 수 없습니다.')
+
+  const { error } = await supabase
+    .from('theory_documents')
+    .update({ title: trimmed })
+    .eq('id', id)
+  if (error) throw error
+}

@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import {
   fetchTheoryDocuments,
+  renameTheoryDocument,
   swapTheoryOrder,
   updateTheoryDocumentContent,
   type TheoryDocument,
@@ -61,6 +62,18 @@ export function TheorySubjectPage() {
       })
     },
     [documents, load],
+  )
+
+  const rename = useCallback(
+    async (document: TheoryDocument, title: string) => {
+      try {
+        await renameTheoryDocument(document.id, title)
+        load()
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : '이름을 바꾸지 못했습니다.')
+      }
+    },
+    [load],
   )
 
 
@@ -160,7 +173,7 @@ export function TheorySubjectPage() {
                 {outlineEditing ? '목차 편집 끝내기' : '목차 편집'}
               </button>
             )}
-            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} editing={outlineEditing} onShift={shift} onMove={setMoving} />)}
+            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} editing={outlineEditing} onShift={shift} onMove={setMoving} onRename={rename} />)}
           </nav>
 
           {selected && (
@@ -344,29 +357,57 @@ type OutlineTools = {
   editing?: boolean
   onShift?: (document: TheoryDocument, direction: -1 | 1) => void
   onMove?: (document: TheoryDocument) => void
+  onRename?: (document: TheoryDocument, title: string) => Promise<void>
 }
 
-function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0, editing, onShift, onMove }: {
+function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0, editing, onShift, onMove, onRename }: {
   document: TheoryDocument; subjectId: string; selectedId?: string; childrenOf: (id: string) => TheoryDocument[]; expanded: Set<string>; onToggle: (id: string) => void; depth?: number
 } & OutlineTools) {
   const children = childrenOf(document.id)
   const hasChildren = children.length > 0
   // 편집 중에는 옮길 곳이 보여야 하므로 접힌 가지도 펼쳐 둔다.
   const isExpanded = expanded.has(document.id) || Boolean(editing)
+  const [draft, setDraft] = useState<string | null>(null)
+
+  async function commit() {
+    if (draft === null) return
+    const next = draft
+    setDraft(null)
+    if (next.trim() !== '' && next !== document.title) await onRename?.(document, next)
+  }
+
   return <div>
     <div className="flex items-center gap-0.5">
       <div className="min-w-0 flex-1">
-        <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} depth={depth} expanded={isExpanded} onToggle={hasChildren && !editing ? () => onToggle(document.id) : undefined} />
+        {draft !== null ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => void commit()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void commit()
+              if (event.key === 'Escape') setDraft(null)
+            }}
+            className={cn(
+              'w-full rounded-lg border border-brand-500 px-2 py-1.5 text-sm dark:bg-slate-800',
+              depth > 0 && 'ml-3',
+            )}
+          />
+        ) : (
+          <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} depth={depth} expanded={isExpanded} onToggle={hasChildren && !editing ? () => onToggle(document.id) : undefined} />
+        )}
       </div>
-      {editing && (
+      {editing && draft === null && (
         <span className="flex shrink-0 items-center">
+          <OutlineButton label="이름 바꾸기" onClick={() => setDraft(document.title)}>✎</OutlineButton>
           <OutlineButton label="위로" onClick={() => onShift?.(document, -1)}>↑</OutlineButton>
           <OutlineButton label="아래로" onClick={() => onShift?.(document, 1)}>↓</OutlineButton>
           <OutlineButton label="다른 곳으로 옮기기" onClick={() => onMove?.(document)}>⇥</OutlineButton>
         </span>
       )}
     </div>
-    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} />)}
+    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} onRename={onRename} />)}
   </div>
 }
 
