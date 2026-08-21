@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -36,6 +37,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
   const { session, isAdmin } = useAuth()
   const userId = session?.user.id ?? ''
 
+  const embed = useEmbedPickers({ subjectId: null, theory: true })
   const [solution, setSolution] = useState<Solution | null | 'loading'>('loading')
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -115,7 +117,9 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
           placeholder="이 문제의 해설을 적어보세요."
           minHeight="7rem"
           compact
+          onRequestTheory={embed.onRequestTheory}
         />
+        {embed.pickers}
         <div className="mt-1.5 flex justify-end gap-1.5">
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
             취소

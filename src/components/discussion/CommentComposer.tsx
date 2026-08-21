@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { useDraft } from '@/components/editor/useDraft'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -38,6 +39,7 @@ export function CommentComposer({
     enabled: draftEnabled,
   })
 
+  const embed = useEmbedPickers({ subjectId: null, theory: true })
   const [seed, setSeed] = useState(() => ({
     doc: editing?.content ?? emptyDoc(),
     version: 0,
@@ -122,7 +124,9 @@ export function CommentComposer({
         placeholder={PLACEHOLDER}
         compact
         onUploadError={setError}
+        onRequestTheory={embed.onRequestTheory}
       />
+      {embed.pickers}
 
       {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
 

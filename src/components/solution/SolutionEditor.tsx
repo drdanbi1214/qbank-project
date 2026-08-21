@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
 import { SolutionScopePicker } from '@/components/solution/SolutionScope'
 import { UnitPicker } from '@/components/question/UnitPicker'
@@ -45,6 +46,7 @@ export function SolutionEditor({
 }: Props) {
   const isNew = !existing
   const { profile, updateProfile } = useAuth()
+  const embed = useEmbedPickers({ subjectId: subjectId, theory: true })
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
   // 새 풀이는 마지막에 쓴 공개범위로 시작한다. 수정할 때는 그 풀이의 값을 그대로 쓴다.
   const [scope, setScope] = useState<string | null>(
@@ -177,7 +179,9 @@ export function SolutionEditor({
         placeholder="풀이를 작성해주세요. 이미지는 붙여넣기로 바로 올릴 수 있습니다."
         minHeight="18rem"
         onUploadError={setError}
+        onRequestTheory={embed.onRequestTheory}
       />
+      {embed.pickers}
       <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} userId={userId} />
 
       {error && (

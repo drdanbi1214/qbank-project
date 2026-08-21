@@ -5,6 +5,7 @@ import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePick
 import { SolutionScopePicker } from '@/components/solution/SolutionScope'
 import { UnitPicker } from '@/components/question/UnitPicker'
 import { useDraft } from '@/components/editor/useDraft'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
@@ -73,6 +74,8 @@ export function AssignmentEditor({
   )
 
   const subjectId = taxonomy?.examById.get(examId)?.subjectId ?? null
+  // 풀이에는 이론 근거를 다는 일이 잦다. 야마(문제 카드)는 문제 화면 안이라 겹치므로 뺀다.
+  const embed = useEmbedPickers({ subjectId, yama: false, theory: true })
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
   // 아직 아무도 안 건드린 AI 1차 분류일 때만 안내를 보여준다. 여기서 바꾸면
   // 저장 시 human_confirmed 로 바뀌므로 다음에 들어오면 안 뜬다.
@@ -244,7 +247,9 @@ export function AssignmentEditor({
         placeholder="풀이를 작성해주세요."
         minHeight="14rem"
         onUploadError={setError}
+        onRequestTheory={embed.onRequestTheory}
       />
+      {embed.pickers}
 
       <div className="mt-3">
         <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} userId={userId} />

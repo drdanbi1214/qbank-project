@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
@@ -16,6 +17,7 @@ export function TheorySubjectPage() {
   const { subjectId, documentId } = useParams()
   const { session, isAdmin } = useAuth()
   const { taxonomy, loading: taxonomyLoading } = useData()
+  const embed = useEmbedPickers({ subjectId: subjectId, theory: true })
   const [documents, setDocuments] = useState<TheoryDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
@@ -153,7 +155,9 @@ export function TheorySubjectPage() {
                     placeholder="이론 내용을 입력하세요. 이미지는 붙여넣거나 이미지 버튼으로 추가할 수 있습니다."
                     minHeight="30rem"
                     onUploadError={setEditError}
+                    onRequestTheory={embed.onRequestTheory}
                   />
+                  {embed.pickers}
                   {editError && <p className="text-sm text-rose-600 dark:text-rose-400">{editError}</p>}
                   <div className="flex gap-2">
                     <Button onClick={() => void saveTheory(selected)} disabled={editBusy}>

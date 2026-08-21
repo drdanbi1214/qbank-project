@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { LinkedQuestionCard } from '@/components/discussion/LinkedQuestionCard'
@@ -50,6 +51,7 @@ export function DiscussionComposer({
   onCancel,
 }: Props) {
   const seed = existing?.content ?? (initialQuote ? quotedDoc(initialQuote) : emptyDoc())
+  const embed = useEmbedPickers({ subjectId: null, theory: true })
   const [category, setCategory] = useState<DiscussionCategory>(existing?.category ?? '해설질문')
   const [title, setTitle] = useState(existing?.title ?? '')
   const [busy, setBusy] = useState(false)
@@ -142,7 +144,9 @@ export function DiscussionComposer({
         placeholder="궁금한 점을 적어주세요. 이미지는 붙여넣기로 바로 올릴 수 있습니다."
         minHeight="14rem"
         onUploadError={setError}
+        onRequestTheory={embed.onRequestTheory}
       />
+      {embed.pickers}
 
       {error && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
@@ -22,6 +23,7 @@ export function PersonalNoteTab({
   const target = useMemo<NoteTarget>(() => ({ questionId, groupId }), [questionId, groupId])
   const noteKey = groupId ?? questionId
 
+  const embed = useEmbedPickers({ subjectId: null, theory: true })
   const [loaded, setLoaded] = useState<{ key: string; note: PersonalNote | null } | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -82,7 +84,9 @@ export function PersonalNoteTab({
         placeholder="나만 보는 메모입니다."
         minHeight="12rem"
         onUploadError={setError}
+        onRequestTheory={embed.onRequestTheory}
       />
+      {embed.pickers}
 
       {error && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
