@@ -134,6 +134,16 @@ export function TheorySubjectPage() {
     ? findSectionRoot(current, documents, new Set(sectionRoots.map((document) => document.id)))
     : null
   const navigationRoots = activeSection ? childrenOf(activeSection.id) : topLevel
+  // 아래쪽 이전/다음은 목차에 보이는 차례 그대로 따라간다. 글이 없는 묶음은
+  // 읽을 것이 없으므로 건너뛴다.
+  const readingOrder: TheoryDocument[] = []
+  const walk = (nodes: TheoryDocument[]) => {
+    for (const node of nodes) {
+      if (node.hasContent) readingOrder.push(node)
+      walk(childrenOf(node.id))
+    }
+  }
+  walk(topLevel)
   const visibleExpanded = new Set(expanded)
   const documentById = new Map(documents.map((document) => [document.id, document]))
   let selectedParentId = current?.parentId
@@ -276,7 +286,15 @@ export function TheorySubjectPage() {
                   </div>
                 </div>
               ) : (
-                <RichTextViewer doc={selected.content} hierarchicalIndent />
+                <>
+                  <RichTextViewer doc={selected.content} hierarchicalIndent />
+                  <TheoryPager
+                    subjectId={subject.id}
+                    current={selected}
+                    ordered={readingOrder}
+                    titleOf={(id) => documentById.get(id)?.title ?? ''}
+                  />
+                </>
               )}
             </article>
           )}
@@ -520,5 +538,74 @@ function TheoryNavItem({
         이론
       </span>
     </div>
+  )
+}
+
+/**
+ * 글 아래쪽 이전/다음 이동.
+ *
+ * 목차에 보이는 차례를 그대로 따라가므로 묶음 경계를 넘어 다음 대단원으로도
+ * 이어진다. 양 끝에서는 링크 대신 왜 더 갈 곳이 없는지 알려준다 — 눌리지
+ * 않는 화살표만 있으면 고장인지 끝인지 구분되지 않는다.
+ */
+function TheoryPager({ subjectId, current, ordered, titleOf }: {
+  subjectId: string
+  current: TheoryDocument
+  ordered: TheoryDocument[]
+  titleOf: (id: string) => string
+}) {
+  const index = ordered.findIndex((row) => row.id === current.id)
+  if (index === -1) return null
+  const previous = index > 0 ? ordered[index - 1] : null
+  const next = index < ordered.length - 1 ? ordered[index + 1] : null
+
+  return (
+    <nav className="mt-10 flex items-stretch justify-between gap-3 border-t border-slate-200 pt-5 dark:border-slate-700">
+      {previous ? (
+        <Link
+          to={`/theory/${subjectId}/${previous.id}`}
+          className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-300 text-slate-400 transition-colors group-hover:border-brand-500 group-hover:text-brand-600 dark:border-slate-600">
+            ‹
+          </span>
+          <span className="min-w-0">
+            {previous.parentId && (
+              <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
+                {titleOf(previous.parentId)}
+              </span>
+            )}
+            <span className="block truncate text-sm font-semibold">{previous.title}</span>
+          </span>
+        </Link>
+      ) : (
+        <span className="flex flex-1 items-center px-4 text-xs text-slate-400 dark:text-slate-500">
+          첫 단원입니다
+        </span>
+      )}
+
+      {next ? (
+        <Link
+          to={`/theory/${subjectId}/${next.id}`}
+          className="group flex min-w-0 flex-1 items-center justify-end gap-3 rounded-xl px-2 py-2 text-right transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          <span className="min-w-0">
+            {next.parentId && (
+              <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
+                {titleOf(next.parentId)}
+              </span>
+            )}
+            <span className="block truncate text-sm font-semibold">{next.title}</span>
+          </span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-300 text-slate-400 transition-colors group-hover:border-brand-500 group-hover:text-brand-600 dark:border-slate-600">
+            ›
+          </span>
+        </Link>
+      ) : (
+        <span className="flex flex-1 items-center justify-end px-4 text-xs text-slate-400 dark:text-slate-500">
+          마지막 단원입니다
+        </span>
+      )}
+    </nav>
   )
 }
