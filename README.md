@@ -11,7 +11,8 @@
 |---|---|
 | Frontend | React 19, TypeScript, Vite |
 | Styling | Tailwind CSS v4 (`@tailwindcss/vite`) |
-| Backend | Supabase (PostgreSQL, Auth, Storage, Realtime, RLS) |
+| Backend | Supabase (PostgreSQL, Auth, Realtime, RLS) |
+| Object Storage | Cloudflare R2 + private Worker gateway (Supabase temporary fallback) |
 | Routing | React Router v7 |
 | Deployment | Vercel |
 
@@ -22,12 +23,16 @@ npm install
 npm run dev
 ```
 
-`.env.local` 에 아래 두 값이 필요합니다. URL 은 프로젝트 주소만 넣고 `/rest/v1` 같은
-경로는 붙이지 않습니다.
+`.env.local` 에 아래 값이 필요합니다. Supabase URL에는 `/rest/v1` 같은 경로를
+붙이지 않습니다. 브라우저에는 신형 publishable key만 넣고 secret key는 넣지 않습니다.
 
 ```
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon key>
+VITE_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_...>
+VITE_STORAGE_PROVIDER=r2
+VITE_R2_GATEWAY_URL=https://<worker-name>.<account>.workers.dev
+VITE_STORAGE_READ_FALLBACK=true
+VITE_STORAGE_UPLOAD_FALLBACK=true
 ```
 
 ## 명령어
@@ -39,6 +44,20 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 | `npm run lint` | ESLint |
 | `npm run db:push` | `supabase/migrations` 를 연결된 프로젝트에 적용 |
 | `npm run gen:types` | DB 스키마에서 `src/types/database.ts` 재생성 |
+| `npm run typecheck:worker` | R2 gateway Worker 타입 검사 |
+| `npm run worker:deploy` | R2 gateway Worker 배포 |
+| `npm run worker:tail` | R2 gateway 실시간 오류 확인 |
+
+## 비공개 파일 저장소
+
+DB에는 실제 URL이 아니라 `버킷/경로`만 저장한다. 브라우저는 Supabase JWT로
+Worker에 권한 확인을 요청하고, 허용된 객체에 대해서만 5분짜리 읽기 URL을 받는다.
+R2 자격 증명과 관리용 migration secret은 브라우저 번들에 포함하지 않는다.
+
+운영 데이터는 2026-08-21 기준 9개 버킷, 3,348개, 373.2 MiB를 R2로 복사하고
+재다운로드 SHA-256 전수 검증했다. 안정화 중에는 Supabase 원본과 읽기·업로드
+fallback을 보존한다. 원본 삭제는 별도 백업과 실제 로그인 화면 검증을 마치기 전에는
+수행하지 않는다. 상세 절차는 [Worker 운영 문서](cloudflare/storage-worker/README.md)를 참고한다.
 
 ## 데이터베이스
 

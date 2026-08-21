@@ -30,3 +30,29 @@ npm run worker:deploy
 
 로컬 개발에서는 `.dev.vars.example`을 `.dev.vars`로 복사하고 실제 값을 넣는다.
 `.dev.vars`는 Git에 커밋하지 않는다.
+
+## Migration and verification
+
+이전 명령은 Supabase 원본을 삭제하지 않으며, 객체마다 R2에서 다시 내려받아
+SHA-256을 비교한다. 완료 기록은 무시되는 `tmp/r2-migration-manifest.jsonl`에
+남아 중단 후 같은 명령으로 재개할 수 있다.
+
+```bash
+python3 scripts/migrate_storage_to_r2.py --apply --verify --workers 6
+
+# manifest를 믿지 않고 양쪽 원본을 다시 읽는 전수 감사
+python3 scripts/migrate_storage_to_r2.py --force --verify --workers 6
+```
+
+전수 검증 뒤에만 Vercel의 `VITE_STORAGE_PROVIDER=r2`를 배포한다. 초기 안정화
+기간에는 `VITE_STORAGE_READ_FALLBACK=true`와
+`VITE_STORAGE_UPLOAD_FALLBACK=true`를 유지한다.
+
+## Rollback
+
+R2 읽기나 업로드에 운영 문제가 있으면 Vercel의 `VITE_STORAGE_PROVIDER`를
+`supabase`로 되돌려 재배포한다. DB에는 같은 `버킷/경로`가 남고 Supabase 원본도
+보존하므로 데이터 변경 없이 즉시 되돌릴 수 있다.
+
+Supabase 원본 삭제는 이 문서의 롤백 경로를 포기하는 파괴적 작업이다. 실제 로그인
+화면에서 이미지와 PDF를 표본 확인하고 별도 백업을 확보하기 전에는 삭제하지 않는다.
