@@ -32,7 +32,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_...>
 VITE_STORAGE_PROVIDER=r2
 VITE_R2_GATEWAY_URL=https://<worker-name>.<account>.workers.dev
 VITE_STORAGE_READ_FALLBACK=true
-VITE_STORAGE_UPLOAD_FALLBACK=true
+VITE_STORAGE_UPLOAD_FALLBACK=false
 ```
 
 ## 명령어
@@ -55,9 +55,11 @@ Worker에 권한 확인을 요청하고, 허용된 객체에 대해서만 5분�
 R2 자격 증명과 관리용 migration secret은 브라우저 번들에 포함하지 않는다.
 
 운영 데이터는 2026-08-21 기준 9개 버킷, 3,348개, 373.2 MiB를 R2로 복사하고
-재다운로드 SHA-256 전수 검증했다. 안정화 중에는 Supabase 원본과 읽기·업로드
-fallback을 보존한다. 원본 삭제는 별도 백업과 실제 로그인 화면 검증을 마치기 전에는
-수행하지 않는다. 상세 절차는 [Worker 운영 문서](cloudflare/storage-worker/README.md)를 참고한다.
+재다운로드 SHA-256 전수 검증했다. 실제 인증 업로드·서명·전체/Range 읽기 E2E
+검증 뒤에는 신규 파일이 두 저장소로 갈라지지 않도록 업로드 fallback을 끄고, 기존
+파일 표시를 위한 읽기 fallback과 Supabase 원본만 보존한다. 원본 삭제는 별도 백업과
+실제 로그인 화면 검증을 마치기 전에는 수행하지 않는다. 상세 절차는
+[Worker 운영 문서](cloudflare/storage-worker/README.md)를 참고한다.
 
 ## 데이터베이스
 

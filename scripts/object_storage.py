@@ -85,20 +85,29 @@ class R2Backend:
         sha256: str | None = None,
     ) -> None:
         digest = sha256 or hashlib.sha256(data).hexdigest()
-        response = requests.put(
-            self._url(logical_bucket, path),
-            headers={
-                **self._headers,
-                "Content-Type": content_type,
-                "X-Content-Sha256": digest,
-            },
-            data=data,
-            timeout=(15, 180),
-        )
-        if response.status_code not in (200, 201):
-            raise RuntimeError(
-                f"R2 업로드 실패 {response.status_code}: {response.text[:300]}"
-            )
+        last_error = ""
+        for attempt in range(3):
+            try:
+                response = requests.put(
+                    self._url(logical_bucket, path),
+                    headers={
+                        **self._headers,
+                        "Content-Type": content_type,
+                        "X-Content-Sha256": digest,
+                    },
+                    data=data,
+                    timeout=(15, 180),
+                )
+                if response.status_code in (200, 201):
+                    return
+                last_error = f"HTTP {response.status_code}: {response.text[:300]}"
+                if response.status_code not in (408, 429) and response.status_code < 500:
+                    break
+            except requests.RequestException as exc:
+                last_error = str(exc)
+            if attempt < 2:
+                time.sleep(0.5 * (2 ** attempt))
+        raise RuntimeError(f"R2 업로드 실패: {last_error}")
 
     def head(self, logical_bucket: str, path: str) -> dict | None:
         response = requests.head(

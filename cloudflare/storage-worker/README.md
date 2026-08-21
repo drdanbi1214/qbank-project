@@ -44,9 +44,11 @@ python3 scripts/migrate_storage_to_r2.py --apply --verify --workers 6
 python3 scripts/migrate_storage_to_r2.py --force --verify --workers 6
 ```
 
-전수 검증 뒤에만 Vercel의 `VITE_STORAGE_PROVIDER=r2`를 배포한다. 초기 안정화
-기간에는 `VITE_STORAGE_READ_FALLBACK=true`와
-`VITE_STORAGE_UPLOAD_FALLBACK=true`를 유지한다.
+전수 검증 뒤에만 Vercel의 `VITE_STORAGE_PROVIDER=r2`를 배포한다. 초기 canary
+기간에는 읽기·업로드 fallback을 모두 유지한다. 실제 인증 업로드와 서명 읽기 E2E가
+통과하면 신규 파일이 두 저장소로 갈라지지 않도록
+`VITE_STORAGE_UPLOAD_FALLBACK=false`로 바꾸고,
+`VITE_STORAGE_READ_FALLBACK=true`만 유지한다.
 
 ## Rollback
 
