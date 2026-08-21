@@ -103,9 +103,8 @@ function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewP
               draggable={false}
               style={width ? { width } : undefined}
               className={cn(
-                'max-w-full rounded-lg',
-                // 폭을 정하지 않은 예전 이미지는 지금까지처럼 높이로 가둔다.
-                width ? 'h-auto' : 'max-h-96',
+                // 폭을 정하지 않았으면 원본 크기로 두고, 편집기보다 넓을 때만 줄인다.
+                'h-auto max-w-full rounded-lg',
                 selected
                   ? 'ring-2 ring-brand-500'
                   : 'border border-slate-200 dark:border-slate-700',
@@ -165,7 +164,18 @@ export const StoredImage = Image.extend({
       ...this.parent?.(),
       width: {
         default: null,
-        parseHTML: (element) => imageWidthOf(Number(element.getAttribute('width'))),
+        /**
+         * width 속성이 없으면 폭을 정하지 않은 것으로 둔다.
+         *
+         * Number(null) 은 0 이고 imageWidthOf 는 최솟값 80 으로 올려버린다.
+         * 그래서 폭 없이 붙여넣은 이미지가 전부 80px 로 쪼그라들었다.
+         */
+        parseHTML: (element) => {
+          const raw = element.getAttribute('width')
+          if (raw === null || raw.trim() === '') return null
+          const value = Number(raw)
+          return Number.isFinite(value) && value > 0 ? imageWidthOf(value) : null
+        },
         renderHTML: (attributes) => {
           const width = imageWidthOf(attributes.width)
           return width ? { width: String(width) } : {}

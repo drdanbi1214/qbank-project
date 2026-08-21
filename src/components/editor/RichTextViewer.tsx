@@ -354,10 +354,8 @@ function ViewerImage({
         alt={alt ?? '본문 이미지'}
         loading="lazy"
         style={width ? { width } : undefined}
-        className={cn(
-          'max-w-full rounded-lg border border-slate-200 dark:border-slate-700',
-          width ? 'h-auto' : 'max-h-96',
-        )}
+        // 폭 미지정이면 원본 크기로 둔다. 넘치면 max-w-full 이 줄인다.
+        className="h-auto max-w-full rounded-lg border border-slate-200 dark:border-slate-700"
       />
     </button>
   )
