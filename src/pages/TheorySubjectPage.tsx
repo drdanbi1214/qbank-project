@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
@@ -8,7 +8,13 @@ import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchTheoryDocuments, updateTheoryDocumentContent, type TheoryDocument } from '@/lib/queries/theory'
+import {
+  fetchTheoryDocuments,
+  swapTheoryOrder,
+  updateTheoryDocumentContent,
+  type TheoryDocument,
+} from '@/lib/queries/theory'
+import { MoveDialog } from '@/components/theory/TheoryOutlineTools'
 import { uploadTheoryImage } from '@/lib/uploads'
 import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
@@ -26,20 +32,37 @@ export function TheorySubjectPage() {
   const [editError, setEditError] = useState<string | null>(null)
   const editedContent = useRef<RichDoc | null>(null)
 
-  useEffect(() => {
+  // 목차를 옮기고 나면 다시 읽어야 하므로 따로 뺀다.
+  const load = useCallback(() => {
     if (!subjectId) return
-    let active = true
     void fetchTheoryDocuments(subjectId)
-      .then((rows) => {
-        if (active) setDocuments(rows)
-      })
+      .then(setDocuments)
       .catch((caught: unknown) => {
-        if (active) setError(caught instanceof Error ? caught.message : '이론을 불러오지 못했습니다.')
+        setError(caught instanceof Error ? caught.message : '이론을 불러오지 못했습니다.')
       })
-    return () => {
-      active = false
-    }
   }, [subjectId])
+
+  useEffect(load, [load])
+
+  // 목차 편집 — 관리자만. 원본 폴더 구조를 그대로 가져온 목차라 손볼 일이 잦다.
+  const [outlineEditing, setOutlineEditing] = useState(false)
+  const [moving, setMoving] = useState<TheoryDocument | null>(null)
+
+  const shift = useCallback(
+    (document: TheoryDocument, direction: -1 | 1) => {
+      const siblings = (documents ?? [])
+        .filter((row) => row.parentId === document.parentId)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko'))
+      const index = siblings.findIndex((row) => row.id === document.id)
+      const neighbour = siblings[index + direction]
+      if (!neighbour) return
+      void swapTheoryOrder(document, neighbour).then(load).catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : '순서를 바꾸지 못했습니다.')
+      })
+    },
+    [documents, load],
+  )
+
 
   if (!subjectId) return <Navigate to="/theory" replace />
   if (taxonomyLoading || documents === null) {
@@ -123,7 +146,21 @@ export function TheorySubjectPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
-            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} />)}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setOutlineEditing((on) => !on)}
+                className={cn(
+                  'mb-1 w-full rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                  outlineEditing
+                    ? 'bg-brand-600 text-white'
+                    : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800',
+                )}
+              >
+                {outlineEditing ? '목차 편집 끝내기' : '목차 편집'}
+              </button>
+            )}
+            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} editing={outlineEditing} onShift={shift} onMove={setMoving} />)}
           </nav>
 
           {selected && (
@@ -192,6 +229,18 @@ export function TheorySubjectPage() {
             )
           )}
         </div>
+      )}
+
+      {moving && documents && (
+        <MoveDialog
+          document={moving}
+          all={documents}
+          onClose={() => setMoving(null)}
+          onMoved={() => {
+            setMoving(null)
+            load()
+          }}
+        />
       )}
     </section>
   )
@@ -290,16 +339,49 @@ function TheoryGroupLanding({ subjectId, document, children }: {
   )
 }
 
-function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0 }: {
+type OutlineTools = {
+  /** 목차 편집 중인지. 관리자가 켰을 때만 참이다. */
+  editing?: boolean
+  onShift?: (document: TheoryDocument, direction: -1 | 1) => void
+  onMove?: (document: TheoryDocument) => void
+}
+
+function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0, editing, onShift, onMove }: {
   document: TheoryDocument; subjectId: string; selectedId?: string; childrenOf: (id: string) => TheoryDocument[]; expanded: Set<string>; onToggle: (id: string) => void; depth?: number
-}) {
+} & OutlineTools) {
   const children = childrenOf(document.id)
   const hasChildren = children.length > 0
-  const isExpanded = expanded.has(document.id)
+  // 편집 중에는 옮길 곳이 보여야 하므로 접힌 가지도 펼쳐 둔다.
+  const isExpanded = expanded.has(document.id) || Boolean(editing)
   return <div>
-    <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} depth={depth} expanded={isExpanded} onToggle={hasChildren ? () => onToggle(document.id) : undefined} />
-    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} />)}
+    <div className="flex items-center gap-0.5">
+      <div className="min-w-0 flex-1">
+        <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} depth={depth} expanded={isExpanded} onToggle={hasChildren && !editing ? () => onToggle(document.id) : undefined} />
+      </div>
+      {editing && (
+        <span className="flex shrink-0 items-center">
+          <OutlineButton label="위로" onClick={() => onShift?.(document, -1)}>↑</OutlineButton>
+          <OutlineButton label="아래로" onClick={() => onShift?.(document, 1)}>↓</OutlineButton>
+          <OutlineButton label="다른 곳으로 옮기기" onClick={() => onMove?.(document)}>⇥</OutlineButton>
+        </span>
+      )}
+    </div>
+    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} />)}
   </div>
+}
+
+function OutlineButton({ label, onClick, children }: { label: string; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className="rounded px-1 py-0.5 text-xs text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+    >
+      {children}
+    </button>
+  )
 }
 
 function TheoryNavItem({
