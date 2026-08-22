@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { collectLectureReferences } from '@/lib/queries/lectures'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
 import { SolutionScopePicker } from '@/components/solution/SolutionScope'
@@ -79,6 +80,14 @@ export function SolutionEditor({
     (next: RichDoc) => {
       doc.current = next
       schedule(next)
+      // 본문에 강의록 쪽을 넣으면 아래 "관련 단원" 에도 저절로 잡히게 한다.
+      // 이미 있는 줄은 건드리지 않고, 사용자가 지운 것을 되살리지도 않도록
+      // 본문에 있는데 목록에 없는 것만 더한다.
+      setReferences((prev) => {
+        const known = new Set(prev.map((item) => item.url))
+        const added = collectLectureReferences(next).filter((item) => !known.has(item.url))
+        return added.length > 0 ? [...prev, ...added] : prev
+      })
     },
     [schedule],
   )

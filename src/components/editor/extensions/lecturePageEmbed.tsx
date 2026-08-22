@@ -7,7 +7,7 @@ import { LecturePageCard, type LecturePageAttrs } from '@/components/lecture/Lec
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     lecturePageEmbed: {
-      insertLecturePage: (attrs: LecturePageAttrs) => ReturnType
+      insertLecturePage: (attrs: LecturePageAttrs | LecturePageAttrs[]) => ReturnType
     }
   }
 }
@@ -105,10 +105,19 @@ export const LecturePageEmbed = Node.create({
 
   addCommands() {
     return {
+      // 여러 쪽을 한 번에 받는다. chain() 으로 insertContent 를 이어 붙이면
+      // 묶인 명령들이 모두 "원래" 커서 위치를 보기 때문에 같은 자리에 겹쳐
+      // 들어가 마지막 쪽만 남는다. 한 번의 삽입으로 배열을 통째로 넣어야
+      // 순서대로 쌓이고, 되돌리기도 한 번에 걸린다.
       insertLecturePage:
-        (attrs: LecturePageAttrs) =>
+        (attrs: LecturePageAttrs | LecturePageAttrs[]) =>
         ({ commands }) =>
-          commands.insertContent({ type: this.name, attrs }),
+          commands.insertContent(
+            (Array.isArray(attrs) ? attrs : [attrs]).map((item) => ({
+              type: this.name,
+              attrs: item,
+            })),
+          ),
     }
   },
 })

@@ -191,3 +191,49 @@ export async function fetchLectureFacets(categoryId?: string | null): Promise<{
   years.sort((a, b) => b - a)
   return { professors, years }
 }
+
+/**
+ * 본문에 박힌 강의록 쪽을 훑어 참조 목록으로 만든다.
+ *
+ * 글 가운데 강의록을 넣고 나서 아래 "관련 단원" 에서 같은 강의록을 다시 찾게
+ * 하면 같은 일을 두 번 시키는 셈이다. 본문에 넣는 순간 참조에도 잡히게 한다.
+ * 같은 강의록을 여러 쪽 넣었으면 가장 앞 쪽 하나만 남긴다 — 참조는 "이 강의록을
+ * 봤다" 는 표시라 쪽마다 줄이 늘어날 필요가 없다.
+ */
+export function collectLectureReferences(
+  doc: unknown,
+): { label: string; url: string; kind: 'lecture'; page: number | null }[] {
+  const found = new Map<string, { label: string; url: string; kind: 'lecture'; page: number | null }>()
+
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    const record = node as Record<string, unknown>
+
+    if (record.type === 'lecturePageEmbed') {
+      const attrs = (record.attrs ?? {}) as Record<string, unknown>
+      const lectureId = typeof attrs.lectureId === 'string' ? attrs.lectureId : null
+      if (lectureId) {
+        const url = `/lectures/${lectureId}`
+        const page = typeof attrs.page === 'number' ? attrs.page : null
+        const title = typeof attrs.title === 'string' ? attrs.title : '강의록'
+        const professor = typeof attrs.professor === 'string' ? attrs.professor : null
+        const existing = found.get(url)
+        // 더 앞쪽을 만나면 그쪽으로 바꾼다.
+        if (!existing || (page !== null && (existing.page === null || page < existing.page))) {
+          found.set(url, {
+            label: [title, professor].filter(Boolean).join(' · '),
+            url,
+            kind: 'lecture',
+            page,
+          })
+        }
+      }
+    }
+
+    const content = record.content
+    if (Array.isArray(content)) for (const child of content) walk(child)
+  }
+
+  walk(doc)
+  return [...found.values()]
+}

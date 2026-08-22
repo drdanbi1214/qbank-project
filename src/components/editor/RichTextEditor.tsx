@@ -409,9 +409,7 @@ function Toolbar({
             void onRequestLecture().then((picks) => {
               if (!picks?.length) return
               // 고른 순서가 아니라 쪽 번호 순으로 이미 정렬되어 온다.
-              let chain = editor.chain().focus()
-              for (const pick of picks) chain = chain.insertLecturePage(pick)
-              chain.run()
+              editor.chain().focus().insertLecturePage(picks).run()
             })
           }}
         >
