@@ -160,9 +160,17 @@ export function examShortLabel(exam: Exam | undefined, subjectName: string | und
   return `${exam.cohort} ${subjectName ?? ''}`.trim()
 }
 
-/** cohort("26학번")를 연도(2026)로 바꿔 exam_name 과 합친다. 예: "2026 학년말고사" */
+/**
+ * 과목별 시험 목록에 쓰는 표시명.
+ * 기존 학년말고사는 "2026 학년말고사"처럼 유지하고, 계통 시험은
+ * "2026 본 2-1 계통 Y · 심혈관계 1차"처럼 교육과정과 계통명을 보존한다.
+ */
 export function examYearLabel(exam: Exam | undefined): string {
   if (!exam) return ''
+  if (exam.curriculum) {
+    const detail = [exam.examSubjectLabel, exam.examName].filter(Boolean).join(' ')
+    return [exam.curriculum, detail].filter(Boolean).join(' · ')
+  }
   const match = exam.cohort.match(/^(\d{2})학번$/)
   const year = match ? `20${match[1]}` : exam.cohort
   return `${year} ${exam.examName}`.trim()

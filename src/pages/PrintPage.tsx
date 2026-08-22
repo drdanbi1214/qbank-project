@@ -247,7 +247,9 @@ export function PrintPage() {
   const title =
     source === 'exam'
       ? exam
-        ? `${examSubjectName ?? ''} ${examYearLabel(exam)}`.trim()
+        ? exam.curriculum
+          ? examYearLabel(exam)
+          : `${examSubjectName ?? ''} ${examYearLabel(exam)}`.trim()
         : '시험 문제집'
       : source === 'bookmark'
         ? '북마크 문제집'
