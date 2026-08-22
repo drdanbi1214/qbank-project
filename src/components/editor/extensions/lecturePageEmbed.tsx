@@ -26,7 +26,7 @@ declare module '@tiptap/core' {
  * richtext.ts 의 LEAF_TYPES 에도 같은 이름이 등록되어 있어야 인라인 코멘트
  * 위치가 어긋나지 않는다.
  */
-function LecturePageEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
+function LecturePageEmbedView({ node, selected, editor, deleteNode, updateAttributes }: NodeViewProps) {
   const attrs = node.attrs as Record<string, unknown>
 
   return (
@@ -45,8 +45,10 @@ function LecturePageEmbedView({ node, selected, editor, deleteNode }: NodeViewPr
         page={typeof attrs.page === 'number' ? attrs.page : null}
         title={typeof attrs.title === 'string' ? attrs.title : null}
         professor={typeof attrs.professor === 'string' ? attrs.professor : null}
+        width={typeof attrs.width === 'number' ? attrs.width : null}
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
+        onResize={editor.isEditable ? (width) => updateAttributes({ width }) : undefined}
       />
     </NodeViewWrapper>
   )
@@ -87,6 +89,13 @@ export const LecturePageEmbed = Node.create({
         parseHTML: (element) => element.getAttribute('data-professor'),
         renderHTML: (attributes) =>
           attributes.professor ? { 'data-professor': attributes.professor } : {},
+      },
+      // 사람이 조절한 폭(px). 없으면 글 폭에 맞춘다.
+      width: {
+        default: null,
+        parseHTML: (element) => Number(element.getAttribute('data-width')) || null,
+        renderHTML: (attributes) =>
+          attributes.width ? { 'data-width': String(attributes.width) } : {},
       },
     }
   },

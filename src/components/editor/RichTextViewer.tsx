@@ -320,6 +320,7 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
             page={typeof attrs.page === 'number' ? attrs.page : null}
             title={typeof attrs.title === 'string' ? attrs.title : null}
             professor={typeof attrs.professor === 'string' ? attrs.professor : null}
+            width={typeof attrs.width === 'number' ? attrs.width : null}
           />
         </div>
       )
