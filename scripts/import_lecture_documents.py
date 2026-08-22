@@ -20,10 +20,13 @@
 기본은 시늉만 하는 모드다. 실제로 올리려면 --apply 를 준다.
 
     python3 scripts/import_lecture_documents.py ~/강의록/순환기 \\
-        --subject 내과 --curriculum "2026 본 2-1 계통 Y" --year 2026
+        --category 심혈관계 --curriculum "2026 본 2-1 계통 Y" --year 2026
 
     python3 scripts/import_lecture_documents.py ~/강의록/순환기 \\
-        --subject 내과 --year 2026 --apply
+        --category 심혈관계 --year 2026 --apply
+
+분류(--category)는 강의록 화면의 "과목"이며 임상 과목(내과·외과…)과 별개다.
+없는 이름을 주면 새로 만든다. 웹의 "과목 추가"로 미리 만들어 둔 것과 같은 것이다.
 
 파일명에서 교수명과 제목을 뽑아 보지만 규칙이 제각각이라 자주 틀린다. 먼저
 시늉 모드로 돌려 결과를 보고, 어긋나면 --manifest 로 바로잡는다. manifest 는
@@ -166,7 +169,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="강의록 PDF 일괄 등록")
     parser.add_argument("folder", type=pathlib.Path, help="PDF 가 든 폴더 (하위 폴더까지 훑는다)")
-    parser.add_argument("--subject", required=True, help="과목명. subjects.name 과 정확히 같아야 한다")
+    parser.add_argument("--category", required=True, help="강의록 분류 이름. 없으면 새로 만든다")
     parser.add_argument("--curriculum", default=None, help='예: "2026 본 2-1 계통 Y"')
     parser.add_argument("--year", type=int, default=None, help="판본 연도. 파일명에서 못 찾을 때 쓴다")
     parser.add_argument("--professor", default=None, help="폴더 전체가 같은 교수일 때")
@@ -186,13 +189,21 @@ def main() -> int:
 
     base, key = load_supabase_credentials()
 
-    subjects = json.loads(
-        rest(base, key, "GET", f"/rest/v1/subjects?select=id,name&name=eq.{urllib.parse.quote(args.subject)}")
+    category_name = args.category.strip()
+    found = json.loads(
+        rest(base, key, "GET", f"/rest/v1/lecture_categories?select=id,name&name=eq.{urllib.parse.quote(category_name)}")
     )
-    if not subjects:
-        print(f"과목을 찾지 못했습니다: {args.subject}")
-        return 1
-    subject_id = subjects[0]["id"]
+    if found:
+        category_id = found[0]["id"]
+    elif args.apply:
+        created = json.loads(
+            rest(base, key, "POST", "/rest/v1/lecture_categories", json.dumps({"name": category_name}).encode())
+        )
+        category_id = created[0]["id"]
+        print(f"분류를 새로 만들었습니다: {category_name}")
+    else:
+        category_id = None
+        print(f"분류 '{category_name}' 는 아직 없습니다. --apply 로 돌리면 새로 만듭니다.")
 
     admins = json.loads(rest(base, key, "GET", "/rest/v1/profiles?select=id&role=eq.admin&order=created_at&limit=1"))
     created_by = admins[0]["id"] if admins else None
@@ -206,7 +217,7 @@ def main() -> int:
     before_total = after_total = 0
     registered = skipped = failed = 0
 
-    print(f"{len(pdfs)}개 PDF · 과목 {args.subject}" + ("" if args.apply else " · 시늉 모드(--apply 없음)"))
+    print(f"{len(pdfs)}개 PDF · 분류 {category_name}" + ("" if args.apply else " · 시늉 모드(--apply 없음)"))
     print()
 
     for pdf in pdfs:
@@ -249,7 +260,7 @@ def main() -> int:
             backend.upload(BUCKET, path, data, "application/pdf", sha256=digest)
             body = json.dumps(
                 {
-                    "subject_id": subject_id,
+                    "category_id": category_id,
                     "title": title,
                     "professor": professor,
                     "curriculum": args.curriculum,

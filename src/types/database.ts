@@ -939,9 +939,45 @@ export type Database = {
           },
         ]
       }
+      lecture_categories: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_categories_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecture_documents: {
         Row: {
           byte_size: number | null
+          category_id: string
           content_hash: string
           created_at: string
           created_by: string | null
@@ -954,13 +990,13 @@ export type Database = {
           professor: string | null
           required_permission: string | null
           sort_order: number
-          subject_id: string
           text_content: string | null
           title: string
           updated_at: string
         }
         Insert: {
           byte_size?: number | null
+          category_id: string
           content_hash: string
           created_at?: string
           created_by?: string | null
@@ -973,13 +1009,13 @@ export type Database = {
           professor?: string | null
           required_permission?: string | null
           sort_order?: number
-          subject_id: string
           text_content?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           byte_size?: number | null
+          category_id?: string
           content_hash?: string
           created_at?: string
           created_by?: string | null
@@ -992,12 +1028,18 @@ export type Database = {
           professor?: string | null
           required_permission?: string | null
           sort_order?: number
-          subject_id?: string
           text_content?: string | null
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "lecture_documents_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lecture_documents_created_by_fkey"
             columns: ["created_by"]
@@ -1011,13 +1053,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "access_permissions"
             referencedColumns: ["key"]
-          },
-          {
-            foreignKeyName: "lecture_documents_subject_id_fkey"
-            columns: ["subject_id"]
-            isOneToOne: false
-            referencedRelation: "subjects"
-            referencedColumns: ["id"]
           },
         ]
       }

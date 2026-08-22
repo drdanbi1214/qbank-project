@@ -43,7 +43,9 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
     const keyword = lectureQuery.trim()
     let active = true
     const timer = setTimeout(() => {
-      void fetchLectureDocuments({ subjectId, keyword })
+      // 강의록 분류는 임상 과목과 다른 축이라 과목으로 좁히지 않는다.
+      // 제목·교수·본문 검색만으로 찾는다.
+      void fetchLectureDocuments({ keyword })
         .then((next) => active && setLectures(next.slice(0, 20)))
         .catch(() => active && setLectures([]))
     }, 250)
@@ -51,7 +53,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
       active = false
       clearTimeout(timer)
     }
-  }, [lectureOpen, lectureQuery, subjectId])
+  }, [lectureOpen, lectureQuery])
 
   const documents = useMemo(() => loaded ?? [], [loaded])
   const loading = allenOpen && loaded === null

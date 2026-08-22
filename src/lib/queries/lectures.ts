@@ -7,10 +7,20 @@ import { supabase } from '@/lib/supabase'
  * 한 부를 두고 화면에서 그대로 읽는다. text_content 는 화면에 뿌리지 않고 문서 간
  * 검색에만 쓰므로 목록 조회에서는 일부러 빼서 받는다 — 수백 건이면 본문까지 끌고
  * 오는 순간 목록이 몇 MB 가 된다.
+ *
+ * 분류는 임상 과목(subjects)이 아니라 강의록 전용 lecture_categories 를 쓴다.
  */
+export type LectureCategory = {
+  id: string
+  name: string
+  sortOrder: number
+  /** 그 분류에 담긴 강의록 수. 목록에서 바로 보여 주려고 함께 센다. */
+  documentCount: number
+}
+
 export type LectureDocument = {
   id: string
-  subjectId: string
+  categoryId: string
   title: string
   professor: string | null
   curriculum: string | null
@@ -24,11 +34,11 @@ export type LectureDocument = {
 }
 
 const LIST_SELECT =
-  'id, subject_id, title, professor, curriculum, lecture_year, file_path, byte_size, page_count, is_published, required_permission, updated_at'
+  'id, category_id, title, professor, curriculum, lecture_year, file_path, byte_size, page_count, is_published, required_permission, updated_at'
 
 type LectureRow = {
   id: string
-  subject_id: string
+  category_id: string
   title: string
   professor: string | null
   curriculum: string | null
@@ -44,7 +54,7 @@ type LectureRow = {
 function toLecture(row: LectureRow): LectureDocument {
   return {
     id: row.id,
-    subjectId: row.subject_id,
+    categoryId: row.category_id,
     title: row.title,
     professor: row.professor,
     curriculum: row.curriculum,
@@ -58,8 +68,50 @@ function toLecture(row: LectureRow): LectureDocument {
   }
 }
 
+/** 분류 목록. 빈 분류도 보여야 해서 문서 쪽에서 세지 않고 분류에서 끌고 온다. */
+export async function fetchLectureCategories(): Promise<LectureCategory[]> {
+  const { data, error } = await supabase
+    .from('lecture_categories')
+    .select('id, name, sort_order, lecture_documents(count)')
+    .order('sort_order')
+    .order('name')
+  if (error) throw error
+
+  type Row = {
+    id: string
+    name: string
+    sort_order: number
+    lecture_documents: { count: number }[] | null
+  }
+  return ((data ?? []) as unknown as Row[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    sortOrder: row.sort_order,
+    documentCount: row.lecture_documents?.[0]?.count ?? 0,
+  }))
+}
+
+export async function createLectureCategory(name: string): Promise<void> {
+  const { error } = await supabase.from('lecture_categories').insert({ name: name.trim() })
+  if (error) throw error
+}
+
+export async function renameLectureCategory(id: string, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('lecture_categories')
+    .update({ name: name.trim() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** 강의록이 남아 있으면 DB 의 참조 제약이 막는다. 빈 분류만 지워진다. */
+export async function deleteLectureCategory(id: string): Promise<void> {
+  const { error } = await supabase.from('lecture_categories').delete().eq('id', id)
+  if (error) throw error
+}
+
 export type LectureFilter = {
-  subjectId?: string | null
+  categoryId?: string | null
   professor?: string | null
   year?: number | null
   /** 제목과 본문에서 함께 찾는다. 본문 색인은 트라이그램이라 부분 문자열도 걸린다. */
@@ -75,7 +127,7 @@ export async function fetchLectureDocuments(filter: LectureFilter = {}): Promise
     .order('sort_order')
     .order('title')
 
-  if (filter.subjectId) query = query.eq('subject_id', filter.subjectId)
+  if (filter.categoryId) query = query.eq('category_id', filter.categoryId)
   if (filter.professor) query = query.eq('professor', filter.professor)
   if (filter.year) query = query.eq('lecture_year', filter.year)
 
@@ -105,12 +157,12 @@ export async function fetchLectureDocument(id: string): Promise<LectureDocument 
  * 목록 위의 거르개를 채울 값들. 실제로 등록된 것만 보여주려고 행에서 직접 뽑는다.
  * 교수가 110명이라 고정 목록을 코드에 둘 수 없다.
  */
-export async function fetchLectureFacets(subjectId?: string | null): Promise<{
+export async function fetchLectureFacets(categoryId?: string | null): Promise<{
   professors: string[]
   years: number[]
 }> {
   let query = supabase.from('lecture_documents').select('professor, lecture_year')
-  if (subjectId) query = query.eq('subject_id', subjectId)
+  if (categoryId) query = query.eq('category_id', categoryId)
 
   const { data, error } = await query
   if (error) throw error
