@@ -31,6 +31,10 @@ export type LectureDocument = {
   isPublished: boolean
   requiredPermission: string | null
   updatedAt: string
+  /** 본문 검색일 때 처음 일치한 쪽과 주변 문맥. 일반 목록에서는 null이다. */
+  matchPage: number | null
+  matchSnippet: string | null
+  matchPageCount: number
 }
 
 const LIST_SELECT =
@@ -49,6 +53,9 @@ type LectureRow = {
   is_published: boolean
   required_permission: string | null
   updated_at: string
+  match_page?: number | null
+  match_snippet?: string | null
+  match_page_count?: number | null
 }
 
 function toLecture(row: LectureRow): LectureDocument {
@@ -65,6 +72,9 @@ function toLecture(row: LectureRow): LectureDocument {
     isPublished: row.is_published,
     requiredPermission: row.required_permission,
     updatedAt: row.updated_at,
+    matchPage: row.match_page ?? null,
+    matchSnippet: row.match_snippet ?? null,
+    matchPageCount: row.match_page_count ?? 0,
   }
 }
 
@@ -119,6 +129,19 @@ export type LectureFilter = {
 }
 
 export async function fetchLectureDocuments(filter: LectureFilter = {}): Promise<LectureDocument[]> {
+  const keyword = filter.keyword?.trim() ?? ''
+  if (keyword) {
+    const { data, error } = await supabase.rpc('search_lecture_documents', {
+      p_query: keyword,
+      p_category_id: filter.categoryId ?? undefined,
+      p_professor: filter.professor ?? undefined,
+      p_year: filter.year ?? undefined,
+      p_limit: 200,
+    })
+    if (error) throw error
+    return ((data ?? []) as LectureRow[]).map(toLecture)
+  }
+
   let query = supabase
     .from('lecture_documents')
     .select(LIST_SELECT)
@@ -130,13 +153,6 @@ export async function fetchLectureDocuments(filter: LectureFilter = {}): Promise
   if (filter.categoryId) query = query.eq('category_id', filter.categoryId)
   if (filter.professor) query = query.eq('professor', filter.professor)
   if (filter.year) query = query.eq('lecture_year', filter.year)
-
-  const keyword = filter.keyword?.trim()
-  if (keyword) {
-    // 쉼표와 괄호는 PostgREST 의 or() 문법을 깨뜨리므로 미리 걸러낸다.
-    const safe = keyword.replace(/[,()]/g, ' ').trim()
-    if (safe) query = query.or(`title.ilike.%${safe}%,text_content.ilike.%${safe}%`)
-  }
 
   const { data, error } = await query
   if (error) throw error

@@ -26,6 +26,62 @@
   --color-brand-900: oklch(0.34 0.11 254);
 }
 
+/*
+ * PDF.js 캔버스 위에 같은 좌표의 투명 텍스트를 얹는다. 화면에는 원본 PDF가
+ * 보이지만 실제 글자는 드래그·복사할 수 있고 검색 일치 부분만 색으로 드러난다.
+ */
+.lecture-pdf-text-layer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  color-scheme: only light;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  forced-color-adjust: none;
+}
+
+.lecture-pdf-text-layer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  user-select: text;
+  transform-origin: 0 0;
+}
+
+.lecture-pdf-text-layer > :not(.markedContent),
+.lecture-pdf-text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.lecture-pdf-text-layer .markedContent {
+  display: contents;
+}
+
+.lecture-pdf-text-layer ::selection {
+  color: transparent;
+  background: rgb(37 99 235 / 0.3);
+}
+
+.lecture-pdf-text-layer .lecture-pdf-search-hit {
+  color: transparent;
+  background: rgb(250 204 21 / 0.55);
+  border-radius: 2px;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

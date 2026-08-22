@@ -77,7 +77,15 @@ TIMETABLE_PATTERNS = (
 TIMETABLE_NO_PROFESSOR = re.compile(r"^(\d{4})_[\d,\s]+교시_(.+)$")
 
 
-def rest(base: str, key: str, method: str, path: str, body: bytes | None = None) -> bytes:
+def rest(
+    base: str,
+    key: str,
+    method: str,
+    path: str,
+    body: bytes | None = None,
+    *,
+    prefer: str = "return=representation",
+) -> bytes:
     request = urllib.request.Request(
         f"{base}{path}",
         data=body,
@@ -86,7 +94,7 @@ def rest(base: str, key: str, method: str, path: str, body: bytes | None = None)
             "Authorization": f"Bearer {key}",
             "apikey": key,
             "Content-Type": "application/json",
-            "Prefer": "return=representation",
+            "Prefer": prefer,
         },
     )
     with urllib.request.urlopen(request, timeout=120) as response:
@@ -148,14 +156,15 @@ def shrink(source: pathlib.Path) -> bytes:
     return source.read_bytes()
 
 
-def profile(data: bytes) -> tuple[int, str]:
+def profile(data: bytes) -> tuple[int, str, list[str]]:
     document = fitz.open(stream=data, filetype="pdf")
     try:
         pages = len(document)
-        text = "\n".join(page.get_text().strip() for page in document)
+        page_texts = [page.get_text("text", sort=True).strip() for page in document]
+        text = "\n".join(page_texts)
     finally:
         document.close()
-    return pages, text.strip()
+    return pages, text.strip(), page_texts
 
 
 def guess_meta(name: str) -> tuple[str, str | None, int | None]:
@@ -285,7 +294,7 @@ def main() -> int:
             skipped += 1
             continue
 
-        pages, text = profile(data)
+        pages, text, page_texts = profile(data)
         path = f"{args.prefix.strip('/')}/{safe_key(pdf.name)}" if args.prefix else safe_key(pdf.name)
         shrink_note = f"{original_size / 1024 / 1024:.1f}MB → {len(data) / 1024 / 1024:.1f}MB"
         text_note = f"{len(text):,}자" if text else "텍스트 없음(스캔본)"
@@ -318,7 +327,25 @@ def main() -> int:
                     "created_by": created_by,
                 }
             ).encode()
-            rest(base, key, "POST", "/rest/v1/lecture_documents", body)
+            created = json.loads(rest(base, key, "POST", "/rest/v1/lecture_documents", body))
+            lecture_id = created[0]["id"]
+            page_rows = [
+                {
+                    "lecture_id": lecture_id,
+                    "page_number": page_number,
+                    "text_content": page_text,
+                }
+                for page_number, page_text in enumerate(page_texts, 1)
+            ]
+            for offset in range(0, len(page_rows), 200):
+                rest(
+                    base,
+                    key,
+                    "POST",
+                    "/rest/v1/lecture_page_texts?on_conflict=lecture_id,page_number",
+                    json.dumps(page_rows[offset : offset + 200]).encode(),
+                    prefer="return=minimal,resolution=merge-duplicates",
+                )
             registered += 1
         except Exception as exc:
             print(f"           실패: {exc}")

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
 import { Spinner } from '@/components/ui/Spinner'
@@ -11,22 +11,81 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString()
 
-type Props = { storagePath: string; title: string; initialPage?: number | null }
+type Props = {
+  storagePath: string
+  title: string
+  initialPage?: number | null
+  initialQuery?: string
+}
+
+type SearchHit = { pageNumber: number; count: number }
+
+function countMatches(text: string, query: string): number {
+  if (!query) return 0
+  const haystack = text.toLocaleLowerCase()
+  const needle = query.toLocaleLowerCase()
+  let cursor = 0
+  let count = 0
+  while ((cursor = haystack.indexOf(needle, cursor)) >= 0) {
+    count += 1
+    cursor += needle.length
+  }
+  return count
+}
+
+function markTextLayer(container: HTMLDivElement, query: string) {
+  const needle = query.trim().toLocaleLowerCase()
+  for (const span of container.querySelectorAll<HTMLSpanElement>('span')) {
+    if (span.children.length > 0) continue
+    const source = span.dataset.sourceText ?? span.textContent ?? ''
+    span.dataset.sourceText = source
+    span.replaceChildren(source)
+    if (!needle) continue
+
+    const lower = source.toLocaleLowerCase()
+    let cursor = 0
+    let found = lower.indexOf(needle)
+    if (found < 0) continue
+
+    const fragment = window.document.createDocumentFragment()
+    while (found >= 0) {
+      if (found > cursor) fragment.append(source.slice(cursor, found))
+      const mark = window.document.createElement('mark')
+      mark.className = 'lecture-pdf-search-hit'
+      mark.textContent = source.slice(found, found + query.trim().length)
+      fragment.append(mark)
+      cursor = found + query.trim().length
+      found = lower.indexOf(needle, cursor)
+    }
+    if (cursor < source.length) fragment.append(source.slice(cursor))
+    span.replaceChildren(fragment)
+  }
+}
 
 /** 한 쪽. 화면 가까이 왔을 때만 캔버스에 그린다. */
 function PdfPage({
   document,
   pageNumber,
   width,
+  searchQuery,
+  activeSearchPage,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
   width: number
+  searchQuery: string
+  activeSearchPage: boolean
 }) {
   const holder = useRef<HTMLDivElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
+  const textLayer = useRef<HTMLDivElement | null>(null)
+  const latestSearchQuery = useRef(searchQuery)
   const [visible, setVisible] = useState(false)
   const [ratio, setRatio] = useState(1.414) // A4 세로 비율. 실제 크기를 알기 전 자리만 잡는다.
+
+  useEffect(() => {
+    latestSearchQuery.current = searchQuery
+  }, [searchQuery])
 
   useEffect(() => {
     const node = holder.current
@@ -44,6 +103,7 @@ function PdfPage({
     if (!visible || width <= 0) return
     let cancelled = false
     let task: { cancel: () => void } | null = null
+    let textTask: pdfjs.TextLayer | null = null
 
     void (async () => {
       const page = await document.getPage(pageNumber)
@@ -77,6 +137,20 @@ function PdfPage({
       context.fillStyle = '#ffffff'
       context.fillRect(0, 0, target.width, target.height)
 
+      const textTarget = textLayer.current
+      if (textTarget) {
+        textTarget.replaceChildren()
+        textTarget.style.setProperty('--total-scale-factor', String(base1x.scale))
+        textTask = new pdfjs.TextLayer({
+          textContentSource: page.streamTextContent({ includeMarkedContent: true }),
+          container: textTarget,
+          viewport: base1x,
+        })
+        void textTask.render().then(() => {
+          if (!cancelled) markTextLayer(textTarget, latestSearchQuery.current)
+        })
+      }
+
       task = page.render({ canvas: target, canvasContext: context, viewport })
       try {
         await (task as unknown as { promise: Promise<void> }).promise
@@ -88,31 +162,47 @@ function PdfPage({
     return () => {
       cancelled = true
       task?.cancel()
+      textTask?.cancel()
     }
   }, [visible, width, document, pageNumber])
+
+  useEffect(() => {
+    if (textLayer.current) markTextLayer(textLayer.current, searchQuery)
+  }, [searchQuery])
 
   return (
     <div
       ref={holder}
       data-page={pageNumber}
-      className="relative w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700"
+      className={`relative w-full scroll-mt-32 overflow-hidden rounded-lg border bg-white shadow-sm ${
+        activeSearchPage
+          ? 'border-amber-400 ring-2 ring-amber-300/70'
+          : 'border-slate-200 dark:border-slate-700'
+      }`}
       style={{ aspectRatio: visible ? undefined : `1 / ${ratio}` }}
     >
       <canvas ref={canvas} className="block w-full" />
-      <span className="absolute bottom-1 right-2 rounded bg-slate-900/60 px-1.5 text-[11px] text-white">
+      <div ref={textLayer} className="lecture-pdf-text-layer" />
+      <span className="pointer-events-none absolute bottom-1 right-2 z-[2] rounded bg-slate-900/60 px-1.5 text-[11px] text-white">
         {pageNumber}
       </span>
     </div>
   )
 }
 
-export function LecturePdfViewer({ storagePath, title, initialPage }: Props) {
+export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery = '' }: Props) {
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [width, setWidth] = useState(0)
+  const [pageTexts, setPageTexts] = useState<string[] | null>(null)
+  const [searchInput, setSearchInput] = useState(initialQuery)
+  const [searchQuery, setSearchQuery] = useState(initialQuery.trim())
+  const [activeResult, setActiveResult] = useState(0)
+  const [viewMode, setViewMode] = useState<'pdf' | 'compatible'>('compatible')
   const column = useRef<HTMLDivElement | null>(null)
+  const searchBox = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const node = column.current
@@ -201,6 +291,97 @@ export function LecturePdfViewer({ storagePath, title, initialPage }: Props) {
     [document],
   )
 
+  // 브라우저 기본 찾기는 아직 화면에 그리지 않은 PDF 쪽을 찾지 못한다. PDF.js가
+  // 가진 텍스트를 한 번만 읽어 전체 문서 검색용 메모리 색인을 만든다.
+  useEffect(() => {
+    if (!document) return
+    let active = true
+    void (async () => {
+      const texts = new Array<string>(document.numPages)
+      let cursor = 0
+      const worker = async () => {
+        for (;;) {
+          const index = cursor
+          cursor += 1
+          if (index >= document.numPages || !active) return
+          const page = await document.getPage(index + 1)
+          const content = await page.getTextContent()
+          texts[index] = content.items
+            .map((item) => ('str' in item ? item.str : ''))
+            .join(' ')
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, document.numPages) }, worker))
+      if (active) setPageTexts(texts)
+    })()
+    return () => {
+      active = false
+    }
+  }, [document])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(searchInput.trim()), 180)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
+
+  const searchHits = useMemo<SearchHit[]>(() => {
+    if (!pageTexts || !searchQuery) return []
+    return pageTexts.flatMap((text, index) => {
+      const count = countMatches(text, searchQuery)
+      return count > 0 ? [{ pageNumber: index + 1, count }] : []
+    })
+  }, [pageTexts, searchQuery])
+
+  const totalMatches = useMemo(
+    () => searchHits.reduce((sum, hit) => sum + hit.count, 0),
+    [searchHits],
+  )
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (searchHits.length === 0) {
+        setActiveResult(0)
+        return
+      }
+      const preferred = initialPage
+        ? searchHits.findIndex((hit) => hit.pageNumber >= initialPage)
+        : -1
+      setActiveResult(preferred >= 0 ? preferred : 0)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [searchHits, initialPage])
+
+  const scrollToPage = useCallback((pageNumber: number) => {
+    const target = window.document.querySelector(`[data-page="${pageNumber}"]`)
+    target?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [])
+
+  const moveSearch = useCallback(
+    (step: number) => {
+      if (searchHits.length === 0) return
+      const next = (activeResult + step + searchHits.length) % searchHits.length
+      setActiveResult(next)
+      scrollToPage(searchHits[next].pageNumber)
+    },
+    [activeResult, scrollToPage, searchHits],
+  )
+
+  useEffect(() => {
+    const handleFind = (event: KeyboardEvent) => {
+      if (viewMode !== 'compatible') return
+      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') {
+        event.preventDefault()
+        searchBox.current?.focus()
+        searchBox.current?.select()
+      } else if (event.key === 'Enter' && window.document.activeElement === searchBox.current) {
+        event.preventDefault()
+        moveSearch(event.shiftKey ? -1 : 1)
+      }
+    }
+    window.addEventListener('keydown', handleFind)
+    return () => window.removeEventListener('keydown', handleFind)
+  }, [moveSearch, viewMode])
+
   // 풀이에서 "127쪽" 처럼 가리켜 들어온 경우 그 자리로 옮겨 준다. 아직 안 그린
   // 쪽도 자리는 잡혀 있어 스크롤이 제대로 닿는다.
   useEffect(() => {
@@ -214,18 +395,92 @@ export function LecturePdfViewer({ storagePath, title, initialPage }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         {document && (
           <span className="text-sm text-slate-500 dark:text-slate-400">총 {document.numPages}쪽</span>
         )}
-        {blobUrl && (
-          <a
-            href={blobUrl}
-            download={`${title}.pdf`}
-            className="ml-auto rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+        <span className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+          <button
+            type="button"
+            onClick={() => setViewMode('pdf')}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+              viewMode === 'pdf'
+                ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
           >
-            내려받기
-          </a>
+            원본 PDF 보기
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('compatible')}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+              viewMode === 'compatible'
+                ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            페이지 전체 보기
+          </button>
+        </span>
+        {viewMode === 'compatible' && (
+          <>
+            <div className="relative min-w-[220px] flex-1 sm:max-w-md">
+              <input
+                ref={searchBox}
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="강의록 안에서 찾기 (⌘/Ctrl+F)"
+                aria-label="강의록 안에서 찾기"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 pr-24 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-slate-600 dark:bg-slate-800 dark:focus:ring-brand-900"
+              />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                {!document || (document && !pageTexts)
+                  ? '색인 중…'
+                  : !searchQuery
+                    ? ''
+                    : `${totalMatches}건 · ${searchHits.length}쪽`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => moveSearch(-1)}
+              disabled={searchHits.length === 0}
+              aria-label="이전 검색 결과"
+              className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm disabled:opacity-35 dark:border-slate-600"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => moveSearch(1)}
+              disabled={searchHits.length === 0}
+              aria-label="다음 검색 결과"
+              className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm disabled:opacity-35 dark:border-slate-600"
+            >
+              ↓
+            </button>
+          </>
+        )}
+        {blobUrl && (
+          <span className="ml-auto flex items-center gap-2">
+            <a
+              href={blobUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+            >
+              원본 열기
+            </a>
+            <a
+              href={blobUrl}
+              download={`${title}.pdf`}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            >
+              내려받기
+            </a>
+          </span>
         )}
       </div>
 
@@ -241,9 +496,22 @@ export function LecturePdfViewer({ storagePath, title, initialPage }: Props) {
               {progress > 0 ? `강의록을 받는 중… ${progress}%` : '강의록을 여는 중…'}
             </p>
           </div>
+        ) : viewMode === 'pdf' && blobUrl ? (
+          <iframe
+            title={title}
+            src={`${blobUrl}#page=${initialPage ?? 1}&view=FitH${initialQuery ? `&search=${encodeURIComponent(initialQuery)}` : ''}`}
+            className="h-[calc(100vh-10rem)] min-h-[680px] w-full rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700"
+          />
         ) : (
           pages.map((pageNumber) => (
-            <PdfPage key={pageNumber} document={document} pageNumber={pageNumber} width={width} />
+            <PdfPage
+              key={pageNumber}
+              document={document}
+              pageNumber={pageNumber}
+              width={width}
+              searchQuery={searchQuery}
+              activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
+            />
           ))
         )}
       </div>

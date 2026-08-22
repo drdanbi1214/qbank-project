@@ -26,6 +26,7 @@ export function LectureDocumentPage() {
   // 풀이의 강의록 참조가 `?page=` 로 특정 쪽을 가리킨다.
   const rawPage = Number(params.get('page'))
   const initialPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : null
+  const initialQuery = params.get('q')?.trim() ?? ''
 
   const [loaded, setLoaded] = useState<{ id: string; item: LectureDocument | null } | null>(null)
 
@@ -98,6 +99,7 @@ export function LectureDocumentPage() {
           storagePath={detail.filePath}
           title={detail.title}
           initialPage={initialPage}
+          initialQuery={initialQuery}
         />
       </Suspense>
     </section>

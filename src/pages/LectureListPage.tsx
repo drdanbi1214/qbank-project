@@ -15,6 +15,37 @@ function sizeLabel(bytes: number | null): string | null {
     : `${Math.max(1, Math.round(bytes / 1024))}KB`
 }
 
+function SearchSnippet({ text, keyword }: { text: string; keyword: string }) {
+  const needle = keyword.trim()
+  if (!needle) return text
+
+  const pieces: { text: string; match: boolean }[] = []
+  const lowerText = text.toLocaleLowerCase()
+  const lowerNeedle = needle.toLocaleLowerCase()
+  let cursor = 0
+  for (;;) {
+    const found = lowerText.indexOf(lowerNeedle, cursor)
+    if (found < 0) break
+    if (found > cursor) pieces.push({ text: text.slice(cursor, found), match: false })
+    pieces.push({ text: text.slice(found, found + needle.length), match: true })
+    cursor = found + needle.length
+  }
+  if (cursor < text.length) pieces.push({ text: text.slice(cursor), match: false })
+
+  return pieces.map((piece, index) =>
+    piece.match ? (
+      <mark
+        key={`${index}-${piece.text}`}
+        className="rounded bg-amber-200/80 px-0.5 text-inherit dark:bg-amber-700/60"
+      >
+        {piece.text}
+      </mark>
+    ) : (
+      piece.text
+    ),
+  )
+}
+
 /** 한 분류 안의 강의록 목록. 교수·연도로 추리고 제목·본문으로 찾는다. */
 export function LectureListPage() {
   const { categoryId } = useParams()
@@ -163,18 +194,32 @@ export function LectureListPage() {
                 lecture.pageCount ? `${lecture.pageCount}쪽` : null,
                 sizeLabel(lecture.byteSize),
               ].filter(Boolean)
+              const targetParams = new URLSearchParams()
+              if (lecture.matchPage) targetParams.set('page', String(lecture.matchPage))
+              if (debounced.trim()) targetParams.set('q', debounced.trim())
+              const encodedParams = targetParams.toString()
+              const suffix = encodedParams ? `?${encodedParams}` : ''
 
               return (
                 <li key={lecture.id}>
                   <Link
-                    to={`/lectures/${lecture.id}`}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                    to={`/lectures/${lecture.id}${suffix}`}
+                    className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{lecture.title}</span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
                         {meta.join(' · ') || '정보 없음'}
                       </span>
+                      {lecture.matchSnippet && lecture.matchPage && (
+                        <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          <span className="mr-1 font-medium text-slate-600 dark:text-slate-300">
+                            {lecture.matchPage}쪽
+                            {lecture.matchPageCount > 1 && ` · 외 ${lecture.matchPageCount - 1}쪽`}
+                          </span>
+                          <SearchSnippet text={lecture.matchSnippet} keyword={debounced} />
+                        </span>
+                      )}
                     </span>
                     {!lecture.isPublished && (
                       <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">

@@ -1056,6 +1056,38 @@ export type Database = {
           },
         ]
       }
+      lecture_page_texts: {
+        Row: {
+          created_at: string
+          lecture_id: string
+          page_number: number
+          text_content: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          lecture_id: string
+          page_number: number
+          text_content?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          lecture_id?: string
+          page_number?: number
+          text_content?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_page_texts_lecture_id_fkey"
+            columns: ["lecture_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecture_sources: {
         Row: {
           created_at: string
@@ -2955,6 +2987,10 @@ export type Database = {
       is_active_member: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
+      lecture_search_snippet: {
+        Args: { input_text: string; query_text: string; radius?: number }
+        Returns: string
+      }
       list_profile_cards: {
         Args: never
         Returns: {
@@ -2997,6 +3033,32 @@ export type Database = {
         Returns: undefined
       }
       richtext_plain: { Args: { doc: Json }; Returns: string }
+      search_lecture_documents: {
+        Args: {
+          p_category_id?: string
+          p_limit?: number
+          p_professor?: string
+          p_query: string
+          p_year?: number
+        }
+        Returns: {
+          byte_size: number
+          category_id: string
+          curriculum: string
+          file_path: string
+          id: string
+          is_published: boolean
+          lecture_year: number
+          match_page: number
+          match_page_count: number
+          match_snippet: string
+          page_count: number
+          professor: string
+          required_permission: string
+          title: string
+          updated_at: string
+        }[]
+      }
       search_questions: {
         Args: {
           p_cohort?: string
