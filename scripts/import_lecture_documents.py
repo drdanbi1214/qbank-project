@@ -201,6 +201,7 @@ def main() -> int:
     parser.add_argument("--permission", default=None, help="열람 권한 키. 생략하면 활성 회원 전원")
     parser.add_argument("--prefix", default="", help="R2 경로 앞에 붙일 폴더명")
     parser.add_argument("--manifest", type=pathlib.Path, default=None, help="파일명별 메타데이터 JSON")
+    parser.add_argument("--no-compress", action="store_true", help="압축하지 않고 원본 그대로 올린다")
     parser.add_argument("--apply", action="store_true", help="실제로 올리고 등록한다")
     args = parser.parse_args()
 
@@ -242,7 +243,11 @@ def main() -> int:
     before_total = after_total = 0
     registered = skipped = failed = 0
 
-    print(f"{len(pdfs)}개 PDF · 분류 {category_name}" + ("" if args.apply else " · 시늉 모드(--apply 없음)"))
+    print(
+        f"{len(pdfs)}개 PDF · 분류 {category_name}"
+        + (" · 원본 그대로" if args.no_compress else "")
+        + ("" if args.apply else " · 시늉 모드(--apply 없음)")
+    )
     print()
 
     for pdf in pdfs:
@@ -252,7 +257,7 @@ def main() -> int:
         professor = override.get("professor", professor or args.professor)
         year = override.get("year", year or args.year)
 
-        data = shrink(pdf)
+        data = pdf.read_bytes() if args.no_compress else shrink(pdf)
         digest = hashlib.sha256(data).hexdigest()
         original_size = pdf.stat().st_size
         before_total += original_size
