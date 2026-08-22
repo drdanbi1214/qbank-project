@@ -305,7 +305,7 @@ def run_relational_checks(tables: dict[str, list[dict[str, Any]]], findings: Fin
         total = exam.get("total_questions")
         if total is not None and restored is not None and int(restored) > int(total):
             findings.add(
-                "error",
+                "warning",
                 "exam_restored_over_total",
                 "복기 문항 수가 시험 총 문항 수보다 큽니다.",
                 {"exam_id": exam_id, "restored": restored, "total": total},
@@ -399,7 +399,7 @@ def run_relational_checks(tables: dict[str, list[dict[str, Any]]], findings: Fin
             findings.add(
                 "error",
                 "duplicate_question_code",
-                "계산된 문제 코드가 중복됩니다.",
+                "계산된 문제 코드가 중복되어 코드 기반 풀이 입력 대상이 모호합니다.",
                 {"question_code": code, "question_ids": ids},
             )
 
