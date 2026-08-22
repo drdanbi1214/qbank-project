@@ -203,7 +203,10 @@ begin
 end;
 $$;
 
+-- Worker 가 사용자 JWT 로 부르는 진입점이라 authenticated 가 실행할 수 있어야
+-- 한다. 여기서 authenticated 를 걷어내면 R2 서명과 업로드 인가가 전부
+-- 503 authorization_unavailable 로 떨어진다. 20260821170000 이 정한 권한 그대로 둔다.
 revoke execute on function public.authorize_storage_object(text, text, text)
-  from public, anon, authenticated;
+  from public, anon;
 grant execute on function public.authorize_storage_object(text, text, text)
-  to service_role;
+  to authenticated;
