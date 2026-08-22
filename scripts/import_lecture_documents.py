@@ -65,9 +65,16 @@ PROFESSOR_PATTERNS = (
 )
 YEAR_PATTERN = re.compile(r"(20\d{2})")
 
-# 강의 시간표에서 그대로 내려받은 이름. 예) 0212_3,4교시_이유경_심장영상의학
-# 날짜(MMDD)·교시·교수명·제목이 밑줄로 끊겨 있어 규칙이 뚜렷하다.
-TIMETABLE_PATTERN = re.compile(r"^(\d{4})_[\d,]+교시_([가-힣]{2,4})_(.+)$")
+# 강의 시간표에서 그대로 내려받은 이름. 날짜(MMDD)·교시·교수명·제목이 밑줄로
+# 끊겨 있다. 교수와 교시의 앞뒤가 바뀐 것이 섞여 있어 둘 다 받는다.
+#   0212_3,4교시_이유경_심장영상의학
+#   0602_김용석_2교시_비만증치료의 분자생물학적 접근
+TIMETABLE_PATTERNS = (
+    re.compile(r"^(\d{4})_[\d,]+교시_([가-힣]{2,4})_(.+)$"),
+    re.compile(r"^(\d{4})_([가-힣]{2,4})_[\d,]+교시_(.+)$"),
+)
+# 교수명이 아예 없는 것도 있다. 예) 0517_8,9교시_anatomy&histology lab
+TIMETABLE_NO_PROFESSOR = re.compile(r"^(\d{4})_[\d,]+교시_(.+)$")
 
 
 def rest(base: str, key: str, method: str, path: str, body: bytes | None = None) -> bytes:
@@ -154,11 +161,18 @@ def profile(data: bytes) -> tuple[int, str]:
 def guess_meta(name: str) -> tuple[str, str | None, int | None]:
     stem = pathlib.Path(name).stem
 
-    timetable = TIMETABLE_PATTERN.match(stem)
-    if timetable:
-        # 날짜에는 연도가 없다. 연도는 --year 로 받는다.
-        title = re.sub(r"\s+", " ", timetable.group(3).replace("_", " ")).strip(" .")
-        return (title or stem), timetable.group(2), None
+    def clean(text: str) -> str:
+        return re.sub(r"\s+", " ", text.replace("_", " ")).strip(" .")
+
+    # 날짜에는 연도가 없다. 연도는 --year 로 받는다.
+    for pattern in TIMETABLE_PATTERNS:
+        found = pattern.match(stem)
+        if found:
+            return (clean(found.group(3)) or stem), found.group(2), None
+
+    plain = TIMETABLE_NO_PROFESSOR.match(stem)
+    if plain:
+        return (clean(plain.group(2)) or stem), None, None
 
     professor = None
     for pattern in PROFESSOR_PATTERNS:
