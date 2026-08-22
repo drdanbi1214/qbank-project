@@ -101,7 +101,7 @@ export function ExamsPage() {
                         <h3 className="flex items-center bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 sm:py-2.5 dark:bg-slate-800/70 dark:text-slate-200">
                           {subjectExams[0]?.examSubjectLabel ?? taxonomy?.subjectById.get(subjectExams[0]?.subjectId ?? '')?.name ?? '과목'}
                         </h3>
-                        <ul className="grid gap-px bg-slate-200 sm:grid-cols-2 xl:grid-cols-3 dark:bg-slate-700">
+                        <ul className="divide-y divide-slate-200 dark:divide-slate-700">
                           {subjectExams.map((exam) => {
                             const restored =
                               exam.restoredQuestions !== null && exam.totalQuestions !== null
