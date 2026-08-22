@@ -46,11 +46,11 @@ async function getSupabaseSignedUrl(storagePath: string): Promise<{ url: string;
   }
 }
 
-async function getR2SignedUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
+async function getR2SignedUrl(
+  storagePath: string,
+  accessToken: string,
+): Promise<{ url: string; expiresAt: number } | null> {
   if (!R2_GATEWAY_URL) return null
-  const { data } = await supabase.auth.getSession()
-  const accessToken = data.session?.access_token
-  if (!accessToken) return null
 
   const response = await fetch(`${R2_GATEWAY_URL}/v1/sign`, {
     method: 'POST',
@@ -73,19 +73,29 @@ async function getR2SignedUrl(storagePath: string): Promise<{ url: string; expir
 export async function getSignedUrl(storagePath: string): Promise<string | null> {
   if (/^https?:\/\//.test(storagePath)) return storagePath
 
-  const cached = cache.get(storagePath)
+  // A signed URL is a bearer credential. Keep it scoped to the account that
+  // passed the authorization check so a later login in the same tab cannot
+  // reuse the previous account's URL.
+  const { data } = await supabase.auth.getSession()
+  const session = data.session
+  if (!session) return null
+  const cacheKey = `${session.user.id}:${storagePath}`
+
+  const cached = cache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.url
 
   const parsed = parseStoragePath(storagePath)
   if (!parsed) return null
   const useR2 = usesR2(parsed.bucket)
-  let signed = useR2 ? await getR2SignedUrl(storagePath) : await getSupabaseSignedUrl(storagePath)
+  let signed = useR2
+    ? await getR2SignedUrl(storagePath, session.access_token)
+    : await getSupabaseSignedUrl(storagePath)
   if (!signed && useR2 && READ_FALLBACK) {
     signed = await getSupabaseSignedUrl(storagePath)
   }
   if (!signed) return null
 
-  cache.set(storagePath, signed)
+  cache.set(cacheKey, signed)
   return signed.url
 }
 
