@@ -65,6 +65,10 @@ PROFESSOR_PATTERNS = (
 )
 YEAR_PATTERN = re.compile(r"(20\d{2})")
 
+# 강의 시간표에서 그대로 내려받은 이름. 예) 0212_3,4교시_이유경_심장영상의학
+# 날짜(MMDD)·교시·교수명·제목이 밑줄로 끊겨 있어 규칙이 뚜렷하다.
+TIMETABLE_PATTERN = re.compile(r"^(\d{4})_[\d,]+교시_([가-힣]{2,4})_(.+)$")
+
 
 def rest(base: str, key: str, method: str, path: str, body: bytes | None = None) -> bytes:
     request = urllib.request.Request(
@@ -106,21 +110,35 @@ def shrink(source: pathlib.Path) -> bytes:
     줄지 않거나 변환이 실패하면 원본을 그대로 쓴다. 이미 알맞은 해상도로 뽑은
     강의록은 줄어들 여지가 없는데, 그건 정상이라 등록을 막지 않는다.
     """
-    original = source.read_bytes()
-    with tempfile.TemporaryDirectory() as workdir:
-        target = pathlib.Path(workdir) / "shrunk.pdf"
-        result = subprocess.run(
-            [sys.executable, __file__, "--shrink", str(source), str(target)],
-            capture_output=True,
-            timeout=900,
-        )
-        if result.returncode != 0 or not target.exists():
-            detail = (result.stderr.decode(errors="replace").strip().splitlines() or [""])[-1]
-            print(f"           압축 건너뜀(원본 사용): {detail[:120]}")
-            return original
-        shrunk = target.read_bytes()
+    # 원본을 미리 읽지 않는다. 30MB 짜리를 든 채로 자식을 띄우면 변환이 메모리를
+    # 크게 쓰는 순간 SIGBUS 로 죽는 일이 있었다(같은 파일을 단독으로 돌리면 된다).
+    original_size = source.stat().st_size
 
-    return shrunk if len(shrunk) < len(original) else original
+    with tempfile.TemporaryDirectory() as workdir:
+        shrunk = None
+        # 죽는 건 파일 탓이 아니라 그때그때라, 같은 파일도 다시 돌리면 대개 된다.
+        # 한 번만 더 해 보고 그래도 안 되면 원본으로 올린다.
+        for attempt in (1, 2):
+            target = pathlib.Path(workdir) / f"shrunk{attempt}.pdf"
+            result = subprocess.run(
+                [sys.executable, __file__, "--shrink", str(source), str(target)],
+                capture_output=True,
+                timeout=900,
+            )
+            if result.returncode == 0 and target.exists():
+                # 줄어든 경우에만 읽는다. 여기서도 쓸데없이 두 벌을 들지 않는다.
+                if target.stat().st_size < original_size:
+                    shrunk = target.read_bytes()
+                break
+            if attempt == 2:
+                lines = result.stderr.decode(errors="replace").strip().splitlines()
+                detail = lines[-1] if lines else f"종료코드 {result.returncode}"
+                print(f"           압축 건너뜀(원본 사용): {detail[:120]}")
+
+        if shrunk is not None:
+            return shrunk
+
+    return source.read_bytes()
 
 
 def profile(data: bytes) -> tuple[int, str]:
@@ -135,6 +153,13 @@ def profile(data: bytes) -> tuple[int, str]:
 
 def guess_meta(name: str) -> tuple[str, str | None, int | None]:
     stem = pathlib.Path(name).stem
+
+    timetable = TIMETABLE_PATTERN.match(stem)
+    if timetable:
+        # 날짜에는 연도가 없다. 연도는 --year 로 받는다.
+        title = re.sub(r"\s+", " ", timetable.group(3).replace("_", " ")).strip(" .")
+        return (title or stem), timetable.group(2), None
+
     professor = None
     for pattern in PROFESSOR_PATTERNS:
         found = pattern.search(stem)

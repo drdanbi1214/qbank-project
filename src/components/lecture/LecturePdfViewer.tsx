@@ -52,10 +52,17 @@ function PdfPage({
       const base = page.getViewport({ scale: 1 })
       if (!cancelled) setRatio(base.height / base.width)
 
-      // 고해상도 화면에서 글자가 뭉개지지 않도록 실제 픽셀만큼 그린다. 3배를
-      // 넘기면 145쪽짜리에서 메모리가 급격히 늘어 상한을 둔다.
-      const dpr = Math.min(window.devicePixelRatio || 1, 3)
-      const viewport = page.getViewport({ scale: (width / base.width) * dpr })
+      // 화면 배율만큼 키워 그려야 글자가 또렷하다. 다만 브라우저마다 캔버스
+      // 최대 넓이가 있어서(특히 iOS 사파리) 그 선을 넘으면 그리기가 통째로
+      // 실패하고 캔버스가 검게 남는다. 배율을 2배로 묶고, 그래도 총 픽셀이
+      // 많으면 한도 안으로 다시 줄인다.
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const MAX_PIXELS = 4_000_000
+      const base1x = page.getViewport({ scale: width / base.width })
+      const wanted = base1x.width * dpr * (base1x.height * dpr)
+      const guard = wanted > MAX_PIXELS ? Math.sqrt(MAX_PIXELS / wanted) : 1
+      const viewport = page.getViewport({ scale: (width / base.width) * dpr * guard })
+
       const target = canvas.current
       const context = target?.getContext('2d')
       if (!target || !context || cancelled) return
@@ -64,6 +71,11 @@ function PdfPage({
       target.height = Math.floor(viewport.height)
       target.style.width = '100%'
       target.style.height = 'auto'
+
+      // PDF 는 배경을 스스로 칠하지 않는 경우가 있어 비워 두면 캔버스의 투명한
+      // 바탕이 그대로 비친다. 흰 종이를 먼저 깔고 그 위에 그린다.
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, target.width, target.height)
 
       task = page.render({ canvas: target, canvasContext: context, viewport })
       try {
