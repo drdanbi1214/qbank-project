@@ -70,11 +70,11 @@ YEAR_PATTERN = re.compile(r"(20\d{2})")
 #   0212_3,4교시_이유경_심장영상의학
 #   0602_김용석_2교시_비만증치료의 분자생물학적 접근
 TIMETABLE_PATTERNS = (
-    re.compile(r"^(\d{4})_[\d,]+교시_([가-힣]{2,4})_(.+)$"),
-    re.compile(r"^(\d{4})_([가-힣]{2,4})_[\d,]+교시_(.+)$"),
+    re.compile(r"^(\d{4})_[\d,\s]+교시_([가-힣]{2,4})_(.+)$"),
+    re.compile(r"^(\d{4})_([가-힣]{2,4})_[\d,\s]+교시_(.+)$"),
 )
 # 교수명이 아예 없는 것도 있다. 예) 0517_8,9교시_anatomy&histology lab
-TIMETABLE_NO_PROFESSOR = re.compile(r"^(\d{4})_[\d,]+교시_(.+)$")
+TIMETABLE_NO_PROFESSOR = re.compile(r"^(\d{4})_[\d,\s]+교시_(.+)$")
 
 
 def rest(base: str, key: str, method: str, path: str, body: bytes | None = None) -> bytes:
