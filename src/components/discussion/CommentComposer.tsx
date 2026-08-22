@@ -39,7 +39,7 @@ export function CommentComposer({
     enabled: draftEnabled,
   })
 
-  const embed = useEmbedPickers({ subjectId: null, theory: true })
+  const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId })
   const [seed, setSeed] = useState(() => ({
     doc: editing?.content ?? emptyDoc(),
     version: 0,
@@ -125,6 +125,7 @@ export function CommentComposer({
         compact
         onUploadError={setError}
         onRequestTheory={embed.onRequestTheory}
+        onRequestLecture={embed.onRequestLecture}
       />
       {embed.pickers}
 

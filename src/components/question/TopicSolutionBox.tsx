@@ -37,7 +37,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
   const { session, isAdmin } = useAuth()
   const userId = session?.user.id ?? ''
 
-  const embed = useEmbedPickers({ subjectId: null, theory: true })
+  const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId })
   const [solution, setSolution] = useState<Solution | null | 'loading'>('loading')
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -118,6 +118,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
           minHeight="7rem"
           compact
           onRequestTheory={embed.onRequestTheory}
+          onRequestLecture={embed.onRequestLecture}
         />
         {embed.pickers}
         <div className="mt-1.5 flex justify-end gap-1.5">

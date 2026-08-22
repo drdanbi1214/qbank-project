@@ -2,6 +2,7 @@ import { Fragment, useId, useState, type ReactNode } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
+import { LecturePageCard } from '@/components/lecture/LecturePageCard'
 import { TheoryCard } from '@/components/question/TheoryCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { HIGHLIGHT_SET, TEXT_COLOR_SET } from '@/components/editor/palette'
@@ -306,6 +307,20 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       return (
         <div className="my-3">
           <TheoryCard documentId={documentId} />
+        </div>
+      )
+    }
+    case 'lecturePageEmbed': {
+      const attrs = (node.attrs ?? {}) as Record<string, unknown>
+      return (
+        <div className="my-3">
+          <LecturePageCard
+            src={typeof attrs.src === 'string' ? attrs.src : null}
+            lectureId={typeof attrs.lectureId === 'string' ? attrs.lectureId : null}
+            page={typeof attrs.page === 'number' ? attrs.page : null}
+            title={typeof attrs.title === 'string' ? attrs.title : null}
+            professor={typeof attrs.professor === 'string' ? attrs.professor : null}
+          />
         </div>
       )
     }

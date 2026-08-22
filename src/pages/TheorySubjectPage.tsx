@@ -26,7 +26,7 @@ export function TheorySubjectPage() {
   const { subjectId, documentId } = useParams()
   const { session, isAdmin } = useAuth()
   const { taxonomy, loading: taxonomyLoading } = useData()
-  const embed = useEmbedPickers({ subjectId: subjectId, theory: true })
+  const embed = useEmbedPickers({ subjectId: subjectId, theory: true, lectureUserId: session?.user.id ?? null })
   const [documents, setDocuments] = useState<TheoryDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
@@ -264,6 +264,7 @@ export function TheorySubjectPage() {
                     minHeight="30rem"
                     onUploadError={setEditError}
                     onRequestTheory={embed.onRequestTheory}
+                    onRequestLecture={embed.onRequestLecture}
                   />
                   {embed.pickers}
                   {editError && <p className="text-sm text-rose-600 dark:text-rose-400">{editError}</p>}

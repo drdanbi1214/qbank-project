@@ -16,9 +16,19 @@ type Props = {
   title: string
   initialPage?: number | null
   initialQuery?: string
+  /**
+   * 글에 넣을 쪽을 고르는 모드. 쪽마다 체크칸이 생기고, 고른 쪽은 바깥에서
+   * 알 수 있게 알려 준다. 읽기만 하는 화면에서는 끈다.
+   */
+  selectable?: boolean
+  selectedPages?: number[]
+  onTogglePage?: (pageNumber: number) => void
+  /** PDF 가 열리면 알려 준다. 고른 쪽을 굽는 데 이 문서를 그대로 쓴다. */
+  onDocumentReady?: (document: PDFDocumentProxy | null) => void
 }
 
 type SearchHit = { pageNumber: number; occurrenceIndex: number }
+
 
 function countMatches(text: string, query: string): number {
   if (!query) return 0
@@ -79,6 +89,9 @@ function PdfPage({
   searchQuery,
   activeSearchPage,
   activeSearchOccurrence,
+  selectable = false,
+  checked = false,
+  onToggle,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
@@ -86,6 +99,9 @@ function PdfPage({
   searchQuery: string
   activeSearchPage: boolean
   activeSearchOccurrence: number | null
+  selectable?: boolean
+  checked?: boolean
+  onToggle?: () => void
 }) {
   const holder = useRef<HTMLDivElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
@@ -204,14 +220,30 @@ function PdfPage({
       ref={holder}
       data-page={pageNumber}
       className={`relative w-full scroll-mt-32 overflow-hidden rounded-lg border bg-white shadow-sm ${
-        activeSearchPage
-          ? 'border-amber-400 ring-2 ring-amber-300/70'
-          : 'border-slate-200 dark:border-slate-700'
+        checked
+          ? 'border-brand-500 ring-2 ring-brand-400/70'
+          : activeSearchPage
+            ? 'border-amber-400 ring-2 ring-amber-300/70'
+            : 'border-slate-200 dark:border-slate-700'
       }`}
       style={{ aspectRatio: visible ? undefined : `1 / ${ratio}` }}
     >
       <canvas ref={canvas} className="block w-full" />
       <div ref={textLayer} className="lecture-pdf-text-layer" />
+
+      {selectable && (
+        // 쪽 위에 얹되 글자 층을 가리지 않도록 왼쪽 위 모서리만 차지한다.
+        <label className="absolute left-2 top-2 z-[3] flex cursor-pointer items-center gap-1.5 rounded-md bg-white/95 px-2 py-1 text-xs font-medium shadow-sm ring-1 ring-slate-300 dark:bg-slate-900/95 dark:ring-slate-600">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => onToggle?.()}
+            aria-label={`${pageNumber}쪽 선택`}
+          />
+          {pageNumber}쪽
+        </label>
+      )}
+
       <span className="pointer-events-none absolute bottom-1 right-2 z-[2] rounded bg-slate-900/60 px-1.5 text-[11px] text-white">
         {pageNumber}
       </span>
@@ -219,7 +251,16 @@ function PdfPage({
   )
 }
 
-export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery = '' }: Props) {
+export function LecturePdfViewer({
+  storagePath,
+  title,
+  initialPage,
+  initialQuery = '',
+  selectable = false,
+  selectedPages,
+  onTogglePage,
+  onDocumentReady,
+}: Props) {
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -232,6 +273,15 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
   const [viewMode, setViewMode] = useState<'pdf' | 'compatible'>('compatible')
   const column = useRef<HTMLDivElement | null>(null)
   const searchBox = useRef<HTMLInputElement | null>(null)
+
+  const selectedSet = useMemo(() => new Set(selectedPages ?? []), [selectedPages])
+
+  useEffect(() => {
+    onDocumentReady?.(document)
+  }, [document, onDocumentReady])
+  // 브라우저 기본 PDF 뷰어(iframe)에는 체크칸을 얹을 수 없다. 고르는 중에는
+  // 우리가 그리는 쪽 화면으로 고정한다.
+  const effectiveMode = selectable ? 'compatible' : viewMode
 
   useEffect(() => {
     const node = column.current
@@ -522,7 +572,7 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
               {progress > 0 ? `강의록을 받는 중… ${progress}%` : '강의록을 여는 중…'}
             </p>
           </div>
-        ) : viewMode === 'pdf' && blobUrl ? (
+        ) : effectiveMode === 'pdf' && blobUrl ? (
           <iframe
             title={title}
             src={`${blobUrl}#page=${initialPage ?? 1}&view=FitH${initialQuery ? `&search=${encodeURIComponent(initialQuery)}` : ''}`}
@@ -535,6 +585,9 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
               document={document}
               pageNumber={pageNumber}
               width={width}
+              selectable={selectable}
+              checked={selectedSet.has(pageNumber)}
+              onToggle={() => onTogglePage?.(pageNumber)}
               searchQuery={searchQuery}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
               activeSearchOccurrence={

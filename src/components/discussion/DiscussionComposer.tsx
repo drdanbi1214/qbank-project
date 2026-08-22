@@ -51,7 +51,7 @@ export function DiscussionComposer({
   onCancel,
 }: Props) {
   const seed = existing?.content ?? (initialQuote ? quotedDoc(initialQuote) : emptyDoc())
-  const embed = useEmbedPickers({ subjectId: null, theory: true })
+  const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId })
   const [category, setCategory] = useState<DiscussionCategory>(existing?.category ?? '해설질문')
   const [title, setTitle] = useState(existing?.title ?? '')
   const [busy, setBusy] = useState(false)
@@ -145,6 +145,7 @@ export function DiscussionComposer({
         minHeight="14rem"
         onUploadError={setError}
         onRequestTheory={embed.onRequestTheory}
+        onRequestLecture={embed.onRequestLecture}
       />
       {embed.pickers}
 

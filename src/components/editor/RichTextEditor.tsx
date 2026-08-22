@@ -14,7 +14,9 @@ import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
 import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
+import { LecturePageEmbed } from '@/components/editor/extensions/lecturePageEmbed'
 import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
+import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { BlockIndent } from '@/components/editor/extensions/indent'
@@ -56,6 +58,8 @@ type Props = {
   onRequestYama?: () => Promise<string | null>
   /** 이론 넣기 버튼. 부모가 이론 고르기 화면을 띄우고 문서 id 를 돌려준다. */
   onRequestTheory?: () => Promise<string | null>
+  /** 강의록에서 고른 쪽들. 여러 쪽을 한 번에 넣을 수 있다. */
+  onRequestLecture?: () => Promise<LecturePageAttrs[] | null>
 }
 
 export function RichTextEditor({
@@ -71,6 +75,7 @@ export function RichTextEditor({
   uploadImageFile = uploadImage,
   onRequestYama,
   onRequestTheory,
+  onRequestLecture,
 }: Props) {
   // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
   const userIdRef = useRef(userId)
@@ -129,6 +134,7 @@ export function RichTextEditor({
       StoredImage,
       YamaEmbed,
       TheoryEmbed,
+      LecturePageEmbed,
       Footnote,
       MathInline,
       MathBlock,
@@ -236,6 +242,7 @@ export function RichTextEditor({
         extra={toolbarExtra}
         onRequestYama={onRequestYama}
         onRequestTheory={onRequestTheory}
+        onRequestLecture={onRequestLecture}
       />
       <div className="px-3 py-2">
         <EditorContent editor={editor} />
@@ -341,6 +348,7 @@ function Toolbar({
   extra,
   onRequestYama,
   onRequestTheory,
+  onRequestLecture,
 }: {
   editor: Editor
   compact: boolean
@@ -348,6 +356,8 @@ function Toolbar({
   extra?: ReactNode
   onRequestYama?: () => Promise<string | null>
   onRequestTheory?: () => Promise<string | null>
+  /** 강의록에서 고른 쪽들. 여러 쪽을 한 번에 넣을 수 있다. */
+  onRequestLecture?: () => Promise<LecturePageAttrs[] | null>
 }) {
   // 서식 버튼의 활성 상태는 선택 영역이 바뀔 때마다 달라진다.
   const [, forceRender] = useState(0)
@@ -389,6 +399,23 @@ function Toolbar({
           }}
         >
           <span className="px-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">알렌</span>
+        </ToolButton>
+      )}
+      {onRequestLecture && (
+        <ToolButton
+          label="강의록 넣기"
+          active={false}
+          onClick={() => {
+            void onRequestLecture().then((picks) => {
+              if (!picks?.length) return
+              // 고른 순서가 아니라 쪽 번호 순으로 이미 정렬되어 온다.
+              let chain = editor.chain().focus()
+              for (const pick of picks) chain = chain.insertLecturePage(pick)
+              chain.run()
+            })
+          }}
+        >
+          <span className="px-0.5 text-xs font-bold text-amber-700 dark:text-amber-300">강의록</span>
         </ToolButton>
       )}
       <ToolButton

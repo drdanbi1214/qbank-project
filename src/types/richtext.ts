@@ -124,6 +124,8 @@ const LEAF_TYPES = new Set([
   'yamaEmbed',
   // 테마 본문에 끼워 넣는 이론 문서. 야마와 같은 이유로 여기 있어야 한다.
   'theoryEmbed',
+  // 본문에 박은 강의록 한 쪽. 같은 이유로 여기 있어야 한다.
+  'lecturePageEmbed',
   // 각주. 본문에는 위첨자 번호 한 칸으로만 자리한다.
   'footnote',
 ])

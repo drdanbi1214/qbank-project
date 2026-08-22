@@ -23,7 +23,7 @@ export function PersonalNoteTab({
   const target = useMemo<NoteTarget>(() => ({ questionId, groupId }), [questionId, groupId])
   const noteKey = groupId ?? questionId
 
-  const embed = useEmbedPickers({ subjectId: null, theory: true })
+  const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId })
   const [loaded, setLoaded] = useState<{ key: string; note: PersonalNote | null } | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -85,6 +85,7 @@ export function PersonalNoteTab({
         minHeight="12rem"
         onUploadError={setError}
         onRequestTheory={embed.onRequestTheory}
+        onRequestLecture={embed.onRequestLecture}
       />
       {embed.pickers}
 

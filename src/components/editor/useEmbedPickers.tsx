@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
+import { LecturePicker } from '@/components/lecture/LecturePicker'
 import { TheoryPicker } from '@/components/question/TheoryPicker'
+import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { useData } from '@/lib/data'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 
@@ -17,6 +19,7 @@ export function useEmbedPickers({
   subjectId,
   yama = false,
   theory = true,
+  lectureUserId = null,
 }: {
   /** 이 과목 것을 먼저 보여준다. 없으면 전체에서 찾는다. */
   subjectId?: string | null
@@ -24,6 +27,8 @@ export function useEmbedPickers({
   yama?: boolean
   /** 알렌(이론 문서) 넣기를 쓸지. */
   theory?: boolean
+  /** 강의록 쪽 넣기를 쓸지. 글쓴이 id 가 있어야 이미지를 올릴 수 있다. */
+  lectureUserId?: string | null
 } = {}) {
   const { taxonomy } = useData()
 
@@ -43,6 +48,22 @@ export function useEmbedPickers({
     setPickingYama(false)
     resolveYama.current?.(id)
     resolveYama.current = null
+  }, [])
+
+  const [pickingLecture, setPickingLecture] = useState(false)
+  const resolveLecture = useRef<((picks: LecturePageAttrs[] | null) => void) | null>(null)
+
+  const requestLecture = useCallback(() => {
+    setPickingLecture(true)
+    return new Promise<LecturePageAttrs[] | null>((resolve) => {
+      resolveLecture.current = resolve
+    })
+  }, [])
+
+  const finishLecture = useCallback((picks: LecturePageAttrs[] | null) => {
+    setPickingLecture(false)
+    resolveLecture.current?.(picks)
+    resolveLecture.current = null
   }, [])
 
   const requestTheory = useCallback(() => {
@@ -69,6 +90,14 @@ export function useEmbedPickers({
 
   const pickers = (
     <>
+      {pickingLecture && lectureUserId && (
+        <LecturePicker
+          userId={lectureUserId}
+          onPick={finishLecture}
+          onCancel={() => finishLecture(null)}
+        />
+      )}
+
       {pickingTheory && (
         <TheoryPicker
           subjectId={subjectId ?? null}
@@ -103,6 +132,8 @@ export function useEmbedPickers({
     /** 편집기에 그대로 넘긴다. 쓰지 않기로 한 쪽은 undefined 라 버튼이 안 생긴다. */
     onRequestYama: yama ? requestYama : undefined,
     onRequestTheory: theory ? requestTheory : undefined,
+    // 이미지를 올려야 해서 글쓴이를 알 때만 버튼을 낸다.
+    onRequestLecture: lectureUserId ? requestLecture : undefined,
     pickers,
   }
 }

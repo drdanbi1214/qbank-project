@@ -46,7 +46,7 @@ export function SolutionEditor({
 }: Props) {
   const isNew = !existing
   const { profile, updateProfile } = useAuth()
-  const embed = useEmbedPickers({ subjectId: subjectId, theory: true })
+  const embed = useEmbedPickers({ subjectId: subjectId, theory: true, lectureUserId: userId })
   const [unitId, setUnitId] = useState<string | null>(currentUnitId)
   // 새 풀이는 마지막에 쓴 공개범위로 시작한다. 수정할 때는 그 풀이의 값을 그대로 쓴다.
   const [scope, setScope] = useState<string | null>(
@@ -180,6 +180,7 @@ export function SolutionEditor({
         minHeight="18rem"
         onUploadError={setError}
         onRequestTheory={embed.onRequestTheory}
+        onRequestLecture={embed.onRequestLecture}
       />
       {embed.pickers}
       <TheoryReferencePicker subjectId={subjectId} value={references} onChange={setReferences} />
