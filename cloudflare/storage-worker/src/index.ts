@@ -36,6 +36,9 @@ const BUCKET_LIMITS: Record<string, { maxBytes: number; contentTypes: Set<string
   'topic-images': { maxBytes: 10 * 1024 * 1024, contentTypes: IMAGE_TYPES },
   'solution-lecture-files': { maxBytes: 50 * 1024 * 1024, contentTypes: LECTURE_TYPES },
   'exam-sources': { maxBytes: 100 * 1024 * 1024, contentTypes: new Set(['application/pdf']) },
+  // 강의록 라이브러리. 화면에서 그대로 읽히도록 PDF 만 받는다. 슬라이드가 많은
+  // 강의록은 압축 전 200MB 를 넘기도 해서 다른 버킷보다 한도를 크게 잡았다.
+  'lecture-documents': { maxBytes: 300 * 1024 * 1024, contentTypes: new Set(['application/pdf']) },
 }
 
 const encoder = new TextEncoder()
