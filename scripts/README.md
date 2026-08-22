@@ -23,6 +23,28 @@ security add-generic-password -U -a qbank-project \
   -s qbank-project-r2-migration-secret -w '<migration secret>'
 ```
 
+## 운영 데이터 무결성 검사 (읽기 전용)
+
+문제·시험·단원·R형 세트·야마 묶음·풀이의 연결을 교차 검사하고, JSON 본문에
+저장된 이미지/파일 경로가 실제 R2에 존재하는지 HEAD 요청으로 확인한다.
+Supabase에는 GET, R2에는 HEAD만 보내며 DB와 스토리지를 변경하는 옵션 자체가
+없다. 결과만 로컬 `tmp/integrity-audits/`에 JSON으로 남긴다.
+
+```bash
+# 전체 검사(DB 관계 + R2 파일 존재 여부)
+python3 scripts/audit_integrity.py
+
+# DB 관계만 빠르게 검사
+python3 scripts/audit_integrity.py --skip-storage
+
+# 자동 점검에서 경고도 실패로 취급
+python3 scripts/audit_integrity.py --fail-on-warning
+```
+
+종료 코드는 오류가 없으면 `0`, 오류가 있으면 `2`다. 경고는 보고서에 남지만
+기본적으로 실패 처리하지 않는다. `--fail-on-warning`을 주면 경고도 종료 코드
+`2`로 처리한다.
+
 이전 도구는 기본 dry-run이며 Supabase 원본을 삭제하는 기능이 없다.
 
 ```bash
