@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
-import { uploadLectureFile } from '@/lib/uploads'
+import { fetchLectureDocuments, type LectureDocument } from '@/lib/queries/lectures'
 import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
 import type { SolutionReference } from '@/lib/queries/solutions'
 
-type Props = { subjectId: string | null; value: SolutionReference[]; onChange: (next: SolutionReference[]) => void; userId: string }
+type Props = { subjectId: string | null; value: SolutionReference[]; onChange: (next: SolutionReference[]) => void }
 type Result = { document: TheoryDocument; path: string; titleMatch: boolean }
 
 function pathOf(document: TheoryDocument, documents: TheoryDocument[]): string {
@@ -19,7 +19,7 @@ function pathOf(document: TheoryDocument, documents: TheoryDocument[]): string {
   return names.join(' > ')
 }
 
-export function TheoryReferencePicker({ subjectId, value, onChange, userId }: Props) {
+export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
   const [allenOpen, setAllenOpen] = useState(false)
   const [lectureOpen, setLectureOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -27,9 +27,9 @@ export function TheoryReferencePicker({ subjectId, value, onChange, userId }: Pr
   // setState 를 부르게 되어 React Compiler 가 막는다.
   const [loaded, setLoaded] = useState<TheoryDocument[] | null>(null)
   const [preview, setPreview] = useState<TheoryDocument | null>(null)
-  const [lectureName, setLectureName] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [lectureQuery, setLectureQuery] = useState('')
+  const [lectures, setLectures] = useState<LectureDocument[] | null>(null)
+  const [lecturePage, setLecturePage] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!allenOpen || !subjectId || loaded !== null) return
@@ -37,6 +37,21 @@ export function TheoryReferencePicker({ subjectId, value, onChange, userId }: Pr
       .then(setLoaded)
       .catch(() => setLoaded([]))
   }, [allenOpen, subjectId, loaded])
+
+  useEffect(() => {
+    if (!lectureOpen) return
+    const keyword = lectureQuery.trim()
+    let active = true
+    const timer = setTimeout(() => {
+      void fetchLectureDocuments({ subjectId, keyword })
+        .then((next) => active && setLectures(next.slice(0, 20)))
+        .catch(() => active && setLectures([]))
+    }, 250)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [lectureOpen, lectureQuery, subjectId])
 
   const documents = useMemo(() => loaded ?? [], [loaded])
   const loading = allenOpen && loaded === null
@@ -58,13 +73,17 @@ export function TheoryReferencePicker({ subjectId, value, onChange, userId }: Pr
     if (!value.some((item) => item.url === url)) onChange([...value, { label: pathOf(document, documents), url, kind: 'theory' }])
     setQuery('')
   }
-  async function attachLecture(file: File) {
-    setUploading(true)
-    try {
-      const url = await uploadLectureFile(file, userId)
-      onChange([...value, { label: lectureName.trim() || file.name, url, kind: 'lecture' }])
-      setLectureName(''); setLectureOpen(false)
-    } finally { setUploading(false) }
+  // 강의록은 더 이상 풀이마다 파일을 올리지 않는다. 관리자가 등록해 둔 문서를
+  // 가리키기만 해서, 같은 강의록이 사람 수만큼 복사되지 않게 한다.
+  const addLecture = (lecture: LectureDocument) => {
+    const raw = Number(lecturePage[lecture.id])
+    const page = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null
+    const url = `/lectures/${lecture.id}`
+    if (!value.some((item) => item.url === url)) {
+      const label = [lecture.title, lecture.professor].filter(Boolean).join(' · ')
+      onChange([...value, { label, url, kind: 'lecture', page }])
+    }
+    setLectureQuery('')
   }
 
   return <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
@@ -88,10 +107,18 @@ export function TheoryReferencePicker({ subjectId, value, onChange, userId }: Pr
           <Button size="sm" variant="ghost" onClick={() => setPreview(document)}>이론 보기</Button>
         </li>)}</ul>}
     </div>}
-    {lectureOpen && <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
-      <input value={lectureName} onChange={(event) => setLectureName(event.target.value)} placeholder="강의록 이름" className="w-40 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />
-      <input ref={fileRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void attachLecture(file); event.currentTarget.value = '' }} />
-      <Button size="sm" variant="secondary" disabled={uploading} onClick={() => fileRef.current?.click()}>{uploading ? '첨부 중…' : '+ 파일 첨부'}</Button>
+    {lectureOpen && <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+      <input autoFocus value={lectureQuery} onChange={(event) => setLectureQuery(event.target.value)} placeholder="강의록 제목·교수·본문 검색" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />
+      {lectures === null ? <p className="mt-2 text-xs text-slate-400">강의록을 불러오는 중…</p> : lectures.length === 0 ? <p className="mt-2 text-xs text-slate-400">{lectureQuery.trim() ? '검색 결과가 없습니다.' : '등록된 강의록이 없습니다.'}</p> : <ul className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        {lectures.map((lecture) => <li key={lecture.id} className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-0 dark:border-slate-800">
+          <button type="button" onClick={() => addLecture(lecture)} className="min-w-0 flex-1 text-left text-sm hover:text-brand-700 dark:hover:text-brand-200">
+            <span className="block truncate">{lecture.title}</span>
+            <span className="text-xs text-slate-400">{[lecture.professor, lecture.lectureYear ? `${lecture.lectureYear}년` : null, lecture.pageCount ? `${lecture.pageCount}쪽` : null].filter(Boolean).join(' · ') || '정보 없음'}</span>
+          </button>
+          {/* 강의록은 길어서 몇 쪽인지 함께 남겨 두면 다시 찾기 쉽다. */}
+          <input value={lecturePage[lecture.id] ?? ''} onChange={(event) => setLecturePage((prev) => ({ ...prev, [lecture.id]: event.target.value }))} inputMode="numeric" placeholder="쪽" aria-label={`${lecture.title} 쪽 번호`} className="w-14 shrink-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />
+        </li>)}
+      </ul>}
     </div>}
     {preview && <div role="dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setPreview(null)}><article className="max-h-[85dvh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-5 dark:bg-slate-900" onClick={(event) => event.stopPropagation()}><div className="mb-3 flex items-center gap-3"><h2 className="flex-1 text-lg font-bold">{pathOf(preview, documents)}</h2><Button size="sm" variant="ghost" onClick={() => setPreview(null)}>닫기</Button></div><RichTextViewer doc={preview.content} /></article></div>}
   </div>

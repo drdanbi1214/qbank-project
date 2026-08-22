@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
 import {
@@ -59,7 +59,12 @@ function LectureRow({ lecture, subjectName }: { lecture: LectureDocument; subjec
 
 export function LecturesPage() {
   const { lectureId } = useParams()
+  const [params] = useSearchParams()
   const { taxonomy } = useData()
+
+  // 풀이의 강의록 참조가 `?page=` 로 특정 쪽을 가리킨다.
+  const rawPage = Number(params.get('page'))
+  const initialPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : null
 
   const [subjectId, setSubjectId] = useState<string | null>(null)
   const [professor, setProfessor] = useState<string | null>(null)
@@ -168,7 +173,11 @@ export function LecturesPage() {
             </div>
           }
         >
-          <LecturePdfViewer storagePath={detail.filePath} title={detail.title} />
+          <LecturePdfViewer
+            storagePath={detail.filePath}
+            title={detail.title}
+            initialPage={initialPage}
+          />
         </Suspense>
       </section>
     )

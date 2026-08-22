@@ -33,7 +33,7 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:px-4">
+      <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-2 px-3 sm:px-4">
         {showDrawerButton && (
           <button
             type="button"
@@ -47,17 +47,18 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
 
         <NavLink to="/study" className="flex shrink-0 items-center gap-2">
           <BrandMark className="h-8 w-8 text-sm" />
-          <span className={cn('hidden text-lg sm:inline', BRAND_NAME_CLASSNAME)}>{BRAND_NAME}</span>
+          {/* 메뉴가 많은 중간 폭에서는 워드마크를 접어 링크가 줄바꿈되지 않게 한다. */}
+          <span className={cn('hidden text-lg 2xl:inline', BRAND_NAME_CLASSNAME)}>{BRAND_NAME}</span>
         </NavLink>
 
-        <nav className="ml-4 hidden items-center gap-1 lg:flex">
+        <nav className="ml-2 hidden min-w-0 flex-1 items-center justify-center gap-0 lg:flex xl:ml-3">
           {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 xl:text-sm',
                   isActive
                     ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
                     : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
@@ -74,7 +75,7 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <ThemeToggle />
           <NotificationBell />
 
@@ -87,7 +88,7 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
               className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <Avatar path={profile?.avatar_url} name={profile?.display_name} size={28} />
-              <span className="hidden max-w-28 truncate sm:inline">
+              <span className="hidden max-w-28 truncate 2xl:inline">
                 {profile?.display_name ?? '사용자'}
               </span>
             </button>

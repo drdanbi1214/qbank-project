@@ -19,8 +19,15 @@ export type Author = {
 
 export type SolutionReference = {
   label: string
+  /**
+   * `/` 로 시작하면 사이트 안의 주소다(알렌 문서, 강의록 문서). 그렇지 않으면
+   * `<bucket>/<path>` 형태의 저장소 경로이며, 강의록을 문서로 등록하기 전에
+   * 풀이마다 올리던 파일들이 그렇다. 그 파일들도 계속 열려야 해서 둘을 함께 받는다.
+   */
   url: string | null
   kind?: 'theory' | 'lecture'
+  /** 강의록 문서에서 가리키는 쪽. 없으면 첫 쪽부터 연다. */
+  page?: number | null
 }
 
 export type Solution = {
@@ -79,7 +86,9 @@ export function parseReferences(value: unknown): SolutionReference[] {
     if (label === '') return []
     const url = typeof record.url === 'string' && record.url.trim() !== '' ? record.url.trim() : null
     const kind = record.kind === 'lecture' ? 'lecture' as const : 'theory' as const
-    return [{ label, url, kind }]
+    const rawPage = typeof record.page === 'number' ? Math.floor(record.page) : null
+    const page = rawPage && rawPage > 0 ? rawPage : null
+    return [{ label, url, kind, page }]
   })
 }
 

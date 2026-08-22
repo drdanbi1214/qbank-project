@@ -11,7 +11,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString()
 
-type Props = { storagePath: string; title: string }
+type Props = { storagePath: string; title: string; initialPage?: number | null }
 
 /** 한 쪽. 화면 가까이 왔을 때만 캔버스에 그린다. */
 function PdfPage({
@@ -94,7 +94,7 @@ function PdfPage({
   )
 }
 
-export function LecturePdfViewer({ storagePath, title }: Props) {
+export function LecturePdfViewer({ storagePath, title, initialPage }: Props) {
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -188,6 +188,17 @@ export function LecturePdfViewer({ storagePath, title }: Props) {
     () => (document ? Array.from({ length: document.numPages }, (_, index) => index + 1) : []),
     [document],
   )
+
+  // 풀이에서 "127쪽" 처럼 가리켜 들어온 경우 그 자리로 옮겨 준다. 아직 안 그린
+  // 쪽도 자리는 잡혀 있어 스크롤이 제대로 닿는다.
+  useEffect(() => {
+    if (!document || !initialPage || initialPage < 1 || initialPage > document.numPages) return
+    const timer = setTimeout(() => {
+      const target = window.document.querySelector(`[data-page="${initialPage}"]`)
+      target?.scrollIntoView({ block: 'start' })
+    }, 60)
+    return () => clearTimeout(timer)
+  }, [document, initialPage])
 
   return (
     <div className="flex flex-col gap-3">

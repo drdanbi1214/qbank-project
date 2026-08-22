@@ -106,13 +106,9 @@ export async function uploadImage(file: File, userId: string): Promise<string> {
   return uploadImageTo(BUCKET, file, userId)
 }
 
-export async function uploadLectureFile(file: File, userId: string): Promise<string> {
-  if (file.size > 50 * 1024 * 1024) throw new Error('강의록 파일은 50MB 까지 가능합니다.')
-  const extension = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'file'
-  const path = `${userId}/${crypto.randomUUID()}.${extension}`
-  await uploadStoredObject('solution-lecture-files', path, file, file.type || 'application/octet-stream')
-  return `solution-lecture-files/${path}`
-}
+// 풀이에서 강의록 파일을 올리던 함수는 없앴다. 이제 강의록은 관리자가 라이브러리에
+// 등록하고 풀이는 그 문서를 가리키기만 한다. 이미 올라간 solution-lecture-files
+// 객체 21개는 기존 풀이 660건이 계속 참조하므로 읽기는 그대로 열어 둔다.
 
 /**
  * 프로필 사진 업로드.

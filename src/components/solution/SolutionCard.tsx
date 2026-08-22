@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { MarkableRegion } from '@/components/marking/MarkableRegion'
 import { useTextMarks } from '@/components/marking/useTextMarks'
@@ -253,7 +254,32 @@ export function SolutionCard({
 }
 
 function SolutionReferenceLink({ reference }: { reference: Solution['references'][number] }) {
-  const signedUrl = useSignedUrl(reference.kind === 'lecture' ? reference.url : null)
-  const href = reference.kind === 'lecture' ? signedUrl : reference.url
-  return href ? <a href={href} target="_blank" rel="noreferrer" className="rounded-lg bg-brand-50 px-2 py-1 text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200">{reference.kind === 'lecture' ? '강의록 · ' : ''}{reference.label}</a> : null
+  // 사이트 안의 주소는 그대로 열고, 저장소 경로만 서명해서 연다. 강의록을 문서로
+  // 등록하기 전에 풀이마다 올리던 파일들이 후자에 해당하며 계속 열려야 한다.
+  const isRoute = Boolean(reference.url?.startsWith('/'))
+  const signedUrl = useSignedUrl(isRoute ? null : reference.url)
+  const href = isRoute
+    ? reference.page
+      ? `${reference.url}?page=${reference.page}`
+      : reference.url
+    : signedUrl
+  if (!href) return null
+
+  const badge = reference.kind === 'lecture' ? '강의록 · ' : ''
+  const suffix = reference.page ? ` (${reference.page}쪽)` : ''
+  const className =
+    'rounded-lg bg-brand-50 px-2 py-1 text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200'
+
+  return isRoute ? (
+    <Link to={href} className={className}>
+      {badge}
+      {reference.label}
+      {suffix}
+    </Link>
+  ) : (
+    <a href={href} target="_blank" rel="noreferrer" className={className}>
+      {badge}
+      {reference.label}
+    </a>
+  )
 }
