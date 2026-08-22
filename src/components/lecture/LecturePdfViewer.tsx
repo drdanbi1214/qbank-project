@@ -18,7 +18,7 @@ type Props = {
   initialQuery?: string
 }
 
-type SearchHit = { pageNumber: number; count: number }
+type SearchHit = { pageNumber: number; occurrenceIndex: number }
 
 function countMatches(text: string, query: string): number {
   if (!query) return 0
@@ -33,10 +33,14 @@ function countMatches(text: string, query: string): number {
   return count
 }
 
-function markTextLayer(container: HTMLDivElement, query: string) {
+function markTextLayer(container: HTMLDivElement, query: string, activeOccurrence: number | null) {
   const needle = query.trim().toLocaleLowerCase()
+  let occurrenceIndex = 0
+  let activeMark: HTMLElement | null = null
   for (const span of container.querySelectorAll<HTMLSpanElement>('span')) {
-    if (span.children.length > 0) continue
+    // markedContent를 감싼 PDF.js 부모 span만 건너뛴다. 우리가 앞선 검색에서
+    // 넣은 mark는 원문으로 되돌린 뒤 새 검색어에 맞춰 다시 만든다.
+    if ([...span.children].some((child) => child.tagName === 'SPAN')) continue
     const source = span.dataset.sourceText ?? span.textContent ?? ''
     span.dataset.sourceText = source
     span.replaceChildren(source)
@@ -51,15 +55,20 @@ function markTextLayer(container: HTMLDivElement, query: string) {
     while (found >= 0) {
       if (found > cursor) fragment.append(source.slice(cursor, found))
       const mark = window.document.createElement('mark')
-      mark.className = 'lecture-pdf-search-hit'
+      mark.className = `lecture-pdf-search-hit${
+        occurrenceIndex === activeOccurrence ? ' lecture-pdf-search-hit-active' : ''
+      }`
+      if (occurrenceIndex === activeOccurrence) activeMark = mark
       mark.textContent = source.slice(found, found + query.trim().length)
       fragment.append(mark)
+      occurrenceIndex += 1
       cursor = found + query.trim().length
       found = lower.indexOf(needle, cursor)
     }
     if (cursor < source.length) fragment.append(source.slice(cursor))
     span.replaceChildren(fragment)
   }
+  return activeMark
 }
 
 /** 한 쪽. 화면 가까이 왔을 때만 캔버스에 그린다. */
@@ -69,23 +78,27 @@ function PdfPage({
   width,
   searchQuery,
   activeSearchPage,
+  activeSearchOccurrence,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
   width: number
   searchQuery: string
   activeSearchPage: boolean
+  activeSearchOccurrence: number | null
 }) {
   const holder = useRef<HTMLDivElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
   const textLayer = useRef<HTMLDivElement | null>(null)
   const latestSearchQuery = useRef(searchQuery)
+  const latestActiveOccurrence = useRef<number | null>(null)
   const [visible, setVisible] = useState(false)
   const [ratio, setRatio] = useState(1.414) // A4 세로 비율. 실제 크기를 알기 전 자리만 잡는다.
 
   useEffect(() => {
     latestSearchQuery.current = searchQuery
-  }, [searchQuery])
+    latestActiveOccurrence.current = activeSearchPage ? activeSearchOccurrence : null
+  }, [activeSearchOccurrence, activeSearchPage, searchQuery])
 
   useEffect(() => {
     const node = holder.current
@@ -147,7 +160,14 @@ function PdfPage({
           viewport: base1x,
         })
         void textTask.render().then(() => {
-          if (!cancelled) markTextLayer(textTarget, latestSearchQuery.current)
+          if (!cancelled) {
+            const activeMark = markTextLayer(
+              textTarget,
+              latestSearchQuery.current,
+              latestActiveOccurrence.current,
+            )
+            activeMark?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          }
         })
       }
 
@@ -167,8 +187,17 @@ function PdfPage({
   }, [visible, width, document, pageNumber])
 
   useEffect(() => {
-    if (textLayer.current) markTextLayer(textLayer.current, searchQuery)
-  }, [searchQuery])
+    if (textLayer.current) {
+      const activeMark = markTextLayer(
+        textLayer.current,
+        searchQuery,
+        activeSearchPage ? activeSearchOccurrence : null,
+      )
+      if (activeSearchPage) {
+        activeMark?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }
+    }
+  }, [activeSearchOccurrence, activeSearchPage, searchQuery])
 
   return (
     <div
@@ -328,38 +357,33 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
     if (!pageTexts || !searchQuery) return []
     return pageTexts.flatMap((text, index) => {
       const count = countMatches(text, searchQuery)
-      return count > 0 ? [{ pageNumber: index + 1, count }] : []
+      return Array.from({ length: count }, (_, occurrenceIndex) => ({
+        pageNumber: index + 1,
+        occurrenceIndex,
+      }))
     })
   }, [pageTexts, searchQuery])
-
-  const totalMatches = useMemo(
-    () => searchHits.reduce((sum, hit) => sum + hit.count, 0),
-    [searchHits],
-  )
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (searchHits.length === 0) {
-        setActiveResult(0)
-        return
-      }
-      const preferred = initialPage
-        ? searchHits.findIndex((hit) => hit.pageNumber >= initialPage)
-        : -1
-      setActiveResult(preferred >= 0 ? preferred : 0)
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [searchHits, initialPage])
 
   const scrollToPage = useCallback((pageNumber: number) => {
     const target = window.document.querySelector(`[data-page="${pageNumber}"]`)
     target?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [])
 
+  // 새 검색어는 현재 스크롤 위치와 무관하게 문서의 첫 번째 일치 항목부터
+  // 시작한다. 이전에는 URL의 초기 쪽을 기준으로 잡아 끝에서 위로 돌아가는 것처럼
+  // 보일 수 있었다.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setActiveResult(0)
+      if (searchHits.length > 0) scrollToPage(searchHits[0].pageNumber)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [scrollToPage, searchHits])
+
   const moveSearch = useCallback(
     (step: number) => {
       if (searchHits.length === 0) return
-      const next = (activeResult + step + searchHits.length) % searchHits.length
+      const next = Math.max(0, Math.min(activeResult + step, searchHits.length - 1))
       setActiveResult(next)
       scrollToPage(searchHits[next].pageNumber)
     },
@@ -440,13 +464,15 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
                   ? '색인 중…'
                   : !searchQuery
                     ? ''
-                    : `${totalMatches}건 · ${searchHits.length}쪽`}
+                    : searchHits.length === 0
+                      ? '0/0'
+                      : `${Math.min(activeResult + 1, searchHits.length)}/${searchHits.length}`}
               </span>
             </div>
             <button
               type="button"
               onClick={() => moveSearch(-1)}
-              disabled={searchHits.length === 0}
+              disabled={searchHits.length === 0 || activeResult <= 0}
               aria-label="이전 검색 결과"
               className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm disabled:opacity-35 dark:border-slate-600"
             >
@@ -455,7 +481,7 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
             <button
               type="button"
               onClick={() => moveSearch(1)}
-              disabled={searchHits.length === 0}
+              disabled={searchHits.length === 0 || activeResult >= searchHits.length - 1}
               aria-label="다음 검색 결과"
               className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm disabled:opacity-35 dark:border-slate-600"
             >
@@ -511,6 +537,11 @@ export function LecturePdfViewer({ storagePath, title, initialPage, initialQuery
               width={width}
               searchQuery={searchQuery}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
+              activeSearchOccurrence={
+                searchHits[activeResult]?.pageNumber === pageNumber
+                  ? searchHits[activeResult].occurrenceIndex
+                  : null
+              }
             />
           ))
         )}
