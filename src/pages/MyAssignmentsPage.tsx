@@ -74,14 +74,60 @@ export function MyAssignmentsPage() {
       : byScope.filter((row) => row.status !== 'done')
   }, [byScope, filter])
 
+  // 배정은 시험군(2026 본 2-1 계통 Y / 26학번 학년말고사)으로 크게 나눈 뒤
+  // 그 안에서 과목별로 묶는다. 과목만으로 묶으면 학년말고사 내과와 계통 Y 내과가
+  // 한 덩어리로 섞여 어느 시험 문항인지 구분이 안 된다.
+  // 소제목은 시험별 보기와 같은 규칙으로, 계통명이 있으면 그것을 우선한다
+  // (계통 Y 는 8개 시험이 전부 과목상 "내과"라 과목명으로는 나뉘지 않는다).
   const grouped = useMemo(() => {
-    const map = new Map<string, { name: string; items: MyAssignment[] }>()
+    const groups = new Map<
+      string,
+      { label: string; latest: string; count: number; subjects: Map<string, { name: string; items: MyAssignment[] }> }
+    >()
+
     for (const row of filtered) {
-      const entry = map.get(row.subjectId) ?? { name: row.subjectName, items: [] }
-      entry.items.push(row)
-      map.set(row.subjectId, entry)
+      const groupKey = row.curriculum ?? `${row.cohort} ${row.examName}`
+      const group = groups.get(groupKey) ?? {
+        label: groupKey,
+        latest: '',
+        count: 0,
+        subjects: new Map<string, { name: string; items: MyAssignment[] }>(),
+      }
+      if ((row.examDate ?? '') > group.latest) group.latest = row.examDate ?? ''
+      group.count += 1
+
+      const subjectKey = row.examSubjectLabel ?? row.subjectId
+      const subject = group.subjects.get(subjectKey) ?? {
+        name: row.examSubjectLabel ?? row.subjectName,
+        items: [],
+      }
+      subject.items.push(row)
+      group.subjects.set(subjectKey, subject)
+      groups.set(groupKey, group)
     }
-    return [...map.entries()]
+
+    const byExamThenNumber = (a: MyAssignment, b: MyAssignment) =>
+      (a.examDate ?? '').localeCompare(b.examDate ?? '') || a.questionNumber - b.questionNumber
+
+    return [...groups.entries()]
+      // 최근 시험군을 위로. 지금 작업 중인 시험이 맨 앞에 오게 한다.
+      .sort(([, a], [, b]) => b.latest.localeCompare(a.latest) || a.label.localeCompare(b.label, 'ko'))
+      .map(([key, group]) => {
+        const subjects = [...group.subjects.entries()].map(([subjectKey, subject]) => ({
+          key: subjectKey,
+          name: subject.name,
+          items: [...subject.items].sort(byExamThenNumber),
+        }))
+
+        // 과목으로 나뉜 묶음(학년말고사)은 rows 가 이미 과목 정렬순으로 오므로
+        // 들어온 순서를 그대로 둔다. 계통명으로 나뉜 묶음(계통 Y)은 전부 같은
+        // 과목이라 그 순서가 무의미하므로 시험 날짜순으로 세운다.
+        if (subjects.every((subject) => subject.items[0].examSubjectLabel !== null)) {
+          subjects.sort((a, b) => byExamThenNumber(a.items[0], b.items[0]))
+        }
+
+        return { key, label: group.label, count: group.count, subjects }
+      })
   }, [filtered])
 
   const openCount = byScope.filter((row) => row.status !== 'done').length
@@ -173,16 +219,26 @@ export function MyAssignmentsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {grouped.map(([subjectId, group]) => (
-            <div key={subjectId}>
-              <h2 className="mb-2 flex items-baseline gap-2 text-sm font-bold text-slate-500 dark:text-slate-400">
-                {group.name}
-                <span className="text-xs font-normal">{group.items.length}문항</span>
+        <div className="space-y-8">
+          {grouped.map((group) => (
+            <div key={group.key}>
+              <h2 className="mb-3 flex items-baseline gap-2 border-b border-slate-200 pb-1.5 text-base font-bold dark:border-slate-700">
+                {group.label}
+                <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                  {group.count}문항
+                </span>
               </h2>
 
+              <div className="space-y-4">
+          {group.subjects.map((subject) => (
+            <div key={subject.key}>
+              <h3 className="mb-2 flex items-baseline gap-2 text-sm font-bold text-slate-500 dark:text-slate-400">
+                {subject.name}
+                <span className="text-xs font-normal">{subject.items.length}문항</span>
+              </h3>
+
               <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-700 dark:bg-slate-900">
-                {group.items.map((row) => {
+                {subject.items.map((row) => {
                   const overdue =
                     row.status !== 'done' && row.dueDate !== null && row.dueDate < today
 
@@ -215,7 +271,9 @@ export function MyAssignmentsPage() {
                             {row.stemPreview || '본문 없음'}
                           </span>
                           <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                            {row.questionNumber}번 [{row.cohort} {row.subjectName}]
+                            {/* 시험군과 과목은 위 제목이 이미 말해주므로 여기서는
+                                같은 묶음 안에서 갈리는 차수만 덧붙인다. */}
+                            {row.questionNumber}번 | {row.examName}
                             {row.unitName ? ` | ${row.unitName}` : ' | 미분류'}
                             {row.questionType === 'essay' && ' | 서술형'}
                             {row.questionType === 'R' && ' | R형'}
@@ -240,6 +298,9 @@ export function MyAssignmentsPage() {
                   )
                 })}
               </ul>
+            </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>

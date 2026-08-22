@@ -2655,9 +2655,12 @@ export type Database = {
           assignment_id: string
           cohort: string
           completed_at: string
+          curriculum: string
           due_date: string
+          exam_date: string
           exam_id: string
           exam_name: string
+          exam_subject_label: string
           has_my_solution: boolean
           question_id: string
           question_number: number

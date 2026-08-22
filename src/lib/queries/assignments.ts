@@ -15,6 +15,11 @@ export type MyAssignment = {
   examId: string
   cohort: string
   examName: string
+  /** 시험 묶음. null 이면 기존 학년말고사 체계라 cohort + examName 이 묶음이다. */
+  curriculum: string | null
+  /** 계통 Y 처럼 과목 하나에 계통이 여러 개인 시험에서 쓰는 소제목. */
+  examSubjectLabel: string | null
+  examDate: string | null
   questionNumber: number
   questionType: string
   stemPreview: string
@@ -40,6 +45,9 @@ export async function fetchMyAssignments(): Promise<MyAssignment[]> {
     examId: row.exam_id,
     cohort: row.cohort,
     examName: row.exam_name,
+    curriculum: row.curriculum,
+    examSubjectLabel: row.exam_subject_label,
+    examDate: row.exam_date,
     questionNumber: row.question_number,
     questionType: row.question_type,
     stemPreview: row.stem_preview ?? '',
