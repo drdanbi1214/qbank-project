@@ -50,3 +50,31 @@ export async function hasAiSolution(questionId: string): Promise<boolean> {
   if (error) throw error
   return (data?.length ?? 0) > 0
 }
+
+/**
+ * 인쇄용. 여러 문제의 AI 풀이를 한 번에 받아 문제 id 별로 묶는다.
+ * 권한이 없으면 RLS가 걸러 빈 Map 이 온다.
+ */
+export async function fetchAiSolutionsForQuestions(
+  questionIds: string[],
+): Promise<Map<string, AiSolution>> {
+  if (questionIds.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('ai_solutions')
+    .select('id, question_id, content, created_at, updated_at')
+    .in('question_id', questionIds)
+  if (error) throw error
+
+  const result = new Map<string, AiSolution>()
+  for (const row of (data ?? []) as AiSolutionRow[]) {
+    result.set(row.question_id, {
+      id: row.id,
+      questionId: row.question_id,
+      content: parseRichDoc(row.content),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })
+  }
+  return result
+}
