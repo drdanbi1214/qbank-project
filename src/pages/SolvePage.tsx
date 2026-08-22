@@ -8,6 +8,7 @@ import {
   fetchQuestionById,
   fetchQuestionSet,
   fetchQuestions,
+  fetchQuestionsByIds,
   type QuestionSet,
   type SolveQuestion,
 } from '@/lib/queries/questions'
@@ -73,8 +74,7 @@ export function SolvePage() {
           const found = await fetchSession(sessionId)
           if (!found) throw new Error('세션을 찾을 수 없습니다.')
 
-          const fetched = await Promise.all(found.questionIds.map((id) => fetchQuestionById(id)))
-          const ordered = fetched.filter((row): row is SolveQuestion => row !== null)
+          const ordered = await fetchQuestionsByIds(found.questionIds)
           const marked = await fetchBookmarked(ordered.map((row) => row.id))
           if (!active) return
           setLoaded({ key: requestKey, questions: ordered, startIndex: found.currentIndex })

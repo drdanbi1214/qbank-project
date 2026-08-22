@@ -1,48 +1,53 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { RequireAvatar } from '@/components/layout/RequireAvatar'
 import { StudyLayout } from '@/components/layout/StudyLayout'
+import { FullPageSpinner } from '@/components/ui/Spinner'
 import { AuthProvider } from '@/lib/auth'
 import { DataProvider } from '@/lib/data'
 import { NotificationProvider } from '@/lib/notifications'
 import { ThemeProvider } from '@/lib/theme'
-import { AdminAssignmentsPage } from '@/pages/AdminAssignmentsPage'
-import { AdminHomePage } from '@/pages/AdminHomePage'
-import { AdminLabelingPage } from '@/pages/AdminLabelingPage'
-import { AdminQuestionsPage } from '@/pages/AdminQuestionsPage'
-import { AdminReportsPage } from '@/pages/AdminReportsPage'
-import { AdminReviewPage } from '@/pages/AdminReviewPage'
-import { AdminRevisionsPage } from '@/pages/AdminRevisionsPage'
-import { AdminStatsPage } from '@/pages/AdminStatsPage'
-import { AdminUploadPage } from '@/pages/AdminUploadPage'
-import { AdminUsersPage } from '@/pages/AdminUsersPage'
-import { AdminVisibilityPage } from '@/pages/AdminVisibilityPage'
-import { AnnouncementsPage } from '@/pages/AnnouncementsPage'
-import { BlockTestPage } from '@/pages/BlockTestPage'
-import { DiscussionsPage } from '@/pages/DiscussionsPage'
-import { ExamDetailPage } from '@/pages/ExamDetailPage'
-import { ExamsPage } from '@/pages/ExamsPage'
-import { LoginPage } from '@/pages/LoginPage'
-import { MyAssignmentsPage } from '@/pages/MyAssignmentsPage'
-import { MyPage } from '@/pages/MyPage'
-import { NotificationsPage } from '@/pages/NotificationsPage'
-import { PendingApprovalPage } from '@/pages/PendingApprovalPage'
-import { PrintPage } from '@/pages/PrintPage'
-import { ProfilesPage } from '@/pages/ProfilesPage'
-import { SearchPage } from '@/pages/SearchPage'
-import { SolvePage } from '@/pages/SolvePage'
-import { StudyHomePage } from '@/pages/StudyHomePage'
-import { SubjectPage } from '@/pages/SubjectPage'
-import { TheoryIndexPage } from '@/pages/TheoryIndexPage'
-import { TheorySubjectPage } from '@/pages/TheorySubjectPage'
-import { TopicIndexPage } from '@/pages/TopicIndexPage'
-import { TopicNoticesPage } from '@/pages/TopicNoticesPage'
-import { TopicsPage } from '@/pages/TopicsPage'
-import { UnitQuestionsPage } from '@/pages/UnitQuestionsPage'
-import { WrongNotesPage } from '@/pages/WrongNotesPage'
-import { NotFoundPage } from '@/pages/placeholders'
 import { AdminRoute, ApprovedRoute, ProtectedRoute } from '@/routes/ProtectedRoute'
+
+// Route modules are deliberately loaded only when visited. In particular, the
+// login and study screens no longer download every admin/editor page up front.
+const AdminAssignmentsPage = lazy(() => import('@/pages/AdminAssignmentsPage').then((m) => ({ default: m.AdminAssignmentsPage })))
+const AdminHomePage = lazy(() => import('@/pages/AdminHomePage').then((m) => ({ default: m.AdminHomePage })))
+const AdminLabelingPage = lazy(() => import('@/pages/AdminLabelingPage').then((m) => ({ default: m.AdminLabelingPage })))
+const AdminQuestionsPage = lazy(() => import('@/pages/AdminQuestionsPage').then((m) => ({ default: m.AdminQuestionsPage })))
+const AdminReportsPage = lazy(() => import('@/pages/AdminReportsPage').then((m) => ({ default: m.AdminReportsPage })))
+const AdminReviewPage = lazy(() => import('@/pages/AdminReviewPage').then((m) => ({ default: m.AdminReviewPage })))
+const AdminRevisionsPage = lazy(() => import('@/pages/AdminRevisionsPage').then((m) => ({ default: m.AdminRevisionsPage })))
+const AdminStatsPage = lazy(() => import('@/pages/AdminStatsPage').then((m) => ({ default: m.AdminStatsPage })))
+const AdminUploadPage = lazy(() => import('@/pages/AdminUploadPage').then((m) => ({ default: m.AdminUploadPage })))
+const AdminUsersPage = lazy(() => import('@/pages/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })))
+const AdminVisibilityPage = lazy(() => import('@/pages/AdminVisibilityPage').then((m) => ({ default: m.AdminVisibilityPage })))
+const AnnouncementsPage = lazy(() => import('@/pages/AnnouncementsPage').then((m) => ({ default: m.AnnouncementsPage })))
+const BlockTestPage = lazy(() => import('@/pages/BlockTestPage').then((m) => ({ default: m.BlockTestPage })))
+const DiscussionsPage = lazy(() => import('@/pages/DiscussionsPage').then((m) => ({ default: m.DiscussionsPage })))
+const ExamDetailPage = lazy(() => import('@/pages/ExamDetailPage').then((m) => ({ default: m.ExamDetailPage })))
+const ExamsPage = lazy(() => import('@/pages/ExamsPage').then((m) => ({ default: m.ExamsPage })))
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const MyAssignmentsPage = lazy(() => import('@/pages/MyAssignmentsPage').then((m) => ({ default: m.MyAssignmentsPage })))
+const MyPage = lazy(() => import('@/pages/MyPage').then((m) => ({ default: m.MyPage })))
+const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
+const PendingApprovalPage = lazy(() => import('@/pages/PendingApprovalPage').then((m) => ({ default: m.PendingApprovalPage })))
+const PrintPage = lazy(() => import('@/pages/PrintPage').then((m) => ({ default: m.PrintPage })))
+const ProfilesPage = lazy(() => import('@/pages/ProfilesPage').then((m) => ({ default: m.ProfilesPage })))
+const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
+const SolvePage = lazy(() => import('@/pages/SolvePage').then((m) => ({ default: m.SolvePage })))
+const StudyHomePage = lazy(() => import('@/pages/StudyHomePage').then((m) => ({ default: m.StudyHomePage })))
+const SubjectPage = lazy(() => import('@/pages/SubjectPage').then((m) => ({ default: m.SubjectPage })))
+const TheoryIndexPage = lazy(() => import('@/pages/TheoryIndexPage').then((m) => ({ default: m.TheoryIndexPage })))
+const TheorySubjectPage = lazy(() => import('@/pages/TheorySubjectPage').then((m) => ({ default: m.TheorySubjectPage })))
+const TopicIndexPage = lazy(() => import('@/pages/TopicIndexPage').then((m) => ({ default: m.TopicIndexPage })))
+const TopicNoticesPage = lazy(() => import('@/pages/TopicNoticesPage').then((m) => ({ default: m.TopicNoticesPage })))
+const TopicsPage = lazy(() => import('@/pages/TopicsPage').then((m) => ({ default: m.TopicsPage })))
+const UnitQuestionsPage = lazy(() => import('@/pages/UnitQuestionsPage').then((m) => ({ default: m.UnitQuestionsPage })))
+const WrongNotesPage = lazy(() => import('@/pages/WrongNotesPage').then((m) => ({ default: m.WrongNotesPage })))
+const NotFoundPage = lazy(() => import('@/pages/placeholders').then((m) => ({ default: m.NotFoundPage })))
 
 export default function App() {
   return (
@@ -52,7 +57,8 @@ export default function App() {
           <ThemeProvider>
             <NotificationProvider>
               <DataProvider>
-                <Routes>
+                <Suspense fallback={<FullPageSpinner />}>
+                  <Routes>
                   <Route path="/login" element={<LoginPage />} />
 
                   <Route element={<ProtectedRoute />}>
@@ -113,7 +119,8 @@ export default function App() {
                       </Route>
                     </Route>
                   </Route>
-                </Routes>
+                  </Routes>
+                </Suspense>
               </DataProvider>
             </NotificationProvider>
           </ThemeProvider>

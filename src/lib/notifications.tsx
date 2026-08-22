@@ -32,7 +32,7 @@ let channelSeq = 0
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth()
   const userId = session?.user.id
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadState, setUnreadState] = useState<{ userId: string; count: number } | null>(null)
   const reload = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         console.error('알림 개수를 불러오지 못했습니다.', error)
         return
       }
-      setUnreadCount(count ?? 0)
+      setUnreadState({ userId: uid, count: count ?? 0 })
     }
 
     reload.current = () => void load()
@@ -90,10 +90,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const value = useMemo<NotificationState>(
     () => ({
       // 로그아웃 상태에서는 직전 사용자의 값이 남지 않도록 0으로 노출한다.
-      unreadCount: userId ? unreadCount : 0,
+      unreadCount: userId && unreadState?.userId === userId ? unreadState.count : 0,
       refresh,
     }),
-    [userId, unreadCount, refresh],
+    [userId, unreadState, refresh],
   )
 
   return (

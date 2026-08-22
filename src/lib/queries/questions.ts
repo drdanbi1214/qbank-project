@@ -195,16 +195,33 @@ export async function fetchQuestionById(id: string): Promise<SolveQuestion | nul
   return data ? toSolveQuestion(data as SolveRow) : null
 }
 
-/** 인쇄용으로 여러 문제를 한 번에 받는다. 요청한 순서를 지킨다. */
+/** ID 목록에 해당하는 여러 문항을 묶어서 읽고 요청한 순서를 지킨다. */
 export async function fetchQuestionsByIds(ids: string[]): Promise<SolveQuestion[]> {
   if (ids.length === 0) return []
-  const { data, error } = await supabase
-    .from('questions_solve')
-    .select(SOLVE_COLUMNS)
-    .in('id', ids)
 
-  if (error) throw error
-  const byId = new Map((data ?? []).map((row) => [row.id, toSolveQuestion(row as SolveRow)]))
+  // UUID를 너무 많이 한 URL의 `in (...)`에 넣으면 프록시 URL 길이 제한에
+  // 걸릴 수 있다. 100개씩 병렬 조회하면 세션당 수백 번의 단건 요청은
+  // 없애면서도 각 요청 URL은 충분히 짧게 유지된다.
+  const ID_BATCH_SIZE = 100
+  const batches: string[][] = []
+  for (let index = 0; index < ids.length; index += ID_BATCH_SIZE) {
+    batches.push(ids.slice(index, index + ID_BATCH_SIZE))
+  }
+
+  const pages = await Promise.all(
+    batches.map(async (batch) => {
+      const { data, error } = await supabase
+        .from('questions_solve')
+        .select(SOLVE_COLUMNS)
+        .in('id', batch)
+      if (error) throw error
+      return (data ?? []) as SolveRow[]
+    }),
+  )
+
+  const byId = new Map(
+    pages.flat().map((row) => [row.id, toSolveQuestion(row)]),
+  )
   return ids.flatMap((id) => {
     const found = byId.get(id)
     return found ? [found] : []

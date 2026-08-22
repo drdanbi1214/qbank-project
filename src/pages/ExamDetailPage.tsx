@@ -21,19 +21,27 @@ export function ExamDetailPage() {
   const { session } = useAuth()
   const { taxonomy, loading: taxonomyLoading, examProgress } = useData()
   const [busy, setBusy] = useState(false)
+  const [actionFailure, setActionFailure] = useState<{ key: string; message: string } | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const requestKey = `${session?.user.id ?? ''}|${examId ?? ''}|${reloadNonce}`
   const [loaded, setLoaded] = useState<{
     key: string
     questions: SolveQuestion[]
     states: Map<string, QuestionState>
   } | null>(null)
+  const [failed, setFailed] = useState<{ key: string; message: string } | null>(null)
 
   // 매 렌더마다 새 배열이 되면 아래 useMemo 가 계속 다시 계산된다.
-  const fresh = loaded !== null && loaded.key === examId
+  const fresh = loaded !== null && loaded.key === requestKey
   const questions = useMemo(() => (fresh ? loaded.questions : []), [fresh, loaded])
   const states = useMemo(
     () => (fresh ? loaded.states : new Map<string, QuestionState>()),
     [fresh, loaded],
   )
+  const loadError = failed?.key === requestKey ? failed.message : null
+  const questionLoading = !fresh && loadError === null
+  const actionKey = `${session?.user.id ?? ''}|${examId ?? ''}`
+  const actionError = actionFailure?.key === actionKey ? actionFailure.message : null
 
   // 이 시험에서 마지막 시도가 오답이었던 문항
   const wrongIds = useMemo(
@@ -51,6 +59,7 @@ export function ExamDetailPage() {
   async function retryWrong() {
     if (wrongIds.length === 0 || busy) return
     setBusy(true)
+    setActionFailure(null)
     try {
       const id = await startSession({
         userId: session?.user.id ?? '',
@@ -60,24 +69,32 @@ export function ExamDetailPage() {
       })
       navigate(`/solve?session=${id}`)
     } catch (caught) {
-      console.error('오답 세션을 시작하지 못했습니다.', caught)
+      setActionFailure({
+        key: actionKey,
+        message: caught instanceof Error ? caught.message : '오답 세션을 시작하지 못했습니다.',
+      })
     } finally {
       setBusy(false)
     }
   }
 
   useEffect(() => {
-    if (!examId) return
-    const currentExamId = examId
+    if (!examId || !session?.user.id) return
     let active = true
 
     async function load() {
       try {
         const rows = await fetchQuestions({ examId })
         const nextStates = await fetchQuestionStates(rows.map((row) => row.id))
-        if (active) setLoaded({ key: currentExamId, questions: rows, states: nextStates })
+        if (!active) return
+        setLoaded({ key: requestKey, questions: rows, states: nextStates })
+        setFailed(null)
       } catch (caught) {
-        console.error('문항을 불러오지 못했습니다.', caught)
+        if (!active) return
+        setFailed({
+          key: requestKey,
+          message: caught instanceof Error ? caught.message : '문항을 불러오지 못했습니다.',
+        })
       }
     }
 
@@ -85,7 +102,7 @@ export function ExamDetailPage() {
     return () => {
       active = false
     }
-  }, [examId])
+  }, [examId, requestKey, session?.user.id])
 
   if (!examId) return <Navigate to="/exams" replace />
   if (taxonomyLoading) {
@@ -164,6 +181,12 @@ export function ExamDetailPage() {
             )}
           </div>
         )}
+
+        {actionError && (
+          <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+            {actionError}
+          </p>
+        )}
       </header>
 
       {exam.overview && (
@@ -174,6 +197,31 @@ export function ExamDetailPage() {
           </p>
         </section>
       )}
+
+      {questionLoading ? (
+        <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500 dark:text-slate-400">
+          <Spinner />
+          <span>문항을 불러오는 중입니다.</span>
+        </div>
+      ) : loadError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300">
+          <p>{loadError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setFailed(null)
+              setReloadNonce((value) => value + 1)
+            }}
+            className="mt-3 inline-flex h-9 items-center rounded-lg border border-rose-300 bg-white px-4 font-medium hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950 dark:hover:bg-rose-900"
+          >
+            다시 시도
+          </button>
+        </div>
+      ) : questions.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <p className="text-sm text-slate-500 dark:text-slate-400">등록된 문제가 없습니다.</p>
+        </div>
+      ) : null}
 
     </section>
   )

@@ -42,6 +42,8 @@ type DataState = {
 }
 
 const DataContext = createContext<DataState | null>(null)
+const EMPTY_UNIT_PROGRESS: UnitProgress[] = []
+const EMPTY_EXAM_PROGRESS: ExamProgress[] = []
 
 function accumulate(rows: { total: number; solved: number; correct: number }[]): Progress {
   return rows.reduce(
@@ -56,32 +58,44 @@ function accumulate(rows: { total: number; solved: number; correct: number }[]):
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { session, isPending } = useAuth()
-  const enabled = Boolean(session) && !isPending
+  const userId = session?.user.id ?? null
+  const enabled = userId !== null && !isPending
 
-  const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null)
-  const [units, setUnits] = useState<UnitProgress[]>([])
-  const [exams, setExams] = useState<ExamProgress[]>([])
-  const [openAssignments, setOpenAssignments] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [taxonomyNonce, setTaxonomyNonce] = useState(0)
   const [progressNonce, setProgressNonce] = useState(0)
+  // 결과 소유자는 계정 단위로 기록한다. nonce는 재조회만 일으키므로 같은
+  // 계정에서 새 응답을 기다리는 동안 기존 화면을 불필요하게 비우지 않는다.
+  const taxonomyRequestKey = enabled ? userId : null
+  const progressRequestKey = enabled ? userId : null
+  const [taxonomyResult, setTaxonomyResult] = useState<{
+    key: string
+    taxonomy: Taxonomy | null
+    error: string | null
+  } | null>(null)
+  const [progressResult, setProgressResult] = useState<{
+    key: string
+    units: UnitProgress[]
+    exams: ExamProgress[]
+    openAssignments: number
+  } | null>(null)
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !userId || !taxonomyRequestKey) return
+    const requestKey = taxonomyRequestKey
     let active = true
 
     async function load() {
       try {
         const next = await fetchTaxonomy()
         if (!active) return
-        setTaxonomy(next)
-        setError(null)
+        setTaxonomyResult({ key: requestKey, taxonomy: next, error: null })
       } catch (caught) {
         if (!active) return
-        setError(caught instanceof Error ? caught.message : '분류 체계를 불러오지 못했습니다.')
-      } finally {
-        if (active) setLoading(false)
+        setTaxonomyResult({
+          key: requestKey,
+          taxonomy: null,
+          error: caught instanceof Error ? caught.message : '분류 체계를 불러오지 못했습니다.',
+        })
       }
     }
 
@@ -89,10 +103,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [enabled, taxonomyNonce])
+  }, [enabled, userId, taxonomyRequestKey, taxonomyNonce])
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !userId || !progressRequestKey) return
+    const requestKey = progressRequestKey
     let active = true
 
     async function load() {
@@ -103,11 +118,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
           countMyOpenAssignments(),
         ])
         if (!active) return
-        setUnits(unitRows)
-        setExams(examRows)
-        setOpenAssignments(assignmentCount)
+        setProgressResult({
+          key: requestKey,
+          units: unitRows,
+          exams: examRows,
+          openAssignments: assignmentCount,
+        })
       } catch (caught) {
         console.error('진행률을 불러오지 못했습니다.', caught)
+        if (!active) return
+        setProgressResult({ key: requestKey, units: [], exams: [], openAssignments: 0 })
       }
     }
 
@@ -115,47 +135,80 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [enabled, progressNonce])
+  }, [enabled, userId, progressRequestKey, progressNonce])
+
+  // Provider 자체는 로그인 화면에서도 유지된다. 이전 사용자의 비동기 결과가
+  // 메모리에 남아 있더라도 현재 계정 소유로 확인된 값만 화면에 노출한다.
+  const scopedTaxonomy =
+    taxonomyRequestKey && taxonomyResult?.key === taxonomyRequestKey
+      ? taxonomyResult.taxonomy
+      : null
+  const scopedUnits =
+    progressRequestKey && progressResult?.key === progressRequestKey
+      ? progressResult.units
+      : EMPTY_UNIT_PROGRESS
+  const scopedExams =
+    progressRequestKey && progressResult?.key === progressRequestKey
+      ? progressResult.exams
+      : EMPTY_EXAM_PROGRESS
+  const scopedOpenAssignments =
+    progressRequestKey && progressResult?.key === progressRequestKey
+      ? progressResult.openAssignments
+      : 0
+  const scopedLoading = enabled && taxonomyResult?.key !== taxonomyRequestKey
+  const scopedError =
+    taxonomyRequestKey && taxonomyResult?.key === taxonomyRequestKey
+      ? taxonomyResult.error
+      : null
 
   const unitProgress = useCallback(
     (unitId: string | null, subjectId?: string): Progress => {
-      const rows = units.filter(
+      const rows = scopedUnits.filter(
         (row) => row.unitId === unitId && (unitId !== null || row.subjectId === subjectId),
       )
       return rows.length > 0 ? accumulate(rows) : { ...EMPTY }
     },
-    [units],
+    [scopedUnits],
   )
 
   const subjectProgress = useCallback(
-    (subjectId: string): Progress => accumulate(units.filter((row) => row.subjectId === subjectId)),
-    [units],
+    (subjectId: string): Progress =>
+      accumulate(scopedUnits.filter((row) => row.subjectId === subjectId)),
+    [scopedUnits],
   )
 
   const examProgress = useCallback(
     (examId: string): Progress => {
-      const row = exams.find((item) => item.examId === examId)
+      const row = scopedExams.find((item) => item.examId === examId)
       return row ? { total: row.total, solved: row.solved, correct: row.correct } : { ...EMPTY }
     },
-    [exams],
+    [scopedExams],
   )
 
   const value = useMemo<DataState>(
     () => ({
-      taxonomy,
-      loading,
-      error,
+      taxonomy: scopedTaxonomy,
+      loading: scopedLoading,
+      error: scopedError,
       unitProgress,
       subjectProgress,
       examProgress,
-      openAssignments,
+      openAssignments: scopedOpenAssignments,
       refreshProgress: () => setProgressNonce((n) => n + 1),
       refreshAll: () => {
         setTaxonomyNonce((n) => n + 1)
         setProgressNonce((n) => n + 1)
       },
     }),
-    [taxonomy, loading, error, unitProgress, subjectProgress, examProgress, openAssignments],
+    [
+      scopedTaxonomy,
+      scopedLoading,
+      scopedError,
+      unitProgress,
+      subjectProgress,
+      examProgress,
+      scopedOpenAssignments,
+    ],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
