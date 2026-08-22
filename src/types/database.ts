@@ -939,6 +939,88 @@ export type Database = {
           },
         ]
       }
+      lecture_documents: {
+        Row: {
+          byte_size: number | null
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          curriculum: string | null
+          file_path: string
+          id: string
+          is_published: boolean
+          lecture_year: number | null
+          page_count: number | null
+          professor: string | null
+          required_permission: string | null
+          sort_order: number
+          subject_id: string
+          text_content: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          byte_size?: number | null
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          curriculum?: string | null
+          file_path: string
+          id?: string
+          is_published?: boolean
+          lecture_year?: number | null
+          page_count?: number | null
+          professor?: string | null
+          required_permission?: string | null
+          sort_order?: number
+          subject_id: string
+          text_content?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          byte_size?: number | null
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          curriculum?: string | null
+          file_path?: string
+          id?: string
+          is_published?: boolean
+          lecture_year?: number | null
+          page_count?: number | null
+          professor?: string | null
+          required_permission?: string | null
+          sort_order?: number
+          subject_id?: string
+          text_content?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_documents_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "lecture_documents_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecture_sources: {
         Row: {
           created_at: string
@@ -2010,6 +2092,57 @@ export type Database = {
           },
         ]
       }
+      theory_backup_gynecology_20260821: {
+        Row: {
+          content: Json | null
+          created_at: string | null
+          created_by: string | null
+          has_content: boolean | null
+          id: string | null
+          is_published: boolean | null
+          parent_id: string | null
+          required_permission: string | null
+          sort_order: number | null
+          source_key: string | null
+          subject_id: string | null
+          title: string | null
+          unit_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          has_content?: boolean | null
+          id?: string | null
+          is_published?: boolean | null
+          parent_id?: string | null
+          required_permission?: string | null
+          sort_order?: number | null
+          source_key?: string | null
+          subject_id?: string | null
+          title?: string | null
+          unit_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          has_content?: boolean | null
+          id?: string | null
+          is_published?: boolean | null
+          parent_id?: string | null
+          required_permission?: string | null
+          sort_order?: number | null
+          source_key?: string | null
+          subject_id?: string | null
+          title?: string | null
+          unit_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       theory_documents: {
         Row: {
           content: Json
@@ -2578,7 +2711,19 @@ export type Database = {
       }
       can_cluster: { Args: never; Returns: boolean }
       can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
+      can_read_exam_source: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
+      can_read_lecture_document: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
       can_read_lecture_file: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
+      can_read_question_image: {
         Args: { p_object_name: string }
         Returns: boolean
       }
@@ -2772,6 +2917,7 @@ export type Database = {
         Args: { p_question_id: string }
         Returns: undefined
       }
+      is_active_member: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
       list_profile_cards: {

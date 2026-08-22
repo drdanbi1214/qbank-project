@@ -15,6 +15,8 @@ export const MAIN_NAV: NavItem[] = [
   { to: '/theory', label: '이론 보기', icon: 'theory', permission: 'study_hapbon3' },
   // 테마는 이론과 완전히 별개다. 이론은 Notion 에서 임포트한 교과 정리이고,
   // 테마는 스터디원이 주제 단위로 쓰고 야마를 붙이는 글이다.
+  // 강의록은 활성 회원 전원이 본다. 이론과 달리 스터디 권한을 걸지 않는다.
+  { to: '/lectures', label: '강의록', icon: 'theory' },
   { to: '/topics', label: '레옵스', icon: 'topic', permission: 'study_legendob' },
   { to: '/exams', label: '시험별', icon: 'exam' },
   { to: '/assignments', label: '풀이 배정', icon: 'clipboard' },

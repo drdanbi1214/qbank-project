@@ -42,6 +42,7 @@ const SolvePage = lazy(() => import('@/pages/SolvePage').then((m) => ({ default:
 const StudyHomePage = lazy(() => import('@/pages/StudyHomePage').then((m) => ({ default: m.StudyHomePage })))
 const SubjectPage = lazy(() => import('@/pages/SubjectPage').then((m) => ({ default: m.SubjectPage })))
 const TheoryIndexPage = lazy(() => import('@/pages/TheoryIndexPage').then((m) => ({ default: m.TheoryIndexPage })))
+const LecturesPage = lazy(() => import('@/pages/LecturesPage').then((m) => ({ default: m.LecturesPage })))
 const TheorySubjectPage = lazy(() => import('@/pages/TheorySubjectPage').then((m) => ({ default: m.TheorySubjectPage })))
 const TopicIndexPage = lazy(() => import('@/pages/TopicIndexPage').then((m) => ({ default: m.TopicIndexPage })))
 const TopicNoticesPage = lazy(() => import('@/pages/TopicNoticesPage').then((m) => ({ default: m.TopicNoticesPage })))
@@ -87,6 +88,9 @@ export default function App() {
                           <Route path="/theory" element={<TheoryIndexPage />} />
                           <Route path="/theory/:subjectId" element={<TheorySubjectPage />} />
                           <Route path="/theory/:subjectId/:documentId" element={<TheorySubjectPage />} />
+                          {/* 강의록은 이론과 별개다. PDF 원본을 그대로 읽는다. */}
+                          <Route path="/lectures" element={<LecturesPage />} />
+                          <Route path="/lectures/:lectureId" element={<LecturesPage />} />
                           {/* 테마는 스터디 권한이 있어야 열린다. 가드는 페이지 안에서 한다. */}
                           <Route path="/topics" element={<TopicIndexPage />} />
                           <Route path="/topics/notices" element={<TopicNoticesPage />} />
