@@ -12,17 +12,19 @@ import {
 import { cn } from '@/utils/cn'
 import { BRAND_NAME, BRAND_NAME_CLASSNAME, BrandMark } from '@/components/ui/BrandMark'
 
-type Mode = 'signin' | 'signup'
+type Mode = 'signin' | 'signup' | 'forgot'
 
 export function LoginPage() {
-  const { session, loading, signIn, signUp } = useAuth()
+  const { session, loading, signIn, signUp, sendPasswordReset } = useAuth()
   const location = useLocation()
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(
+    () => (location.state as { notice?: string } | null)?.notice ?? null,
+  )
   const [busy, setBusy] = useState(false)
 
   if (!loading && session) {
@@ -38,6 +40,11 @@ export function LoginPage() {
     try {
       if (mode === 'signin') {
         await signIn(email.trim(), password)
+      } else if (mode === 'forgot') {
+        await sendPasswordReset(email.trim())
+        setNotice(
+          '가입된 계정이라면 비밀번호 재설정 메일이 발송됩니다. 메일함과 스팸함을 확인해주세요.',
+        )
       } else {
         const nickname = displayName.trim()
         const invalid = validateNickname(nickname)
@@ -85,7 +92,7 @@ export function LoginPage() {
               }}
               className={cn(
                 'flex-1 rounded-md py-2 text-sm font-medium transition-colors',
-                mode === value
+                (mode === 'forgot' ? 'signin' : mode) === value
                   ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100'
                   : 'text-slate-500 dark:text-slate-400',
               )}
@@ -96,6 +103,12 @@ export function LoginPage() {
         </div>
 
         <form onSubmit={(event) => void handleSubmit(event)} className="space-y-3">
+          {mode === 'forgot' && (
+            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+              가입할 때 사용한 이메일을 입력하면 비밀번호 재설정 링크를 보내드립니다.
+            </p>
+          )}
+
           {mode === 'signup' && (
             <div>
               <label htmlFor="displayName" className="mb-1 block text-sm font-medium">
@@ -133,21 +146,38 @@ export function LoginPage() {
             />
           </div>
 
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium">
-              비밀번호
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              className={inputClass}
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <label htmlFor="password" className="block text-sm font-medium">
+                  비밀번호
+                </label>
+                {mode === 'signin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('forgot')
+                      setError(null)
+                      setNotice(null)
+                    }}
+                    className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-300"
+                  >
+                    비밀번호를 잊으셨나요?
+                  </button>
+                )}
+              </div>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                className={inputClass}
+              />
+            </div>
+          )}
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
@@ -162,8 +192,26 @@ export function LoginPage() {
 
           <Button type="submit" size="lg" block disabled={busy}>
             {busy && <Spinner className="h-4 w-4 border-white/40 border-t-white" />}
-            {mode === 'signin' ? '로그인' : '가입 요청 보내기'}
+            {mode === 'signin'
+              ? '로그인'
+              : mode === 'forgot'
+                ? '재설정 메일 보내기'
+                : '가입 요청 보내기'}
           </Button>
+
+          {mode === 'forgot' && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin')
+                setError(null)
+                setNotice(null)
+              }}
+              className="w-full py-1 text-sm font-medium text-slate-500 hover:underline dark:text-slate-400"
+            >
+              로그인으로 돌아가기
+            </button>
+          )}
         </form>
       </div>
     </div>

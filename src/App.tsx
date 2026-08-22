@@ -36,6 +36,7 @@ const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m
 const PendingApprovalPage = lazy(() => import('@/pages/PendingApprovalPage').then((m) => ({ default: m.PendingApprovalPage })))
 const PrintPage = lazy(() => import('@/pages/PrintPage').then((m) => ({ default: m.PrintPage })))
 const ProfilesPage = lazy(() => import('@/pages/ProfilesPage').then((m) => ({ default: m.ProfilesPage })))
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })))
 const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
 const SolvePage = lazy(() => import('@/pages/SolvePage').then((m) => ({ default: m.SolvePage })))
 const StudyHomePage = lazy(() => import('@/pages/StudyHomePage').then((m) => ({ default: m.StudyHomePage })))
@@ -60,6 +61,7 @@ export default function App() {
                 <Suspense fallback={<FullPageSpinner />}>
                   <Routes>
                   <Route path="/login" element={<LoginPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                   <Route element={<ProtectedRoute />}>
                     <Route path="/pending" element={<PendingApprovalPage />} />

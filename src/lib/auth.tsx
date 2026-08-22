@@ -24,6 +24,8 @@ type AuthState = {
   hasPermission: (permission: PermissionKey) => boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, displayName: string) => Promise<void>
+  sendPasswordReset: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (patch: ProfilePatch) => Promise<void>
@@ -167,6 +169,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const sendPasswordReset = useCallback(async (email: string) => {
+    const redirectTo = new URL('/reset-password', window.location.origin).toString()
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    if (error) throw error
+  }, [])
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) throw error
+  }, [])
+
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
@@ -216,6 +229,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasPermission: (permission: PermissionKey) => permissionSet.has(permission),
         signIn,
         signUp,
+        sendPasswordReset,
+        updatePassword,
         signOut,
         refreshProfile,
         updateProfile,
@@ -228,6 +243,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signIn,
       signUp,
+      sendPasswordReset,
+      updatePassword,
       signOut,
       refreshProfile,
       updateProfile,
