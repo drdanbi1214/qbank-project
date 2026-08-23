@@ -239,7 +239,7 @@ export function RichTextEditor({
   return (
     <div
       className={cn(
-        'overflow-clip rounded-xl border border-slate-300 bg-white focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900',
+        'rounded-xl border border-slate-300 bg-white focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900',
         className,
       )}
     >
@@ -384,9 +384,15 @@ function Toolbar({
   return (
     <div
       // 글이 길어지면 아래에서 쓰다가 도구를 누르러 위로 스크롤해야 했다.
-      // 화면 위에 붙여 두면 어디를 쓰든 손이 닿는다. 배경을 칠하지 않으면
-      // 본문이 뒤로 비쳐 지나간다.
-      className="sticky top-0 z-20 flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-white/95 px-2 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+      // 화면 위에 붙여 두면 어디를 쓰든 손이 닿는다.
+      //
+      // 바깥 상자에 overflow 를 걸면 안 된다. sticky 가 그 상자 안에 갇혀
+      // 따라오지 않는다. 모서리는 여기서 직접 둥글린다. 배경도 칠해야 본문이
+      // 뒤로 비쳐 지나가지 않는다.
+      //
+      // top 은 사이트 머리글 높이(h-14)만큼 띄운다. 0 으로 두면 z-30 인 머리글
+      // 뒤로 들어가 보이지 않는다.
+      className="sticky top-14 z-20 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-slate-200 bg-white/95 px-2 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
     >
       {onRequestYama && (
         <ToolButton
