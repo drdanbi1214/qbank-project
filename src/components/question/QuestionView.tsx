@@ -507,7 +507,15 @@ export function QuestionView({
                     {lecture.professor && (
                       <span className="text-slate-500 dark:text-slate-400"> · {lecture.professor} 교수</span>
                     )}
-                    {!lecture.theoryDocumentId && (
+                    {lecture.lectureDocumentId ? (
+                      <Link
+                        to={`/lectures/${lecture.lectureDocumentId}`}
+                        className="ml-2 rounded bg-white px-1.5 py-0.5 text-xs font-medium text-sky-700 hover:underline dark:bg-slate-900 dark:text-sky-300"
+                      >
+                        강의록 보기
+                        {lecture.lecturePageCount ? ` (${lecture.lecturePageCount}쪽)` : ''} →
+                      </Link>
+                    ) : (
                       <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">강의록 연결 예정</span>
                     )}
                   </li>

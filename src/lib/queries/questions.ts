@@ -54,6 +54,9 @@ export type QuestionLectureSource = {
   title: string
   professor: string | null
   theoryDocumentId: string | null
+  /** 이어진 강의록. 열람 권한이 없으면 null 로 온다. */
+  lectureDocumentId: string | null
+  lecturePageCount: number | null
 }
 
 export async function fetchQuestionLectureSources(questionId: string): Promise<QuestionLectureSource[]> {
@@ -66,6 +69,8 @@ export async function fetchQuestionLectureSources(questionId: string): Promise<Q
     title: row.title,
     professor: row.professor,
     theoryDocumentId: row.theory_document_id,
+    lectureDocumentId: row.lecture_document_id,
+    lecturePageCount: row.lecture_page_count,
   }))
 }
 

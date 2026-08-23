@@ -1093,6 +1093,7 @@ export type Database = {
           created_at: string
           curriculum: string | null
           id: string
+          lecture_document_id: string | null
           professor: string | null
           sort_order: number
           source_key: string | null
@@ -1105,6 +1106,7 @@ export type Database = {
           created_at?: string
           curriculum?: string | null
           id?: string
+          lecture_document_id?: string | null
           professor?: string | null
           sort_order?: number
           source_key?: string | null
@@ -1117,6 +1119,7 @@ export type Database = {
           created_at?: string
           curriculum?: string | null
           id?: string
+          lecture_document_id?: string | null
           professor?: string | null
           sort_order?: number
           source_key?: string | null
@@ -1126,6 +1129,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "lecture_sources_lecture_document_id_fkey"
+            columns: ["lecture_document_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lecture_sources_subject_id_fkey"
             columns: ["subject_id"]
@@ -2944,6 +2954,8 @@ export type Database = {
         Args: { p_question_id: string }
         Returns: {
           id: string
+          lecture_document_id: string
+          lecture_page_count: number
           professor: string
           theory_document_id: string
           title: string

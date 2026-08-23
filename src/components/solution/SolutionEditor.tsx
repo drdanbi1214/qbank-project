@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
-import { collectLectureReferences } from '@/lib/queries/lectures'
+import { collectLectureReferences, collectTheoryReferenceIds } from '@/lib/queries/lectures'
+import { fetchTheoryTitles } from '@/lib/queries/theory'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { TheoryReferencePicker } from '@/components/solution/TheoryReferencePicker'
 import { SolutionScopePicker } from '@/components/solution/SolutionScope'
@@ -76,6 +77,10 @@ export function SolutionEditor({
 
   const doc = useRef<RichDoc>(seed.doc)
 
+  // 본문에 넣은 알렌도 아래 목록에 저절로 잡히게 한다. 알렌 노드에는 문서 id
+  // 만 있어 제목을 따로 받아야 하므로, 새로 나타난 id 만 모아 두었다가 채운다.
+  const [bodyTheoryIds, setBodyTheoryIds] = useState<string[]>([])
+
   const handleChange = useCallback(
     (next: RichDoc) => {
       doc.current = next
@@ -88,9 +93,39 @@ export function SolutionEditor({
         const added = collectLectureReferences(next).filter((item) => !known.has(item.url))
         return added.length > 0 ? [...prev, ...added] : prev
       })
+      setBodyTheoryIds(collectTheoryReferenceIds(next))
     },
     [schedule],
   )
+
+
+
+  useEffect(() => {
+    const missing = bodyTheoryIds.filter(
+      (id) => !references.some((item) => item.url?.endsWith(`/${id}`)),
+    )
+    if (missing.length === 0) return
+    let active = true
+    void fetchTheoryTitles(missing)
+      .then((rows) => {
+        if (!active || rows.length === 0) return
+        setReferences((prev) => {
+          const known = new Set(prev.map((item) => item.url))
+          const added = rows
+            .map((row) => ({
+              label: row.title,
+              url: `/theory/${row.subjectId}/${row.id}`,
+              kind: 'theory' as const,
+            }))
+            .filter((item) => !known.has(item.url))
+          return added.length > 0 ? [...prev, ...added] : prev
+        })
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [bodyTheoryIds, references])
 
   async function save() {
     if (isEmptyDoc(doc.current)) {

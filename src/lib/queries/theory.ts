@@ -182,3 +182,25 @@ export async function deleteTheoryDocument(id: string): Promise<void> {
   const { error: deleteError } = await supabase.from('theory_documents').delete().eq('id', id)
   if (deleteError) throw deleteError
 }
+
+/**
+ * 본문에 박힌 알렌을 참조 줄로 만들 때 쓰는 가벼운 조회.
+ *
+ * 참조에 필요한 것은 제목과 어느 과목인지뿐이라 content 는 받지 않는다. 알렌은
+ * 526건이고 본문 하나가 가리키는 것은 몇 개뿐이라, 전체를 끌고 오지 않는다.
+ */
+export async function fetchTheoryTitles(
+  ids: string[],
+): Promise<{ id: string; subjectId: string; title: string }[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('theory_documents')
+    .select('id, subject_id, title')
+    .in('id', ids)
+  if (error) throw error
+  return ((data ?? []) as { id: string; subject_id: string; title: string }[]).map((row) => ({
+    id: row.id,
+    subjectId: row.subject_id,
+    title: row.title,
+  }))
+}

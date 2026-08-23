@@ -200,6 +200,35 @@ export async function fetchLectureFacets(categoryId?: string | null): Promise<{
  * 같은 강의록을 여러 쪽 넣었으면 가장 앞 쪽 하나만 남긴다 — 참조는 "이 강의록을
  * 봤다" 는 표시라 쪽마다 줄이 늘어날 필요가 없다.
  */
+/**
+ * 본문에 박힌 알렌 문서를 훑어 참조 목록으로 만든다.
+ *
+ * 강의록과 같은 이유다. 본문 가운데 넣고 나서 아래에서 같은 문서를 다시 찾게
+ * 하면 같은 일을 두 번 시키는 셈이다. 알렌은 노드에 문서 id 만 있고 제목이
+ * 없어서, 이름은 부르는 쪽에서 채워 넣는다.
+ */
+export function collectTheoryReferenceIds(doc: unknown): string[] {
+  const ids: string[] = []
+
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    const record = node as Record<string, unknown>
+
+    if (record.type === 'theoryEmbed') {
+      const attrs = (record.attrs ?? {}) as Record<string, unknown>
+      if (typeof attrs.documentId === 'string' && !ids.includes(attrs.documentId)) {
+        ids.push(attrs.documentId)
+      }
+    }
+
+    const content = record.content
+    if (Array.isArray(content)) for (const child of content) walk(child)
+  }
+
+  walk(doc)
+  return ids
+}
+
 export function collectLectureReferences(
   doc: unknown,
 ): { label: string; url: string; kind: 'lecture'; page: number | null }[] {
