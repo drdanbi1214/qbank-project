@@ -266,3 +266,40 @@ export function collectLectureReferences(
   walk(doc)
   return [...found.values()]
 }
+
+/**
+ * 제목이 걸린 것과 본문만 걸린 것을 갈라낸다.
+ *
+ * 서버는 제목 일치를 앞에 몰아 준다. 그대로 앞에서부터 잘라 쓰면 흔한 낱말일수록
+ * 제목 일치가 자리를 다 차지해 본문 일치가 한 건도 안 보인다. "감염" 이면 제목
+ * 일치만 37건이라 서른 칸이 그것으로 다 찬다 — 본문 검색이 안 되는 것처럼 보인다.
+ *
+ * 검색어가 없는 목록은 모두 앞쪽으로 보낸다. 가를 기준 자체가 없기 때문이다.
+ */
+export function splitLectureHits(rows: LectureDocument[], query: string) {
+  const needle = query.trim().toLowerCase()
+  const byTitle: LectureDocument[] = []
+  const byText: LectureDocument[] = []
+  for (const row of rows) {
+    if (needle !== '' && row.matchPage !== null && !row.title.toLowerCase().includes(needle)) {
+      byText.push(row)
+    } else {
+      byTitle.push(row)
+    }
+  }
+  return { byTitle, byText }
+}
+
+/**
+ * 좁은 자리에 양쪽을 고루 담는다. 한쪽이 모자라면 남은 자리를 다른 쪽에 넘긴다.
+ */
+export function mixLectureHits(
+  rows: LectureDocument[],
+  query: string,
+  limit: number,
+): LectureDocument[] {
+  const { byTitle, byText } = splitLectureHits(rows, query)
+  const half = Math.floor(limit / 2)
+  const titleTake = Math.min(byTitle.length, Math.max(half, limit - byText.length))
+  return [...byTitle.slice(0, titleTake), ...byText.slice(0, limit - titleTake)]
+}

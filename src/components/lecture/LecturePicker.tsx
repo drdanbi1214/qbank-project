@@ -3,7 +3,7 @@ import { LecturePdfViewer } from '@/components/lecture/LecturePdfViewer'
 import { renderLecturePageToBlob } from '@/components/lecture/renderLecturePage'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { fetchLectureDocuments, type LectureDocument } from '@/lib/queries/lectures'
+import { fetchLectureDocuments, splitLectureHits, type LectureDocument } from '@/lib/queries/lectures'
 import { uploadImage } from '@/lib/uploads'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
@@ -51,7 +51,7 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
     if (chosen) return
     let active = true
     void fetchLectureDocuments({ keyword: debounced })
-      .then((rows) => active && setResults(rows.slice(0, 30)))
+      .then((rows) => active && setResults(rows))
       .catch(() => active && setResults([]))
     return () => {
       active = false
@@ -68,6 +68,11 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
 
   // 고른 순서가 아니라 쪽 번호 순으로 넣는다. 읽는 사람에겐 그게 자연스럽다.
   const ordered = useMemo(() => [...pages].sort((a, b) => a - b), [pages])
+
+  const hits = useMemo(
+    () => splitLectureHits(results ?? [], debounced),
+    [results, debounced],
+  )
 
   async function insert() {
     if (!chosen || !document || ordered.length === 0) return
@@ -153,40 +158,27 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
                 <div className="flex justify-center py-12">
                   <Spinner className="h-6 w-6" />
                 </div>
-              ) : results.length === 0 ? (
+              ) : hits.byTitle.length + hits.byText.length === 0 ? (
                 <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
                   {debounced.trim() ? '검색 결과가 없습니다.' : '등록된 강의록이 없습니다.'}
                 </p>
               ) : (
-                <ul className="mt-3 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
-                  {results.map((lecture) => (
-                    <li key={lecture.id}>
-                      <button
-                        type="button"
-                        onClick={() => setChosen(lecture)}
-                        className="w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
-                      >
-                        <span className="block truncate text-sm font-medium">{lecture.title}</span>
-                        <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
-                          {[
-                            lecture.professor,
-                            lecture.lectureYear ? `${lecture.lectureYear}년` : null,
-                            lecture.pageCount ? `${lecture.pageCount}쪽` : null,
-                            // 본문이 걸린 검색이면 어느 쪽에서 걸렸는지 알려 준다.
-                            lecture.matchPage ? `${lecture.matchPage}쪽에 일치` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                        {lecture.matchSnippet && (
-                          <span className="mt-1 block truncate text-xs text-slate-400">
-                            “{lecture.matchSnippet}”
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  {/* 제목 일치를 앞에서부터 서른 개 자르면 흔한 낱말일수록 본문
+                      일치가 한 건도 남지 않는다. 무리를 갈라 따로 보여 준다. */}
+                  <HitList
+                    label={debounced.trim() ? '제목 · 교수' : null}
+                    rows={hits.byTitle.slice(0, debounced.trim() ? 20 : 30)}
+                    total={hits.byTitle.length}
+                    onPick={setChosen}
+                  />
+                  <HitList
+                    label="본문"
+                    rows={hits.byText.slice(0, 30)}
+                    total={hits.byText.length}
+                    onPick={setChosen}
+                  />
+                </>
               )}
             </>
           ) : (
@@ -218,5 +210,65 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
         )}
       </div>
     </div>
+  )
+}
+
+/** 검색 결과 한 무리. 무리 이름과 함께 몇 개 중 몇 개인지 밝힌다. */
+function HitList({
+  label,
+  rows,
+  total,
+  onPick,
+}: {
+  label: string | null
+  rows: LectureDocument[]
+  total: number
+  onPick: (lecture: LectureDocument) => void
+}) {
+  if (rows.length === 0) return null
+
+  return (
+    <section className="mt-3">
+      {/* 검색 전 목록에도 전체가 몇 개인지는 알려 준다. 다 보여 주지 않기 때문이다. */}
+      {(label || total > rows.length) && (
+        <h3 className="mb-1 px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          {label ? `${label} 일치 ${total}개` : `전체 ${total}개`}
+          {total > rows.length && ` · 앞 ${rows.length}개`}
+        </h3>
+      )}
+      <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+        {rows.map((lecture) => (
+          <li key={lecture.id}>
+            <button
+              type="button"
+              onClick={() => onPick(lecture)}
+              className="w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <span className="block truncate text-sm font-medium">{lecture.title}</span>
+              <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+                {[
+                  lecture.professor,
+                  lecture.lectureYear ? `${lecture.lectureYear}년` : null,
+                  lecture.pageCount ? `${lecture.pageCount}쪽` : null,
+                  // 본문이 걸린 검색이면 어디서 걸렸는지, 몇 쪽에 걸쳐 있는지 알려 준다.
+                  lecture.matchPage
+                    ? `${lecture.matchPage}쪽에 일치${
+                        lecture.matchPageCount > 1 ? ` (${lecture.matchPageCount}쪽)` : ''
+                      }`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              {lecture.matchSnippet && (
+                <span className="mt-1 block truncate text-xs text-slate-400">
+                  “{lecture.matchSnippet}”
+                </span>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

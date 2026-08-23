@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
 import { searchTopics, type TopicForQuestion } from '@/lib/queries/topics'
-import { fetchLectureDocuments, type LectureDocument } from '@/lib/queries/lectures'
+import { fetchLectureDocuments, mixLectureHits, type LectureDocument } from '@/lib/queries/lectures'
 import { cn } from '@/utils/cn'
 
 /**
@@ -67,7 +67,8 @@ export function SearchPage() {
       // 강의록 분류는 임상 과목과 다른 축이라 과목 거르개를 넘기지 않는다.
       void fetchLectureDocuments({ keyword: query })
         .then((rows) => {
-          if (active) setLectureLoaded({ key: requestKey, rows: rows.slice(0, 30) })
+          // 앞에서부터 자르면 제목 일치가 자리를 다 차지해 본문 일치가 사라진다.
+          if (active) setLectureLoaded({ key: requestKey, rows: mixLectureHits(rows, query, 30) })
         })
         .catch(() => {
           if (active) setLectureLoaded({ key: requestKey, rows: [] })
