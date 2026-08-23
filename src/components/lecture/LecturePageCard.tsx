@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PageStrokeLayer } from '@/components/lecture/PageStrokeLayer'
+import { PageMarkLayer } from '@/components/lecture/PageMarkLayer'
 import {
+  DEFAULT_TEXT_SIZE,
   STROKE_COLORS,
-  type Stroke,
-  type StrokeTool,
-} from '@/components/lecture/pageStrokes'
+  TEXT_SIZES,
+  type MarkTool,
+  type PageMark,
+} from '@/components/lecture/pageMarks'
 import { useSignedUrl } from '@/lib/storage'
 import { imageWidthOf, MAX_IMAGE_WIDTH, MIN_IMAGE_WIDTH } from '@/types/richtext'
 import { cn } from '@/utils/cn'
@@ -30,9 +32,9 @@ type Props = {
   width?: number | null
   /** 편집 중일 때만 온다. 있으면 크기 조절 도구를 낸다. */
   onResize?: (width: number | null) => void
-  /** 쪽 위에 덧그린 자국. 이미지에 굽지 않고 좌표로 담는다. */
-  strokes?: Stroke[]
-  onStrokesChange?: (strokes: Stroke[]) => void
+  /** 쪽 위에 남긴 자국과 글자. 이미지에 굽지 않고 좌표로 담는다. */
+  marks?: PageMark[]
+  onMarksChange?: (marks: PageMark[]) => void
 }
 
 /**
@@ -51,13 +53,14 @@ export function LecturePageCard({
   onRemove,
   width = null,
   onResize,
-  strokes = [],
-  onStrokesChange,
+  marks = [],
+  onMarksChange,
 }: Props) {
   const imageUrl = useSignedUrl(src)
   const frame = useRef<HTMLDivElement | null>(null)
-  const [tool, setTool] = useState<StrokeTool | 'erase' | null>(null)
+  const [tool, setTool] = useState<MarkTool | 'erase' | null>(null)
   const [color, setColor] = useState<string>(STROKE_COLORS[0])
+  const [textSize, setTextSize] = useState<number>(DEFAULT_TEXT_SIZE)
   // 자국이 늘어지지 않으려면 이미지 비율이 필요하다. 불러온 뒤에 알 수 있다.
   const [aspect, setAspect] = useState(1.414)
   const [dragged, setDragged] = useState<number | null>(null)
@@ -122,12 +125,13 @@ export function LecturePageCard({
                 if (image.naturalWidth > 0) setAspect(image.naturalHeight / image.naturalWidth)
               }}
             />
-            <PageStrokeLayer
-              strokes={strokes}
+            <PageMarkLayer
+              marks={marks}
               aspect={aspect}
-              onChange={onStrokesChange}
+              onChange={onMarksChange}
               tool={tool}
               color={color}
+              textSize={textSize}
             />
           </>
         ) : (
@@ -168,9 +172,10 @@ export function LecturePageCard({
           </>
         )}
 
-        {onStrokesChange && (selected || tool) && (
+        {onMarksChange && (selected || tool) && (
           <div
             contentEditable={false}
+            data-page-tools=""
             className="absolute bottom-1 left-1 flex flex-wrap items-center gap-1 rounded-md bg-slate-900/80 px-1 py-0.5 text-[11px] text-white"
           >
             <ToolButton active={tool === 'pen'} onClick={() => setTool(tool === 'pen' ? null : 'pen')}>
@@ -181,6 +186,9 @@ export function LecturePageCard({
               onClick={() => setTool(tool === 'highlight' ? null : 'highlight')}
             >
               형광펜
+            </ToolButton>
+            <ToolButton active={tool === 'text'} onClick={() => setTool(tool === 'text' ? null : 'text')}>
+              글자
             </ToolButton>
             <ToolButton
               active={tool === 'erase'}
@@ -208,10 +216,25 @@ export function LecturePageCard({
               </span>
             )}
 
-            {strokes.length > 0 && (
+            {tool === 'text' && (
+              <select
+                value={textSize}
+                onChange={(event) => setTextSize(Number(event.target.value))}
+                aria-label="글자 크기"
+                className="rounded bg-white/20 px-0.5 py-0.5 text-[11px] text-white outline-none"
+              >
+                {TEXT_SIZES.map((value) => (
+                  <option key={value} value={value} className="text-slate-900">
+                    {value}pt
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {marks.length > 0 && (
               <>
-                <ToolButton onClick={() => onStrokesChange(strokes.slice(0, -1))}>되돌리기</ToolButton>
-                <ToolButton onClick={() => onStrokesChange([])}>모두 지우기</ToolButton>
+                <ToolButton onClick={() => onMarksChange(marks.slice(0, -1))}>되돌리기</ToolButton>
+                <ToolButton onClick={() => onMarksChange([])}>모두 지우기</ToolButton>
               </>
             )}
           </div>

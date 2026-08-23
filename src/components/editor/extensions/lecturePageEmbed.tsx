@@ -3,7 +3,7 @@ import type { ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { LecturePageCard, type LecturePageAttrs } from '@/components/lecture/LecturePageCard'
-import { parseStrokes } from '@/components/lecture/pageStrokes'
+import { parsePageMarks } from '@/components/lecture/pageMarks'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -50,10 +50,8 @@ function LecturePageEmbedView({ node, selected, editor, deleteNode, updateAttrib
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
         onResize={editor.isEditable ? (width) => updateAttributes({ width }) : undefined}
-        strokes={parseStrokes(attrs.strokes)}
-        onStrokesChange={
-          editor.isEditable ? (strokes) => updateAttributes({ strokes }) : undefined
-        }
+        marks={parsePageMarks(attrs.strokes)}
+        onMarksChange={editor.isEditable ? (strokes) => updateAttributes({ strokes }) : undefined}
       />
     </NodeViewWrapper>
   )
@@ -95,7 +93,9 @@ export const LecturePageEmbed = Node.create({
         renderHTML: (attributes) =>
           attributes.professor ? { 'data-professor': attributes.professor } : {},
       },
-      // 쪽 위에 덧그린 자국. 좌표라서 크기를 바꿔도 따라 움직인다.
+      // 쪽 위에 남긴 자국과 글자. 좌표라서 크기를 바꿔도 따라 움직인다.
+      // 이름이 strokes 인 건 글자를 뒤에 붙였기 때문이다. 이미 저장된 글이
+      // 이 이름으로 담겨 있어 바꾸면 예전 글의 표시가 사라진다.
       strokes: {
         default: null,
         parseHTML: (element) => {

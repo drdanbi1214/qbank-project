@@ -5,7 +5,7 @@ import { YamaCard } from '@/components/question/YamaCard'
 import type { CSSProperties } from 'react'
 import { safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { LecturePageCard } from '@/components/lecture/LecturePageCard'
-import { parseStrokes } from '@/components/lecture/pageStrokes'
+import { parsePageMarks } from '@/components/lecture/pageMarks'
 import { TheoryCard } from '@/components/question/TheoryCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { HIGHLIGHT_SET, TEXT_COLOR_SET } from '@/components/editor/palette'
@@ -330,7 +330,7 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
             title={typeof attrs.title === 'string' ? attrs.title : null}
             professor={typeof attrs.professor === 'string' ? attrs.professor : null}
             width={typeof attrs.width === 'number' ? attrs.width : null}
-            strokes={parseStrokes(attrs.strokes)}
+            marks={parsePageMarks(attrs.strokes)}
           />
         </div>
       )

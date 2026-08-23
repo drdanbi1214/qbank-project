@@ -1,15 +1,20 @@
 /**
- * 강의록 쪽 위에 덧그린 자국.
+ * 강의록 쪽 위에 남긴 표시 — 덧그린 자국과 얹은 글자.
  *
- * 그림을 이미지에 구워 넣지 않고 좌표로 따로 담는다. 구워 버리면 나중에 한 획만
+ * 이미지에 구워 넣지 않고 좌표로 따로 담는다. 구워 버리면 나중에 한 획만
  * 지우거나 색을 바꿀 수 없고, 크기를 줄일 때 같이 뭉개진다. 좌표로 두면 어느
  * 크기로 그리든 선명하고 인쇄에도 그대로 나간다.
  *
- * 좌표는 이미지 가로폭을 1로 본 비율이다. 카드 폭을 바꿔도 자국이 따라 움직인다.
+ * 좌표는 이미지 가로폭을 1로 본 비율이다. 카드 폭을 바꿔도 표시가 따라 움직인다.
  * 점은 [x1, y1, x2, y2, …] 로 눕혀 담는다 — 객체로 담으면 글 하나에 자국이
  * 수십 개일 때 본문 JSON 이 몇 배로 불어난다.
+ *
+ * 자국과 글자를 한 배열에 섞어 담는다. 따로 두면 넣은 순서를 잃어 되돌리기가
+ * 엉뚱한 것을 지운다. 이미 저장된 글에는 tool 이 pen/highlight 인 것만 있어,
+ * tool 을 보고 갈라내면 예전 글도 그대로 읽힌다.
  */
 export type StrokeTool = 'pen' | 'highlight'
+export type MarkTool = StrokeTool | 'text'
 
 export type Stroke = {
   tool: StrokeTool
@@ -17,6 +22,21 @@ export type Stroke = {
   /** 이미지 가로폭 대비 굵기. 0.004 면 폭의 0.4%. */
   width: number
   points: number[]
+}
+
+export type PageText = {
+  tool: 'text'
+  color: string
+  /** 글자 크기(pt). 자리는 [x, y] 한 쌍이며 글자의 왼쪽 위를 가리킨다. */
+  size: number
+  text: string
+  points: number[]
+}
+
+export type PageMark = Stroke | PageText
+
+export function isPageText(mark: PageMark): mark is PageText {
+  return mark.tool === 'text'
 }
 
 export const STROKE_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#f59e0b', '#111827'] as const
@@ -30,6 +50,20 @@ export const TOOL_OPACITY: Record<StrokeTool, number> = {
   pen: 1,
   highlight: 0.35,
 }
+
+/** 고를 수 있는 글자 크기(pt). */
+export const TEXT_SIZES = [10, 12, 14, 18, 24, 32, 44] as const
+export const DEFAULT_TEXT_SIZE = 18
+
+/**
+ * pt 를 좌표계 단위로 옮길 때 기준 삼는 쪽 폭.
+ *
+ * 강의록마다 실제 쪽 크기가 달라(16:9 슬라이드 960pt, 4:3 720pt, A4 가로 842pt)
+ * 어느 하나를 골라야 한다. 가장 흔한 16:9 를 기준으로 잡았으므로 4:3 강의록에서는
+ * 같은 pt 라도 조금 크게 보인다. 어차피 카드 폭에 따라 함께 커지고 작아지는
+ * 상대 크기라, pt 는 "얼마나 큰 글씨인지" 를 가리키는 눈금으로 쓴다.
+ */
+export const NOMINAL_PT_WIDTH = 960
 
 /**
  * 손이 떨려 생긴 촘촘한 점을 솎는다.
@@ -64,20 +98,30 @@ export function toPath(points: number[], scaleX: number, scaleY: number): string
   return d
 }
 
-export function parseStrokes(value: unknown): Stroke[] {
+export function parsePageMarks(value: unknown): PageMark[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
+  return value.flatMap((item): PageMark[] => {
     if (!item || typeof item !== 'object') return []
     const record = item as Record<string, unknown>
     const points = Array.isArray(record.points)
       ? record.points.filter((n): n is number => typeof n === 'number')
       : []
     if (points.length < 2) return []
+    const color = typeof record.color === 'string' ? record.color : STROKE_COLORS[0]
+
+    if (record.tool === 'text') {
+      const text = typeof record.text === 'string' ? record.text.trim() : ''
+      // 빈 글자는 화면에 아무것도 남기지 않으면서 자리만 차지한다.
+      if (text === '') return []
+      const size = typeof record.size === 'number' && record.size > 0 ? record.size : DEFAULT_TEXT_SIZE
+      return [{ tool: 'text' as const, color, size, text, points: [points[0], points[1]] }]
+    }
+
     const tool: StrokeTool = record.tool === 'highlight' ? 'highlight' : 'pen'
     return [
       {
         tool,
-        color: typeof record.color === 'string' ? record.color : STROKE_COLORS[0],
+        color,
         width: typeof record.width === 'number' ? record.width : TOOL_WIDTH[tool],
         points,
       },
