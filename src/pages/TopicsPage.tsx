@@ -18,7 +18,9 @@ import {
 } from '@/lib/queries/topics'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { TopicScopeProvider } from '@/components/question/TopicContext'
+import { LecturePicker } from '@/components/lecture/LecturePicker'
 import { TheoryPicker } from '@/components/question/TheoryPicker'
+import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { TopicSidebar } from '@/components/question/TopicSidebar'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
@@ -118,6 +120,23 @@ export function TopicsPage() {
     setPickingTheory(false)
     resolveTheory.current?.(id)
     resolveTheory.current = null
+  }, [])
+
+  // 강의록 쪽 넣기도 같은 배선이다.
+  const [pickingLecture, setPickingLecture] = useState(false)
+  const resolveLecture = useRef<((picks: LecturePageAttrs[] | null) => void) | null>(null)
+
+  const requestLecture = useCallback(() => {
+    setPickingLecture(true)
+    return new Promise<LecturePageAttrs[] | null>((resolve) => {
+      resolveLecture.current = resolve
+    })
+  }, [])
+
+  const finishLecture = useCallback((picks: LecturePageAttrs[] | null) => {
+    setPickingLecture(false)
+    resolveLecture.current?.(picks)
+    resolveLecture.current = null
   }, [])
 
   const save = useCallback(() => {
@@ -307,6 +326,7 @@ export function TopicsPage() {
                   onUploadError={setError}
                   onRequestYama={requestYama}
                   onRequestTheory={requestTheory}
+                  onRequestLecture={userId ? requestLecture : undefined}
                 />
               ) : (
                 <RichTextViewer doc={selected.content} />
@@ -319,6 +339,10 @@ export function TopicsPage() {
 
       {pickingTheory && (
         <TheoryPicker subjectId={subjectId} onPick={finishTheory} onCancel={() => finishTheory(null)} />
+      )}
+
+      {pickingLecture && userId && (
+        <LecturePicker userId={userId} onPick={finishLecture} onCancel={() => finishLecture(null)} />
       )}
 
       {picking && taxonomy && (

@@ -69,12 +69,15 @@ YEAR_PATTERN = re.compile(r"(20\d{2})")
 # 끊겨 있다. 교수와 교시의 앞뒤가 바뀐 것이 섞여 있어 둘 다 받는다.
 #   0212_3,4교시_이유경_심장영상의학
 #   0602_김용석_2교시_비만증치료의 분자생물학적 접근
+# 날짜 뒤가 밑줄이 아니라 붙임표인 것도 있다. 예) 1117-345교시_황세진_...
 TIMETABLE_PATTERNS = (
-    re.compile(r"^(\d{4})_[\d,\s]+교시_\s*([가-힣]{2,4})_(.+)$"),
-    re.compile(r"^(\d{4})_\s*([가-힣]{2,4})_[\d,\s]+교시_(.+)$"),
+    re.compile(r"^(\d{4})[_-][\d,\s]+교시_\s*([가-힣]{2,4}(?:\s*,\s*[가-힣]{2,4})*)_(.+)$"),
+    re.compile(r"^(\d{4})[_-]\s*([가-힣]{2,4})_[\d,\s]+교시_(.+)$"),
 )
 # 교수명이 아예 없는 것도 있다. 예) 0517_8,9교시_anatomy&histology lab
-TIMETABLE_NO_PROFESSOR = re.compile(r"^(\d{4})_[\d,\s]+교시_(.+)$")
+TIMETABLE_NO_PROFESSOR = re.compile(r"^(\d{4})[_-][\d,\s]+교시_(.+)$")
+# 교시 없이 날짜와 교수명만 앞에 오는 것.
+DATE_PROFESSOR_PATTERN = re.compile(r"^(\d{4})[_-]\s*([가-힣]{2,4})_(.+)$")
 
 
 def rest(
@@ -182,6 +185,13 @@ def guess_meta(name: str) -> tuple[str, str | None, int | None]:
     plain = TIMETABLE_NO_PROFESSOR.match(stem)
     if plain:
         return (clean(plain.group(2)) or stem), None, None
+
+    # 교시가 아예 빠진 것도 있다. 예) 1211_박성호_Infectious Disease of the CNS
+    # 날짜 다음이 곧바로 사람 이름일 때만 받아, 제목이 한글로 시작하는 파일을
+    # 교수로 잘못 읽지 않게 한다.
+    dateless = DATE_PROFESSOR_PATTERN.match(stem)
+    if dateless:
+        return (clean(dateless.group(3)) or stem), dateless.group(2), None
 
     professor = None
     for pattern in PROFESSOR_PATTERNS:

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -142,6 +143,8 @@ function AnnouncementComposer({
   const [error, setError] = useState<string | null>(null)
 
   const doc = useRef<RichDoc>(emptyDoc())
+  // 글 쓰는 곳이면 알렌·강의록을 똑같이 넣을 수 있어야 한다.
+  const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId || null })
 
   async function save() {
     if (title.trim() === '' || isEmptyDoc(doc.current)) {
@@ -182,10 +185,13 @@ function AnnouncementComposer({
           doc.current = next
         }}
         userId={userId}
+        onRequestTheory={embed.onRequestTheory}
+        onRequestLecture={embed.onRequestLecture}
         placeholder="공지 내용"
         minHeight="12rem"
         onUploadError={setError}
       />
+      {embed.pickers}
 
       <label className="flex items-center gap-1 text-sm">
         <input

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
+import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -29,6 +30,8 @@ const SCOPE = 'study_legendob'
 export function TopicNoticesPage() {
   const { session, isAdmin, hasPermission } = useAuth()
   const userId = session?.user.id ?? ''
+  // 글 쓰는 곳이면 알렌·강의록을 똑같이 넣을 수 있어야 한다.
+  const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId || null })
   const canUse = isAdmin || hasPermission(SCOPE)
   const canWrite = hasPermission(SCOPE) || isAdmin
 
@@ -133,10 +136,13 @@ export function TopicNoticesPage() {
             }}
             userId={userId}
             uploadImageFile={uploadTopicImage}
+            onRequestTheory={embed.onRequestTheory}
+            onRequestLecture={embed.onRequestLecture}
             placeholder="공지 내용을 입력하세요."
             minHeight="12rem"
             onUploadError={setError}
           />
+          {embed.pickers}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <label className="flex cursor-pointer items-center gap-1.5 text-sm">
               <input
