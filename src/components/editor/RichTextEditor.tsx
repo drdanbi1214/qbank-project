@@ -239,7 +239,7 @@ export function RichTextEditor({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-300 bg-white focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900',
+        'overflow-clip rounded-xl border border-slate-300 bg-white focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900',
         className,
       )}
     >
@@ -382,7 +382,12 @@ function Toolbar({
   const fileInput = useRef<HTMLInputElement>(null)
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 px-2 py-1.5 dark:border-slate-700">
+    <div
+      // 글이 길어지면 아래에서 쓰다가 도구를 누르러 위로 스크롤해야 했다.
+      // 화면 위에 붙여 두면 어디를 쓰든 손이 닿는다. 배경을 칠하지 않으면
+      // 본문이 뒤로 비쳐 지나간다.
+      className="sticky top-0 z-20 flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-white/95 px-2 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+    >
       {onRequestYama && (
         <ToolButton
           label="야마 넣기"

@@ -192,10 +192,14 @@ function YamaBody({
         </span>
         <span className="ml-auto flex items-center gap-2">
           <Link
-            to={`/solve?question=${question.id}`}
+            // 카드에 묶인 문제를 대표부터 순서대로 이어 푼다. 하나만 열면
+            // "유사 문제 3개" 라고 해 놓고 한 문제만 나와 앞뒤가 맞지 않는다.
+            to={`/solve?questions=${[question.id, ...cards.map((row) => row.id)].join(',')}`}
+            target="_blank"
+            rel="noreferrer"
             className="text-brand-600 hover:underline dark:text-brand-300"
           >
-            풀어보기
+            풀어보기 ↗
           </Link>
           {onRemove && (
             <button
@@ -422,13 +426,15 @@ function QuestionCard({
         />
       )}
 
-      <div className="text-[15px] font-semibold leading-relaxed">
+      {/* 카드 안에서는 해설이 주인공이다. 문제는 무엇을 설명하는지 알아볼
+          정도만 하고, 해설(13px)보다 한 눈금만 크게 둔다. */}
+      <div className="text-sm font-semibold leading-snug">
         <StemBlocks blocks={stemBlocks} />
       </div>
-      <ol className="mt-1.5 space-y-0.5 text-sm">
+      <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
         {choices.map((choice) => (
           <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-            {choice.text}
+            {choice.text ?? '(이미지 보기)'}
           </li>
         ))}
       </ol>
@@ -527,7 +533,7 @@ function QuestionPeek({
             <ol className="mt-2 space-y-0.5 text-sm">
               {row.choices.map((choice) => (
                 <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-                  {choice.text}
+                  {choice.text ?? '(이미지 보기)'}
                 </li>
               ))}
             </ol>

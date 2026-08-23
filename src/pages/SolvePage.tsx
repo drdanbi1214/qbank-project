@@ -39,6 +39,9 @@ export function SolvePage() {
   const examId = params.get('exam')
   const subjectId = params.get('subject')
   const questionId = params.get('question')
+  // 저장된 세션을 만들지 않고 그 자리에서 몇 문제를 이어 풀 때 쓴다.
+  // 야마 카드의 "풀어보기" 가 묶인 문제를 통째로 넘긴다.
+  const questionIds = params.get('questions')
   const sessionId = params.get('session')
   const unlabeled = params.get('unlabeled') === '1'
   // 배정 화면에서 넘어온 경우 정답을 바로 열고 풀이 작성창까지 펼친다.
@@ -46,7 +49,7 @@ export function SolvePage() {
   const autoWrite = params.get('write') === '1'
 
   // 요청 키를 결과에 함께 저장해 로딩 상태를 파생시킨다.
-  const requestKey = `${unitId ?? ''}|${examId ?? ''}|${subjectId ?? ''}|${questionId ?? ''}|${sessionId ?? ''}|${unlabeled}`
+  const requestKey = `${unitId ?? ''}|${examId ?? ''}|${subjectId ?? ''}|${questionId ?? ''}|${questionIds ?? ''}|${sessionId ?? ''}|${unlabeled}`
 
   const [loaded, setLoaded] = useState<{
     key: string
@@ -78,6 +81,18 @@ export function SolvePage() {
           const marked = await fetchBookmarked(ordered.map((row) => row.id))
           if (!active) return
           setLoaded({ key: requestKey, questions: ordered, startIndex: found.currentIndex })
+          setBookmarks(marked)
+          return
+        }
+
+        // 주소로 받은 목록은 순서까지 그대로 쓴다. fetchQuestionsByIds 가
+        // 넘긴 순서를 지켜 준다.
+        if (questionIds) {
+          const ids = questionIds.split(',').map((id) => id.trim()).filter(Boolean)
+          const ordered = await fetchQuestionsByIds(ids)
+          const marked = await fetchBookmarked(ordered.map((row) => row.id))
+          if (!active) return
+          setLoaded({ key: requestKey, questions: ordered, startIndex: 0 })
           setBookmarks(marked)
           return
         }
@@ -130,7 +145,7 @@ export function SolvePage() {
     return () => {
       active = false
     }
-  }, [unitId, examId, subjectId, questionId, sessionId, unlabeled, requestKey, userId])
+  }, [unitId, examId, subjectId, questionId, questionIds, sessionId, unlabeled, requestKey, userId])
 
   // 세션으로 들어왔고 URL 에 위치가 없으면 저장된 위치에서 이어간다.
   const savedIndex = loaded?.key === requestKey ? loaded.startIndex : 0
