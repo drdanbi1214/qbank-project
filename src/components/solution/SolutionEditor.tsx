@@ -223,6 +223,7 @@ export function SolutionEditor({
         placeholder="풀이를 작성해주세요. 이미지는 붙여넣기로 바로 올릴 수 있습니다."
         minHeight="18rem"
         onUploadError={setError}
+        contentClassName="solution-rich-text"
         onRequestTheory={embed.onRequestTheory}
         onRequestLecture={embed.onRequestLecture}
       />

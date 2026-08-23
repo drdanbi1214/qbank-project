@@ -58,6 +58,11 @@ type Props = {
   onRequestYama?: () => Promise<string | null>
   /** 이론 넣기 버튼. 부모가 이론 고르기 화면을 띄우고 문서 id 를 돌려준다. */
   onRequestTheory?: () => Promise<string | null>
+  /**
+   * 글이 저장된 뒤 보이는 서식과 같게 맞추려고 넘긴다. 편집기가 늘 기본
+   * 서식으로만 그리면 쓸 때는 널널했다가 저장하는 순간 촘촘해져 놀란다.
+   */
+  contentClassName?: string
   /** 강의록에서 고른 쪽들. 여러 쪽을 한 번에 넣을 수 있다. */
   onRequestLecture?: () => Promise<LecturePageAttrs[] | null>
 }
@@ -76,6 +81,7 @@ export function RichTextEditor({
   onRequestYama,
   onRequestTheory,
   onRequestLecture,
+  contentClassName,
 }: Props) {
   // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
   const userIdRef = useRef(userId)
@@ -143,7 +149,7 @@ export function RichTextEditor({
     content: initialValue,
     editorProps: {
       attributes: {
-        class: cn('rich-text focus:outline-none', compact ? 'min-h-24' : ''),
+        class: cn('rich-text focus:outline-none', contentClassName, compact ? 'min-h-24' : ''),
         style: compact ? '' : `min-height:${minHeight}`,
       },
       handlePaste(view, event) {

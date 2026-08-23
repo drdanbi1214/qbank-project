@@ -289,6 +289,7 @@ export function AssignmentEditor({
         placeholder="풀이를 작성해주세요."
         minHeight="14rem"
         onUploadError={setError}
+        contentClassName="solution-rich-text"
         onRequestTheory={embed.onRequestTheory}
         onRequestLecture={embed.onRequestLecture}
       />

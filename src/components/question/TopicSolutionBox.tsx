@@ -117,6 +117,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
           placeholder="이 문제의 해설을 적어보세요."
           minHeight="7rem"
           compact
+          contentClassName="topic-solution-rich-text"
           onRequestTheory={embed.onRequestTheory}
           onRequestLecture={embed.onRequestLecture}
         />
