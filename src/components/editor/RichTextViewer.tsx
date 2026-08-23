@@ -2,6 +2,8 @@ import { Fragment, useId, useState, type ReactNode } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
+import type { CSSProperties } from 'react'
+import { safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { LecturePageCard } from '@/components/lecture/LecturePageCard'
 import { parseStrokes } from '@/components/lecture/pageStrokes'
 import { TheoryCard } from '@/components/question/TheoryCard'
@@ -200,9 +202,15 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
 }
 
 /** 작성자가 도구 모음으로 준 들여쓰기. 본문에서 추론하는 계층과는 별개다. */
-function blockIndentStyle(node: RichNode): { marginLeft: string } | undefined {
-  const value = indentStyle(safeIndent(node.attrs?.indent))
-  return value ? { marginLeft: value } : undefined
+/** 문단에 걸린 들여쓰기와 줄간격. 편집기에서 정한 것을 읽는 화면에도 그대로 쓴다. */
+function blockIndentStyle(node: RichNode): CSSProperties | undefined {
+  const margin = indentStyle(safeIndent(node.attrs?.indent))
+  const lineHeight = safeLineHeight(node.attrs?.lineHeight)
+  if (!margin && !lineHeight) return undefined
+  return {
+    ...(margin ? { marginLeft: margin } : {}),
+    ...(lineHeight ? { lineHeight } : {}),
+  }
 }
 
 function hierarchyClass(node: RichNode, level?: number): string | undefined {

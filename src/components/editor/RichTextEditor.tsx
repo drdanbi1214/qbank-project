@@ -19,6 +19,7 @@ import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
+import { LINE_HEIGHTS, LineHeight, safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
 import {
@@ -127,6 +128,7 @@ export function RichTextEditor({
       TextStyle,
       Color,
       FontSize,
+      LineHeight,
       BlockIndent,
       // 표 노드는 꾸미기 속성을 붙인 것으로 갈아 끼운다. 열 너비는 드래그로 정한다.
       TableKit.configure({
@@ -502,6 +504,22 @@ function Toolbar({
             {FONT_SIZES.map((item) => (
               <option key={item.label} value={item.value}>
                 {item.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="줄간격"
+            value={
+              safeLineHeight(editor.getAttributes('paragraph').lineHeight) ??
+              safeLineHeight(editor.getAttributes('heading').lineHeight) ??
+              ''
+            }
+            onChange={(event) => editor.chain().focus().setBlockLineHeight(event.target.value).run()}
+            className="mx-0.5 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+          >
+            {LINE_HEIGHTS.map((item) => (
+              <option key={item.label} value={item.value}>
+                줄간격 {item.label}
               </option>
             ))}
           </select>

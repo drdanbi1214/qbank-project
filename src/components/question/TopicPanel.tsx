@@ -94,9 +94,12 @@ function TopicCard({ topic }: { topic: TopicForQuestion }) {
           </button>
           <Link
             to={`/topics/${topic.subjectId}/${topic.id}`}
+            // 읽던 글을 잃지 않도록 새 탭에서 연다.
+            target="_blank"
+            rel="noreferrer"
             className="text-slate-500 hover:underline dark:text-slate-400"
           >
-            전체 보기
+            전체 보기 ↗
           </Link>
         </span>
       </div>

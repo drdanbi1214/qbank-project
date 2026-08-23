@@ -510,12 +510,15 @@ export function QuestionView({
                     {lecture.lectureDocumentId ? (
                       <Link
                         to={`/lectures/${lecture.lectureDocumentId}`}
+                        // 풀던 문제를 잃지 않도록 새 탭에서 연다.
+                        target="_blank"
+                        rel="noreferrer"
                         className="ml-2 rounded bg-white px-1.5 py-0.5 text-xs font-medium text-sky-700 hover:underline dark:bg-slate-900 dark:text-sky-300"
                       >
                         {/* 다른 자리의 "(42쪽)" 은 그 쪽을 가리키는데 여기서는
                             강의록 전체 분량이라, 같은 괄호 표기를 쓰면 몇 쪽으로
                             가는 것으로 읽힌다. 말로 풀어 쓴다. */}
-                        강의록 보기 →
+                        강의록 보기 ↗
                         {lecture.lecturePageCount ? ` 전체 ${lecture.lecturePageCount}쪽` : ''}
                       </Link>
                     ) : (

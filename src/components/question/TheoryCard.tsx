@@ -107,9 +107,12 @@ export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
           </button>
           <Link
             to={`/theory/${document.subjectId}/${document.id}`}
+            // 읽던 글을 잃지 않도록 새 탭에서 연다.
+            target="_blank"
+            rel="noreferrer"
             className="text-slate-500 hover:underline dark:text-slate-400"
           >
-            전체 보기
+            전체 보기 ↗
           </Link>
           {onRemove && (
             <button

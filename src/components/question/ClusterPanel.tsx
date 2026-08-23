@@ -1,4 +1,5 @@
 import { StemBlocks } from '@/components/question/StemBlocks'
+import { circled } from '@/types/question'
 import { useCluster } from '@/components/question/useCluster'
 
 type Props = {
@@ -53,11 +54,24 @@ export function ClusterPanel({ questionId, initialGroupId, examLabelOf }: Props)
             <StemBlocks blocks={row.stemBlocks} />
             <ol className="mt-2 space-y-1 text-sm">
               {row.choices.map((choice) => (
-                <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-                  {choice.text}
+                <li key={choice.no} className="flex gap-2 text-slate-700 dark:text-slate-300">
+                  {/* 번호를 붙이지 않으면 몇 번 보기인지 알 수 없어, 본문과
+                      대조하거나 답을 이야기할 때 가리킬 것이 없다. */}
+                  <span className="shrink-0">{circled(choice.no)}</span>
+                  <span>{choice.text ?? '(이미지 보기)'}</span>
                 </li>
               ))}
             </ol>
+
+            <a
+              href={`/solve?question=${row.id}`}
+              target="_blank"
+              rel="noreferrer"
+              // 지금 풀던 문제를 잃지 않도록 새 탭에서 연다.
+              className="mt-3 inline-block rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-brand-700 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:text-brand-300 dark:ring-slate-600 dark:hover:bg-slate-800"
+            >
+              이 문제 보러가기 ↗
+            </a>
           </div>
         </details>
       ))}

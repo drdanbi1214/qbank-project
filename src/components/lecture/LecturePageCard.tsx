@@ -225,9 +225,12 @@ export function LecturePageCard({
         {lectureId && (
           <Link
             to={`/lectures/${lectureId}${page ? `?page=${page}` : ''}`}
+            // 읽거나 쓰던 글을 잃지 않도록 새 탭에서 연다.
+            target="_blank"
+            rel="noreferrer"
             className="shrink-0 rounded-md bg-brand-50 px-2 py-1 font-medium text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200"
           >
-            강의록 보기 →
+            강의록 보기 ↗
           </Link>
         )}
       </figcaption>
