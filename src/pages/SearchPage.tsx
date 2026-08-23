@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
 import { searchTopics, type TopicForQuestion } from '@/lib/queries/topics'
+import { fetchLectureDocuments, type LectureDocument } from '@/lib/queries/lectures'
 import { cn } from '@/utils/cn'
 
 /**
@@ -33,7 +34,15 @@ export function SearchPage() {
   const canSearchTopics = hasPermission('study_legendob')
   const [topicHits, setTopicHits] = useState<TopicForQuestion[]>([])
 
-  const requestKey = `${query}|${includeSolutions}|${subjectId ?? ''}|${cohort ?? ''}`
+  // 강의록은 문제와 다른 축이라 켜고 끌 수 있게 한다. 늘 함께 찾으면 문제를
+  // 찾는 사람에게 관계없는 강의록이 섞여 들어온다.
+  const includeLectures = params.get('lectures') === '1'
+  const [lectureLoaded, setLectureLoaded] = useState<{
+    key: string
+    rows: LectureDocument[]
+  } | null>(null)
+
+  const requestKey = `${query}|${includeSolutions}|${includeLectures}|${subjectId ?? ''}|${cohort ?? ''}`
 
   useEffect(() => {
     if (query.trim() === '') {
@@ -54,6 +63,17 @@ export function SearchPage() {
         }
       })
 
+    if (includeLectures) {
+      // 강의록 분류는 임상 과목과 다른 축이라 과목 거르개를 넘기지 않는다.
+      void fetchLectureDocuments({ keyword: query })
+        .then((rows) => {
+          if (active) setLectureLoaded({ key: requestKey, rows: rows.slice(0, 30) })
+        })
+        .catch(() => {
+          if (active) setLectureLoaded({ key: requestKey, rows: [] })
+        })
+    }
+
     if (canSearchTopics) {
       void searchTopics(query, subjectId)
         .then((rows) => {
@@ -67,7 +87,7 @@ export function SearchPage() {
     return () => {
       active = false
     }
-  }, [query, includeSolutions, subjectId, cohort, requestKey, canSearchTopics])
+  }, [query, includeSolutions, includeLectures, subjectId, cohort, requestKey, canSearchTopics])
 
   const update = useCallback(
     (patch: Record<string, string | null>) => {
@@ -97,6 +117,8 @@ export function SearchPage() {
 
   const searching = query.trim() !== '' && loaded?.key !== requestKey && error === null
   const hits = loaded?.key === requestKey ? loaded.hits : []
+  // 검색어나 조건이 바뀌면 이전 강의록 결과가 잠깐 남지 않게 열쇠로 잠근다.
+  const lectureHits = lectureLoaded?.key === requestKey ? lectureLoaded.rows : []
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -116,7 +138,7 @@ export function SearchPage() {
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="문제 본문이나 풀이 내용을 검색하세요"
+          placeholder="문제·풀이·강의록 내용을 검색하세요"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
         />
         <Button type="submit">검색</Button>
@@ -133,6 +155,16 @@ export function SearchPage() {
             </ScopeButton>
           </div>
         )}
+
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-700">
+          <input
+            type="checkbox"
+            checked={includeLectures}
+            onChange={(event) => update({ lectures: event.target.checked ? '1' : null })}
+            className="accent-brand-600"
+          />
+          강의록
+        </label>
 
         <select
           value={subjectId ?? ''}
@@ -177,7 +209,7 @@ export function SearchPage() {
         <div className="flex justify-center py-10">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : hits.length === 0 && topicHits.length === 0 ? (
+      ) : hits.length === 0 && topicHits.length === 0 && lectureHits.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">검색 결과가 없습니다.</p>
         </div>
@@ -209,9 +241,51 @@ export function SearchPage() {
             </section>
           )}
 
-          <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-            문제 {hits.length}개를 찾았습니다.
-          </p>
+          {lectureHits.length > 0 && (
+            <section className="mb-5">
+              <h2 className="mb-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                강의록 {lectureHits.length}개
+              </h2>
+              <ul className="space-y-2">
+                {lectureHits.map((lecture) => (
+                  <li key={lecture.id}>
+                    <a
+                      href={lectureLink(lecture, query)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 transition-colors hover:border-indigo-400 dark:border-indigo-900 dark:bg-indigo-950/20"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-medium text-slate-900 dark:text-slate-100">
+                          {lecture.title}
+                        </span>
+                        {lecture.professor && (
+                          <span className="text-slate-400">{lecture.professor}</span>
+                        )}
+                        {lecture.matchPage !== null && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            {lecture.matchPage}쪽
+                            {lecture.matchPageCount > 1 && ` 외 ${lecture.matchPageCount - 1}쪽`}
+                          </span>
+                        )}
+                      </div>
+                      {lecture.matchSnippet && (
+                        <p className="mt-1 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">
+                          <Highlighted text={lecture.matchSnippet} needle={query} />
+                        </p>
+                      )}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {hits.length > 0 && (
+            <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
+              문제 {hits.length}개를 찾았습니다.
+            </p>
+          )}
           <ul className="space-y-2">
             {hits.map((hit) => (
               <li key={hit.questionId}>
@@ -243,6 +317,15 @@ export function SearchPage() {
       )}
     </section>
   )
+}
+
+/** 일치한 쪽으로 바로 열고, 뷰어가 그 자리에서 검색어를 칠하게 한다. */
+function lectureLink(lecture: LectureDocument, query: string): string {
+  const search = new URLSearchParams()
+  if (lecture.matchPage !== null) search.set('page', String(lecture.matchPage))
+  if (query.trim() !== '') search.set('q', query.trim())
+  const tail = search.toString()
+  return `/lectures/${lecture.id}${tail === '' ? '' : `?${tail}`}`
 }
 
 function ScopeButton({
