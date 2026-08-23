@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
+import { formatDateTime } from '@/utils/date'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
@@ -236,8 +237,15 @@ export function TheorySubjectPage() {
 
           {selected && (
             <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <h2 className="text-2xl font-bold tracking-tight">{selected.title}</h2>
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <h2 className="min-w-0 flex-1 text-2xl font-bold tracking-tight">
+                  {selected.title}
+                </h2>
+                {/* 언제 손본 글인지 알아야 믿고 읽을 수 있다. 제목을 밀지 않게
+                    오른쪽 위에 작게 둔다. */}
+                <span className="shrink-0 pt-1 text-xs text-slate-400 dark:text-slate-500">
+                  {formatDateTime(selected.updatedAt)} 수정
+                </span>
                 {isAdmin && session && editingId !== selected.id && (
                   <Button
                     size="sm"
