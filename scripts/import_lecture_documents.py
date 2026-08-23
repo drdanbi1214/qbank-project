@@ -33,6 +33,11 @@
 파일명을 키로 하는 JSON 이다.
 
     {"순환기_01_김철수.pdf": {"title": "심부전의 진단", "professor": "김철수"}}
+
+폴더에 있어도 올리고 싶지 않은 파일은 manifest 에서 뺀다. 수정 전 판이 함께
+들어 있을 때 쓴다.
+
+    {"순환기_01_김철수_수정전.pdf": {"skip": true}}
 """
 from __future__ import annotations
 
@@ -285,6 +290,12 @@ def main() -> int:
 
     for pdf in pdfs:
         override = manifest.get(pdf.name, {})
+        # 같은 강의의 수정 전 판처럼 폴더에 있어도 올리지 않을 파일이 있다.
+        # manifest 에 {"skip": true} 로 적는다. 파일을 옮기지 않고도 뺄 수 있다.
+        if override.get("skip"):
+            print(f"  건너뜀  {pdf.name}\n           manifest 에서 제외")
+            skipped += 1
+            continue
         title, professor, year = guess_meta(pdf.name)
         title = override.get("title", title)
         professor = override.get("professor", professor or args.professor)
