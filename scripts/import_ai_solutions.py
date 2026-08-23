@@ -294,6 +294,60 @@ def replace_image_blocks(existing: object, incoming: dict) -> dict:
     return {**existing, "content": new_blocks or [{"type": "paragraph"}]}
 
 
+def build_code_map(client: "Client", cohort: str, exam_name: str) -> dict[str, str]:
+    """문제코드 -> question id. question_code() 함수와 같은 규칙으로 만든다.
+
+    시험을 반드시 좁혀서 받는다. 문제코드는 학번+과목코드+번호라서 같은 학번의
+    다른 시험과 부딪힌다 — 26학번 내과만 해도 학년말고사와 계통 Y 열세 개가
+    2601001 을 함께 쓴다. 좁히지 않으면 나중에 읽힌 시험이 앞의 것을 덮어써
+    엉뚱한 문항에 풀이가 붙는다.
+
+    조회도 시험 하나씩 나눠 받는다. 한꺼번에 받으면 서버 반환 상한에 잘려
+    뒤쪽 시험의 문항이 통째로 빠진다.
+    """
+    subject_code = {
+        row["id"]: row["code"]
+        for row in client.get("subjects", {"select": "id,code"})
+        if row.get("code")
+    }
+
+    params = {"select": "id,cohort,subject_id", "limit": "2000", "cohort": f"eq.{cohort}"}
+    if exam_name:
+        params["exam_name"] = f"eq.{exam_name}"
+    exams = client.get("exams", params)
+    if not exams:
+        sys.exit(f"시험을 찾지 못했다: cohort={cohort} exam_name={exam_name or '(전체)'}")
+
+    mapping: dict[str, str] = {}
+    collided: list[str] = []
+    for exam in exams:
+        code = subject_code.get(exam.get("subject_id"))
+        found = re.search(r"\d+", exam.get("cohort") or "")
+        if not code or not found:
+            continue
+        prefix = found.group(0) + code
+        rows = client.get(
+            "questions",
+            {"select": "id,question_number", "exam_id": f"eq.{exam['id']}", "limit": "1000"},
+        )
+        for row in rows:
+            number = row.get("question_number")
+            if number is None:
+                continue
+            key = f"{prefix}{int(number):03d}"
+            if key in mapping and mapping[key] != row["id"]:
+                collided.append(key)
+            mapping[key] = row["id"]
+
+    if collided:
+        sys.exit(
+            f"좁힌 범위 안에서도 문제코드가 겹친다({len(collided)}개): "
+            f"{', '.join(sorted(set(collided))[:10])} — 범위를 더 좁혀야 한다"
+        )
+    print(f"대상 시험 {len(exams)}개 · 문제코드 {len(mapping)}개")
+    return mapping
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AI 풀이/선배해설 CSV 일괄 입력")
     parser.add_argument("csv_path", nargs="?", help="question_code,content CSV 경로")
@@ -314,6 +368,8 @@ def main() -> None:
         default="",
         help="이미지를 제거할 문제코드 목록(쉼표 구분). --images-only에서만 쓴다.",
     )
+    parser.add_argument("--cohort", default="26학번", help="대상 학번. 문제코드가 겹치지 않게 범위를 좁힌다")
+    parser.add_argument("--exam-name", default="학년말고사", help="대상 시험 이름. 빈 값이면 그 학번의 모든 시험")
     parser.add_argument("--apply", action="store_true", help="실제로 반영한다. 기본은 dry-run")
     args = parser.parse_args()
     track = TRACKS[args.kind]
@@ -363,8 +419,16 @@ def main() -> None:
             except ValueError as error:
                 sys.exit(f"문제코드 {code}: {error}")
 
-    # 문제코드 -> id 매핑 (questions_solve 뷰가 question_code 를 계산해서 노출한다)
-    code_to_id = {row["question_code"]: row["id"] for row in client.get("questions_solve", {"select": "id,question_code"})}
+    # 문제코드 -> id 매핑.
+    #
+    # 예전에는 questions_solve 뷰의 question_code 를 그대로 읽었다. 그 뷰가
+    # security_invoker 로 바뀐 뒤로는 관리 키로 부르면 행이 하나도 오지 않아,
+    # 모든 문제코드가 "DB 에 없음" 으로 떨어졌다. 뷰에 기대지 않고 코드 계산
+    # 규칙(학번 숫자 + 과목코드 2자리 + 번호 3자리)을 여기서 직접 쓴다.
+    #
+    # 한 번에 다 받지 않고 시험 단위로 나눠 받는다. 문항이 수천 개라 PostgREST
+    # 기본 반환 상한에 걸리면 뒤쪽 시험이 통째로 빠진다.
+    code_to_id = build_code_map(client, args.cohort, args.exam_name)
 
     docs: dict[str, dict] = {}  # question_id -> doc (매칭된 것)
     pending_docs: dict[str, dict] = {}  # question_code -> doc (대기, senior 전용)
