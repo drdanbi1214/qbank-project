@@ -1,5 +1,11 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { PageStrokeLayer } from '@/components/lecture/PageStrokeLayer'
+import {
+  STROKE_COLORS,
+  type Stroke,
+  type StrokeTool,
+} from '@/components/lecture/pageStrokes'
 import { useSignedUrl } from '@/lib/storage'
 import { imageWidthOf, MAX_IMAGE_WIDTH, MIN_IMAGE_WIDTH } from '@/types/richtext'
 import { cn } from '@/utils/cn'
@@ -24,6 +30,9 @@ type Props = {
   width?: number | null
   /** 편집 중일 때만 온다. 있으면 크기 조절 도구를 낸다. */
   onResize?: (width: number | null) => void
+  /** 쪽 위에 덧그린 자국. 이미지에 굽지 않고 좌표로 담는다. */
+  strokes?: Stroke[]
+  onStrokesChange?: (strokes: Stroke[]) => void
 }
 
 /**
@@ -42,9 +51,15 @@ export function LecturePageCard({
   onRemove,
   width = null,
   onResize,
+  strokes = [],
+  onStrokesChange,
 }: Props) {
   const imageUrl = useSignedUrl(src)
   const frame = useRef<HTMLDivElement | null>(null)
+  const [tool, setTool] = useState<StrokeTool | 'erase' | null>(null)
+  const [color, setColor] = useState<string>(STROKE_COLORS[0])
+  // 자국이 늘어지지 않으려면 이미지 비율이 필요하다. 불러온 뒤에 알 수 있다.
+  const [aspect, setAspect] = useState(1.414)
   const [dragged, setDragged] = useState<number | null>(null)
   const shownWidth = dragged ?? imageWidthOf(width)
 
@@ -97,7 +112,24 @@ export function LecturePageCard({
     >
       <div className="relative">
         {imageUrl ? (
-          <img src={imageUrl} alt={caption} className="block w-full" />
+          <>
+            <img
+              src={imageUrl}
+              alt={caption}
+              className="block w-full"
+              onLoad={(event) => {
+                const image = event.currentTarget
+                if (image.naturalWidth > 0) setAspect(image.naturalHeight / image.naturalWidth)
+              }}
+            />
+            <PageStrokeLayer
+              strokes={strokes}
+              aspect={aspect}
+              onChange={onStrokesChange}
+              tool={tool}
+              color={color}
+            />
+          </>
         ) : (
           <div className="flex h-40 items-center justify-center text-sm text-slate-400">
             강의록 쪽을 불러오는 중…
@@ -135,6 +167,55 @@ export function LecturePageCard({
             />
           </>
         )}
+
+        {onStrokesChange && (selected || tool) && (
+          <div
+            contentEditable={false}
+            className="absolute bottom-1 left-1 flex flex-wrap items-center gap-1 rounded-md bg-slate-900/80 px-1 py-0.5 text-[11px] text-white"
+          >
+            <ToolButton active={tool === 'pen'} onClick={() => setTool(tool === 'pen' ? null : 'pen')}>
+              펜
+            </ToolButton>
+            <ToolButton
+              active={tool === 'highlight'}
+              onClick={() => setTool(tool === 'highlight' ? null : 'highlight')}
+            >
+              형광펜
+            </ToolButton>
+            <ToolButton
+              active={tool === 'erase'}
+              onClick={() => setTool(tool === 'erase' ? null : 'erase')}
+            >
+              지우개
+            </ToolButton>
+
+            {tool && tool !== 'erase' && (
+              <span className="flex items-center gap-0.5 pl-1">
+                {STROKE_COLORS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`색 ${value}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setColor(value)}
+                    style={{ background: value }}
+                    className={cn(
+                      'h-3.5 w-3.5 rounded-full',
+                      color === value ? 'ring-2 ring-white' : 'opacity-70',
+                    )}
+                  />
+                ))}
+              </span>
+            )}
+
+            {strokes.length > 0 && (
+              <>
+                <ToolButton onClick={() => onStrokesChange(strokes.slice(0, -1))}>되돌리기</ToolButton>
+                <ToolButton onClick={() => onStrokesChange([])}>모두 지우기</ToolButton>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <figcaption className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
@@ -162,6 +243,28 @@ function SizeButton({ onClick, children }: { onClick: () => void; children: stri
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       className="rounded px-1 py-0.5 hover:bg-white/20"
+    >
+      {children}
+    </button>
+  )
+}
+
+function ToolButton({
+  active = false,
+  onClick,
+  children,
+}: {
+  active?: boolean
+  onClick: () => void
+  children: string
+}) {
+  return (
+    <button
+      type="button"
+      // 누르는 순간 선택이 풀리면 도구가 사라져 버린다.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={cn('rounded px-1 py-0.5', active ? 'bg-white text-slate-900' : 'hover:bg-white/20')}
     >
       {children}
     </button>

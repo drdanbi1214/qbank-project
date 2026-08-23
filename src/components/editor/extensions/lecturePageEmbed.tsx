@@ -3,6 +3,7 @@ import type { ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { LecturePageCard, type LecturePageAttrs } from '@/components/lecture/LecturePageCard'
+import { parseStrokes } from '@/components/lecture/pageStrokes'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -49,6 +50,10 @@ function LecturePageEmbedView({ node, selected, editor, deleteNode, updateAttrib
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
         onResize={editor.isEditable ? (width) => updateAttributes({ width }) : undefined}
+        strokes={parseStrokes(attrs.strokes)}
+        onStrokesChange={
+          editor.isEditable ? (strokes) => updateAttributes({ strokes }) : undefined
+        }
       />
     </NodeViewWrapper>
   )
@@ -89,6 +94,23 @@ export const LecturePageEmbed = Node.create({
         parseHTML: (element) => element.getAttribute('data-professor'),
         renderHTML: (attributes) =>
           attributes.professor ? { 'data-professor': attributes.professor } : {},
+      },
+      // 쪽 위에 덧그린 자국. 좌표라서 크기를 바꿔도 따라 움직인다.
+      strokes: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute('data-strokes')
+          if (!raw) return null
+          try {
+            return JSON.parse(raw)
+          } catch {
+            return null
+          }
+        },
+        renderHTML: (attributes) =>
+          Array.isArray(attributes.strokes) && attributes.strokes.length > 0
+            ? { 'data-strokes': JSON.stringify(attributes.strokes) }
+            : {},
       },
       // 사람이 조절한 폭(px). 없으면 글 폭에 맞춘다.
       width: {

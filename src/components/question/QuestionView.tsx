@@ -512,8 +512,11 @@ export function QuestionView({
                         to={`/lectures/${lecture.lectureDocumentId}`}
                         className="ml-2 rounded bg-white px-1.5 py-0.5 text-xs font-medium text-sky-700 hover:underline dark:bg-slate-900 dark:text-sky-300"
                       >
-                        강의록 보기
-                        {lecture.lecturePageCount ? ` (${lecture.lecturePageCount}쪽)` : ''} →
+                        {/* 다른 자리의 "(42쪽)" 은 그 쪽을 가리키는데 여기서는
+                            강의록 전체 분량이라, 같은 괄호 표기를 쓰면 몇 쪽으로
+                            가는 것으로 읽힌다. 말로 풀어 쓴다. */}
+                        강의록 보기 →
+                        {lecture.lecturePageCount ? ` 전체 ${lecture.lecturePageCount}쪽` : ''}
                       </Link>
                     ) : (
                       <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">강의록 연결 예정</span>
