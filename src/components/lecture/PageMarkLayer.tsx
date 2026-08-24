@@ -3,6 +3,7 @@ import {
   DEFAULT_TEXT_BACKGROUND,
   DEFAULT_TEXT_BORDER,
   DEFAULT_TEXT_SIZE,
+  isPageShape,
   isPageText,
   NOMINAL_PT_WIDTH,
   simplify,
@@ -14,6 +15,7 @@ import {
   TOOL_WIDTH,
   type MarkTool,
   type PageMark,
+  type PageShape,
   type PageText,
   type Stroke,
 } from '@/components/lecture/pageMarks'
@@ -62,7 +64,7 @@ export function PageMarkLayer({
   textSize = DEFAULT_TEXT_SIZE,
 }: Props) {
   const svg = useRef<SVGSVGElement | null>(null)
-  const [drawing, setDrawing] = useState<Stroke | null>(null)
+  const [drawing, setDrawing] = useState<Stroke | PageShape | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
   // 끄는 동안에는 여기에만 담는다. 움직일 때마다 본문에 쓰면 되돌리기 기록이
   // 프레임 수만큼 쌓이고 글 저장이 계속 흔들린다.
@@ -145,7 +147,7 @@ export function PageMarkLayer({
       tool,
       color: color ?? STROKE_COLORS[0],
       width: TOOL_WIDTH[tool],
-      points: [at[0], at[1]],
+      points: isShapeTool(tool) ? [at[0], at[1], at[0], at[1]] : [at[0], at[1]],
     })
   }
 
@@ -153,15 +155,27 @@ export function PageMarkLayer({
     if (!drawing) return
     const at = pointAt(event)
     if (!at) return
-    setDrawing({ ...drawing, points: [...drawing.points, at[0], at[1]] })
+    setDrawing({
+      ...drawing,
+      points: isPageShape(drawing)
+        ? [drawing.points[0], drawing.points[1], at[0], at[1]]
+        : [...drawing.points, at[0], at[1]],
+    })
   }
 
   function finish() {
     if (!drawing) return
-    // 화면에 보이는 모양은 그대로면서 점 수만 줄여 본문을 가볍게 둔다.
-    const simplified = { ...drawing, points: simplify(drawing.points) }
     setDrawing(null)
-    onChange?.([...marks, simplified])
+    if (isPageShape(drawing)) {
+      const width = Math.abs(drawing.points[2] - drawing.points[0])
+      const height = Math.abs(drawing.points[3] - drawing.points[1])
+      // 손가락을 거의 움직이지 않은 실수는 보이지 않는 도형으로 남기지 않는다.
+      if (width < 0.005 || height < 0.005) return
+      onChange?.([...marks, drawing])
+      return
+    }
+    // 화면에 보이는 모양은 그대로면서 점 수만 줄여 본문을 가볍게 둔다.
+    onChange?.([...marks, { ...drawing, points: simplify(drawing.points) }])
   }
 
   /** 이미 얹은 글자를 누르면 옮기거나(끌면) 고친다(그냥 놓으면). */
@@ -260,6 +274,22 @@ export function PageMarkLayer({
                 grabbable={grabbable}
                 erase={tool === 'erase'}
                 onPointerDown={grabbable ? (event) => grabText(event, index) : undefined}
+              />
+            )
+          }
+          if (isPageShape(mark)) {
+            return (
+              <PageShapeShape
+                key={index}
+                mark={mark}
+                scaleX={VIEW}
+                scaleY={height}
+                erase={tool === 'erase' && Boolean(onChange)}
+                onErase={
+                  tool === 'erase' && onChange
+                    ? () => onChange(marks.filter((_, i) => i !== index))
+                    : undefined
+                }
               />
             )
           }
@@ -362,6 +392,65 @@ export function PageMarkLayer({
       )}
     </>
   )
+}
+
+function isShapeTool(tool: MarkTool): tool is 'rectangle' | 'star' {
+  return tool === 'rectangle' || tool === 'star'
+}
+
+function PageShapeShape({
+  mark,
+  scaleX,
+  scaleY,
+  erase,
+  onErase,
+}: {
+  mark: PageShape
+  scaleX: number
+  scaleY: number
+  erase: boolean
+  onErase?: () => void
+}) {
+  const left = Math.min(mark.points[0], mark.points[2]) * scaleX
+  const top = Math.min(mark.points[1], mark.points[3]) * scaleY
+  const width = Math.abs(mark.points[2] - mark.points[0]) * scaleX
+  const height = Math.abs(mark.points[3] - mark.points[1]) * scaleY
+  const common = {
+    fill: 'none',
+    stroke: mark.color,
+    strokeWidth: mark.width * scaleX,
+    strokeOpacity: TOOL_OPACITY[mark.tool],
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: erase ? 'cursor-pointer' : '',
+    style: { pointerEvents: erase ? 'stroke' as const : 'none' as const },
+    onPointerDown: erase
+      ? (event: React.PointerEvent<SVGElement>) => {
+          event.stopPropagation()
+          onErase?.()
+        }
+      : undefined,
+  }
+
+  return mark.tool === 'rectangle' ? (
+    <rect x={left} y={top} width={width} height={height} rx={4} {...common} />
+  ) : (
+    <path d={starPath(left, top, width, height)} {...common} />
+  )
+}
+
+function starPath(left: number, top: number, width: number, height: number): string {
+  const centerX = left + width / 2
+  const centerY = top + height / 2
+  const points: string[] = []
+  for (let index = 0; index < 10; index += 1) {
+    const angle = -Math.PI / 2 + (index * Math.PI) / 5
+    const radius = index % 2 === 0 ? 1 : 0.42
+    const x = centerX + Math.cos(angle) * (width / 2) * radius
+    const y = centerY + Math.sin(angle) * (height / 2) * radius
+    points.push(`${index === 0 ? 'M' : 'L'} ${x} ${y}`)
+  }
+  return `${points.join(' ')} Z`
 }
 
 /** SVG 글자 크기를 잰 뒤 그 뒤에 꼭 맞는 배경과 테두리를 그린다. */

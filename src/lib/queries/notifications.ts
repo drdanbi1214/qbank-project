@@ -234,6 +234,23 @@ export async function createAnnouncement(params: {
   if (error) throw error
 }
 
+export async function updateAnnouncement(params: {
+  id: string
+  title: string
+  content: RichDoc
+  isPinned: boolean
+}): Promise<void> {
+  const { error } = await supabase
+    .from('announcements')
+    .update({
+      title: params.title,
+      content: toJson(params.content),
+      is_pinned: params.isPinned,
+    })
+    .eq('id', params.id)
+  if (error) throw error
+}
+
 export async function deleteAnnouncement(id: string): Promise<void> {
   const { error } = await supabase.from('announcements').delete().eq('id', id)
   if (error) throw error

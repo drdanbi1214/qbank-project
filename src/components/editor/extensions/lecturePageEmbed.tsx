@@ -4,6 +4,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { LecturePageCard, type LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { parsePageMarks } from '@/components/lecture/pageMarks'
+import { pageCropOf } from '@/components/lecture/pageCrop'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -47,9 +48,11 @@ function LecturePageEmbedView({ node, selected, editor, deleteNode, updateAttrib
         title={typeof attrs.title === 'string' ? attrs.title : null}
         professor={typeof attrs.professor === 'string' ? attrs.professor : null}
         width={typeof attrs.width === 'number' ? attrs.width : null}
+        crop={pageCropOf(attrs.crop)}
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
         onResize={editor.isEditable ? (width) => updateAttributes({ width }) : undefined}
+        onCropChange={editor.isEditable ? (crop) => updateAttributes({ crop }) : undefined}
         marks={parsePageMarks(attrs.strokes)}
         onMarksChange={editor.isEditable ? (strokes) => updateAttributes({ strokes }) : undefined}
       />
@@ -124,6 +127,22 @@ export const LecturePageEmbed = Node.create({
         parseHTML: (element) => Number(element.getAttribute('data-width')) || null,
         renderHTML: (attributes) =>
           attributes.width ? { 'data-width': String(attributes.width) } : {},
+      },
+      crop: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute('data-crop')
+          if (!raw) return null
+          try {
+            return pageCropOf(JSON.parse(raw))
+          } catch {
+            return null
+          }
+        },
+        renderHTML: (attributes) => {
+          const crop = pageCropOf(attributes.crop)
+          return crop ? { 'data-crop': JSON.stringify(crop) } : {}
+        },
       },
     }
   },

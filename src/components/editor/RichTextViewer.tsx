@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react'
 import { safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { LecturePageCard } from '@/components/lecture/LecturePageCard'
 import { parsePageMarks } from '@/components/lecture/pageMarks'
+import { pageCropOf } from '@/components/lecture/pageCrop'
 import { TheoryCard } from '@/components/question/TheoryCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { HIGHLIGHT_SET, TEXT_COLOR_SET } from '@/components/editor/palette'
@@ -350,6 +351,7 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
             title={typeof attrs.title === 'string' ? attrs.title : null}
             professor={typeof attrs.professor === 'string' ? attrs.professor : null}
             width={typeof attrs.width === 'number' ? attrs.width : null}
+            crop={pageCropOf(attrs.crop)}
             marks={parsePageMarks(attrs.strokes)}
           />
         </div>

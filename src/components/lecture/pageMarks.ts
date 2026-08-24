@@ -10,16 +10,25 @@
  * 수십 개일 때 본문 JSON 이 몇 배로 불어난다.
  *
  * 자국과 글자를 한 배열에 섞어 담는다. 따로 두면 넣은 순서를 잃어 되돌리기가
- * 엉뚱한 것을 지운다. 이미 저장된 글에는 tool 이 pen/highlight 인 것만 있어,
- * tool 을 보고 갈라내면 예전 글도 그대로 읽힌다.
+ * 엉뚱한 것을 지운다. tool 을 보고 선·도형·글자를 갈라내며, 이미 저장된
+ * pen/highlight 표시도 같은 방식으로 그대로 읽힌다.
  */
 export type StrokeTool = 'pen' | 'highlight'
-export type MarkTool = StrokeTool | 'text'
+export type ShapeTool = 'rectangle' | 'star'
+export type MarkTool = StrokeTool | ShapeTool | 'text'
 
 export type Stroke = {
   tool: StrokeTool
   color: string
   /** 이미지 가로폭 대비 굵기. 0.004 면 폭의 0.4%. */
+  width: number
+  points: number[]
+}
+
+export type PageShape = {
+  tool: ShapeTool
+  color: string
+  /** 테두리 굵기. points는 시작점과 끝점 [x1, y1, x2, y2]다. */
   width: number
   points: number[]
 }
@@ -36,10 +45,14 @@ export type PageText = {
   points: number[]
 }
 
-export type PageMark = Stroke | PageText
+export type PageMark = Stroke | PageShape | PageText
 
 export function isPageText(mark: PageMark): mark is PageText {
   return mark.tool === 'text'
+}
+
+export function isPageShape(mark: PageMark): mark is PageShape {
+  return mark.tool === 'rectangle' || mark.tool === 'star'
 }
 
 export const STROKE_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#f59e0b', '#111827'] as const
@@ -69,14 +82,18 @@ export const TEXT_BOX_BORDERS = [
 export const DEFAULT_TEXT_BACKGROUND = TEXT_BOX_BACKGROUNDS[0].value
 export const DEFAULT_TEXT_BORDER = TEXT_BOX_BORDERS[0].value
 
-export const TOOL_WIDTH: Record<StrokeTool, number> = {
+export const TOOL_WIDTH: Record<StrokeTool | ShapeTool, number> = {
   pen: 0.004,
   highlight: 0.03,
+  rectangle: 0.004,
+  star: 0.005,
 }
 
-export const TOOL_OPACITY: Record<StrokeTool, number> = {
+export const TOOL_OPACITY: Record<StrokeTool | ShapeTool, number> = {
   pen: 1,
   highlight: 0.35,
+  rectangle: 1,
+  star: 1,
 }
 
 /** 고를 수 있는 글자 크기(pt). */
@@ -157,6 +174,19 @@ export function parsePageMarks(value: unknown): PageMark[] {
           size,
           text,
           points: [points[0], points[1]],
+        },
+      ]
+    }
+
+    if (record.tool === 'rectangle' || record.tool === 'star') {
+      if (points.length < 4) return []
+      const tool = record.tool
+      return [
+        {
+          tool,
+          color,
+          width: typeof record.width === 'number' ? record.width : TOOL_WIDTH[tool],
+          points: points.slice(0, 4),
         },
       ]
     }

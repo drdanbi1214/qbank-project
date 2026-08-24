@@ -11,6 +11,7 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   fetchAnnouncements,
+  updateAnnouncement,
   type Announcement,
 } from '@/lib/queries/notifications'
 import { uploadTopicImage, uploadTopicVideo } from '@/lib/uploads'
@@ -38,6 +39,7 @@ export function TopicNoticesPage() {
   const [rows, setRows] = useState<Announcement[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [writing, setWriting] = useState(false)
+  const [editing, setEditing] = useState<Announcement | null>(null)
   const [title, setTitle] = useState('')
   const [pinned, setPinned] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -78,6 +80,32 @@ export function TopicNoticesPage() {
 
   useEffect(load, [load])
 
+  const closeEditor = useCallback(() => {
+    setWriting(false)
+    setEditing(null)
+    setTitle('')
+    setPinned(false)
+    draft.current = emptyDoc()
+  }, [])
+
+  const startWriting = useCallback(() => {
+    setEditing(null)
+    setTitle('')
+    setPinned(false)
+    draft.current = emptyDoc()
+    setError(null)
+    setWriting(true)
+  }, [])
+
+  const startEditing = useCallback((row: Announcement) => {
+    setWriting(false)
+    setEditing(row)
+    setTitle(row.title)
+    setPinned(row.isPinned)
+    draft.current = row.content
+    setError(null)
+  }, [])
+
   const submit = useCallback(() => {
     if (uploading) {
       setError('첨부 파일이 모두 올라갈 때까지 잠시 기다려 주세요.')
@@ -89,26 +117,38 @@ export function TopicNoticesPage() {
       return
     }
     setBusy(true)
-    void createAnnouncement({
-      authorId: userId,
-      title: trimmed,
-      content: draft.current,
-      isPinned: pinned,
-      requiredPermission: SCOPE,
-    })
+    const request = editing
+      ? updateAnnouncement({
+          id: editing.id,
+          title: trimmed,
+          content: draft.current,
+          isPinned: pinned,
+        })
+      : createAnnouncement({
+          authorId: userId,
+          title: trimmed,
+          content: draft.current,
+          isPinned: pinned,
+          requiredPermission: SCOPE,
+        })
+
+    void request
       .then(() => {
-        setWriting(false)
-        setTitle('')
-        setPinned(false)
-        draft.current = emptyDoc()
+        closeEditor()
         setError(null)
         load()
       })
       .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : '올리지 못했습니다.')
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : editing
+              ? '수정하지 못했습니다.'
+              : '올리지 못했습니다.',
+        )
       })
       .finally(() => setBusy(false))
-  }, [title, pinned, userId, load, uploading])
+  }, [title, editing, pinned, userId, closeEditor, load, uploading])
 
   const remove = useCallback(
     (id: string, subject: string) => {
@@ -124,6 +164,51 @@ export function TopicNoticesPage() {
 
   if (!canUse) return <Navigate to="/study" replace />
 
+  const renderEditor = (className = '') => (
+    <div className={`rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900 ${className}`}>
+      <input
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        placeholder="공지 제목"
+        className="mb-2 w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
+      />
+      <LazyRichTextEditor
+        key={editing?.id ?? 'new-announcement'}
+        initialValue={editing?.content ?? emptyDoc()}
+        onChange={(doc) => {
+          draft.current = doc
+        }}
+        userId={userId}
+        uploadImageFile={uploadNoticeImage}
+        uploadVideoFile={uploadNoticeVideo}
+        onRequestTheory={embed.onRequestTheory}
+        onRequestLecture={embed.onRequestLecture}
+        placeholder="공지 내용을 입력하세요."
+        minHeight="12rem"
+        onUploadError={setError}
+      />
+      {embed.pickers}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+          <input
+            type="checkbox"
+            checked={pinned}
+            onChange={(event) => setPinned(event.target.checked)}
+          />
+          위에 고정
+        </label>
+        <span className="ml-auto flex gap-2">
+          <Button size="sm" variant="ghost" onClick={closeEditor} disabled={busy}>
+            취소
+          </Button>
+          <Button size="sm" onClick={submit} disabled={busy || uploading}>
+            {uploading ? '첨부 파일 업로드 중' : editing ? '수정 완료' : '올리기'}
+          </Button>
+        </span>
+      </div>
+    </div>
+  )
+
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -135,8 +220,8 @@ export function TopicNoticesPage() {
         </Link>
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <h1 className="text-xl font-bold">공지사항</h1>
-        {canWrite && !writing && (
-          <Button size="sm" className="ml-auto" onClick={() => setWriting(true)}>
+        {canWrite && !writing && !editing && (
+          <Button size="sm" className="ml-auto" onClick={startWriting}>
             공지 올리기
           </Button>
         )}
@@ -148,49 +233,7 @@ export function TopicNoticesPage() {
         </p>
       )}
 
-      {writing && session && (
-        <div className="mb-4 rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="공지 제목"
-            className="mb-2 w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
-          />
-          <LazyRichTextEditor
-            initialValue={emptyDoc()}
-            onChange={(doc) => {
-              draft.current = doc
-            }}
-            userId={userId}
-            uploadImageFile={uploadNoticeImage}
-            uploadVideoFile={uploadNoticeVideo}
-            onRequestTheory={embed.onRequestTheory}
-            onRequestLecture={embed.onRequestLecture}
-            placeholder="공지 내용을 입력하세요."
-            minHeight="12rem"
-            onUploadError={setError}
-          />
-          {embed.pickers}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={(event) => setPinned(event.target.checked)}
-              />
-              위에 고정
-            </label>
-            <span className="ml-auto flex gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setWriting(false)}>
-                취소
-              </Button>
-              <Button size="sm" onClick={submit} disabled={busy || uploading}>
-                {uploading ? '첨부 파일 업로드 중' : '올리기'}
-              </Button>
-            </span>
-          </div>
-        </div>
-      )}
+      {writing && session && renderEditor('mb-4')}
 
       {rows === null ? (
         <div className="flex justify-center py-16">
@@ -202,11 +245,14 @@ export function TopicNoticesPage() {
         </p>
       ) : (
         <ul className="space-y-3">
-          {rows.map((row) => (
-            <li
-              key={row.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
-            >
+          {rows.map((row) => {
+            if (editing?.id === row.id) return <li key={row.id}>{renderEditor()}</li>
+            const canManage = isAdmin || row.author?.id === userId
+            return (
+              <li
+                key={row.id}
+                className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
+              >
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 {row.isPinned && (
                   <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-xs font-semibold text-white">
@@ -226,20 +272,30 @@ export function TopicNoticesPage() {
                     </>
                   )}
                   {formatShortDate(row.createdAt)}
-                  {canWrite && (
-                    <button
-                      type="button"
-                      onClick={() => remove(row.id, row.title)}
-                      className="underline hover:text-rose-600 dark:hover:text-rose-400"
-                    >
-                      삭제
-                    </button>
+                  {canManage && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startEditing(row)}
+                        className="underline hover:text-brand-600 dark:hover:text-brand-300"
+                      >
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => remove(row.id, row.title)}
+                        className="underline hover:text-rose-600 dark:hover:text-rose-400"
+                      >
+                        삭제
+                      </button>
+                    </>
                   )}
                 </span>
               </div>
               <RichTextViewer doc={row.content} />
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>
