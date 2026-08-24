@@ -2452,6 +2452,32 @@ export type Database = {
           },
         ]
       }
+      update_notice_dismissals: {
+        Row: {
+          dismissed_at: string
+          notice_key: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          notice_key: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          notice_key?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "update_notice_dismissals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           created_at: string
