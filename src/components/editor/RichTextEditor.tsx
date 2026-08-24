@@ -13,6 +13,7 @@ import {
 import { Placeholder } from '@tiptap/extensions'
 import { MathBlock, MathInline } from '@/components/editor/extensions/math'
 import { StoredImage } from '@/components/editor/extensions/storedImage'
+import { StoredVideo } from '@/components/editor/extensions/storedVideo'
 import { YamaEmbed } from '@/components/editor/extensions/yamaEmbed'
 import { LecturePageEmbed } from '@/components/editor/extensions/lecturePageEmbed'
 import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
@@ -21,7 +22,12 @@ import { Footnote } from '@/components/editor/extensions/footnote'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { LINE_HEIGHTS, LineHeight, safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { BlockIndent } from '@/components/editor/extensions/indent'
-import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
+import {
+  imageFilesFrom,
+  imageFilesFromHtml,
+  uploadImage,
+  videoFilesFrom,
+} from '@/lib/uploads'
 import { readLecturePageClipboard } from '@/lib/lectureClipboard'
 import {
   NOTE_HIGHLIGHTS,
@@ -52,6 +58,8 @@ type Props = {
   onUploadError?: (message: string) => void
   /** 본문 종류별 Storage 버킷을 선택할 수 있게 한다. */
   uploadImageFile?: (file: File, userId: string) => Promise<string>
+  /** 넘긴 화면에만 영상 첨부 버튼을 표시한다. 현재는 레옵스 공지에서 쓴다. */
+  uploadVideoFile?: (file: File, userId: string) => Promise<string>
   /**
    * 야마 삽입 버튼을 보여주고, 누르면 이 함수를 부른다.
    * 부모가 문제 고르기 화면을 띄우고 고른 문제 id 를 돌려주면 본문에 꽂는다.
@@ -80,6 +88,7 @@ export function RichTextEditor({
   toolbarExtra,
   onUploadError,
   uploadImageFile = uploadImage,
+  uploadVideoFile,
   onRequestYama,
   onRequestTheory,
   onRequestLecture,
@@ -89,11 +98,13 @@ export function RichTextEditor({
   const userIdRef = useRef(userId)
   const errorRef = useRef(onUploadError)
   const uploadImageRef = useRef(uploadImageFile)
+  const uploadVideoRef = useRef(uploadVideoFile)
   useEffect(() => {
     userIdRef.current = userId
     errorRef.current = onUploadError
     uploadImageRef.current = uploadImageFile
-  }, [userId, onUploadError, uploadImageFile])
+    uploadVideoRef.current = uploadVideoFile
+  }, [userId, onUploadError, uploadImageFile, uploadVideoFile])
 
   const insertImages = useCallback((view: EditorView, files: File[], at?: number) => {
     for (const file of files) {
@@ -119,6 +130,27 @@ export function RichTextEditor({
     }
   }, [])
 
+  const insertVideos = useCallback((view: EditorView, files: File[], at?: number) => {
+    const upload = uploadVideoRef.current
+    const file = files[0]
+    if (!upload || !file) return
+
+    const uploadId = crypto.randomUUID()
+    const { state } = view
+    const node = state.schema.nodes.video.create({ uploadId })
+    const pos = at ?? state.selection.from
+    view.dispatch(state.tr.insert(pos, node).scrollIntoView())
+
+    void upload(file, userIdRef.current)
+      .then((src) => replaceVideoPlaceholder(view, uploadId, src))
+      .catch((caught: unknown) => {
+        removePlaceholder(view, uploadId, 'video')
+        errorRef.current?.(
+          caught instanceof Error ? caught.message : '영상을 올리지 못했습니다.',
+        )
+      })
+  }, [])
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -141,6 +173,7 @@ export function RichTextEditor({
       StyledTableCell,
       StyledTableHeader,
       StoredImage,
+      StoredVideo,
       YamaEmbed,
       TheoryEmbed,
       LecturePageEmbed,
@@ -192,6 +225,13 @@ export function RichTextEditor({
         if (files.length > 0) {
           event.preventDefault()
           insertImages(view, files)
+          return true
+        }
+
+        const videos = videoFilesFrom(event.clipboardData)
+        if (uploadVideoRef.current && videos.length > 0) {
+          event.preventDefault()
+          insertVideos(view, videos)
           return true
         }
 
@@ -255,10 +295,17 @@ export function RichTextEditor({
       handleDrop(view, event, _slice, moved) {
         if (moved) return false
         const files = imageFilesFrom(event.dataTransfer)
-        if (files.length === 0) return false
-        event.preventDefault()
         const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
-        insertImages(view, files, coords?.pos)
+        if (files.length > 0) {
+          event.preventDefault()
+          insertImages(view, files, coords?.pos)
+          return true
+        }
+
+        const videos = videoFilesFrom(event.dataTransfer)
+        if (!uploadVideoRef.current || videos.length === 0) return false
+        event.preventDefault()
+        insertVideos(view, videos, coords?.pos)
         return true
       },
     },
@@ -280,6 +327,7 @@ export function RichTextEditor({
         editor={editor}
         compact={compact}
         onPickImage={insertImages}
+        onPickVideo={uploadVideoFile ? insertVideos : undefined}
         extra={toolbarExtra}
         onRequestYama={onRequestYama}
         onRequestTheory={onRequestTheory}
@@ -368,6 +416,18 @@ function replaceLecturePagePlaceholder(view: EditorView, uploadId: string, src: 
   )
 }
 
+function replaceVideoPlaceholder(view: EditorView, uploadId: string, src: string) {
+  const found = findPlaceholder(view, uploadId, 'video')
+  if (!found) return
+  view.dispatch(
+    view.state.tr.setNodeMarkup(found.pos, undefined, {
+      ...found.attrs,
+      src,
+      uploadId: null,
+    }),
+  )
+}
+
 function removePlaceholder(view: EditorView, uploadId: string, nodeType = 'image') {
   const found = findPlaceholder(view, uploadId, nodeType)
   if (!found) return
@@ -399,6 +459,7 @@ function Toolbar({
   editor,
   compact,
   onPickImage,
+  onPickVideo,
   extra,
   onRequestYama,
   onRequestTheory,
@@ -407,6 +468,7 @@ function Toolbar({
   editor: Editor
   compact: boolean
   onPickImage: (view: EditorView, files: File[]) => void
+  onPickVideo?: (view: EditorView, files: File[]) => void
   extra?: ReactNode
   onRequestYama?: () => Promise<string | null>
   onRequestTheory?: () => Promise<string | null>
@@ -426,6 +488,7 @@ function Toolbar({
   }, [editor])
 
   const fileInput = useRef<HTMLInputElement>(null)
+  const videoInput = useRef<HTMLInputElement>(null)
 
   return (
     <div
@@ -728,6 +791,11 @@ function Toolbar({
       <ToolButton label="이미지" onClick={() => fileInput.current?.click()}>
         🖼
       </ToolButton>
+      {onPickVideo && (
+        <ToolButton label="영상 첨부" onClick={() => videoInput.current?.click()}>
+          ▶
+        </ToolButton>
+      )}
       <ToolButton
         label="인라인 수식"
         onClick={() => editor.chain().focus().setMathInline('').run()}
@@ -764,6 +832,20 @@ function Toolbar({
           event.target.value = ''
         }}
       />
+
+      {onPickVideo && (
+        <input
+          ref={videoInput}
+          type="file"
+          accept="video/mp4,video/webm"
+          hidden
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? [])
+            if (files.length > 0) onPickVideo(editor.view, files)
+            event.target.value = ''
+          }}
+        />
+      )}
 
       {extra && <div className="ml-auto flex items-center gap-2">{extra}</div>}
     </div>

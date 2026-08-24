@@ -19,6 +19,7 @@ interface SignRequest {
 }
 
 const IMAGE_TYPES = new Set(['image/webp', 'image/png', 'image/jpeg', 'image/gif'])
+const TOPIC_MEDIA_TYPES = new Set([...IMAGE_TYPES, 'video/mp4', 'video/webm'])
 const LECTURE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -33,7 +34,7 @@ const BUCKET_LIMITS: Record<string, { maxBytes: number; contentTypes: Set<string
   'theory-images': { maxBytes: 10 * 1024 * 1024, contentTypes: IMAGE_TYPES },
   'ai-solution-images': { maxBytes: 10 * 1024 * 1024, contentTypes: IMAGE_TYPES },
   'senior-solution-images': { maxBytes: 10 * 1024 * 1024, contentTypes: IMAGE_TYPES },
-  'topic-images': { maxBytes: 10 * 1024 * 1024, contentTypes: IMAGE_TYPES },
+  'topic-images': { maxBytes: 100 * 1024 * 1024, contentTypes: TOPIC_MEDIA_TYPES },
   'solution-lecture-files': { maxBytes: 50 * 1024 * 1024, contentTypes: LECTURE_TYPES },
   'exam-sources': { maxBytes: 100 * 1024 * 1024, contentTypes: new Set(['application/pdf']) },
   // 강의록 라이브러리. 화면에서 그대로 읽히도록 PDF 만 받는다. 슬라이드가 많은

@@ -114,6 +114,7 @@ export function parseRichDoc(value: unknown): RichDoc {
 /** 자식을 가질 수 없는 노드. 위치 계산에서 크기 1로 센다. */
 const LEAF_TYPES = new Set([
   'image',
+  'video',
   'hardBreak',
   'horizontalRule',
   'mathInline',
@@ -201,6 +202,10 @@ export function richTextToPlain(doc: RichDoc): string {
       parts.push('[이미지]')
       return
     }
+    if (node.type === 'video') {
+      parts.push('[영상]')
+      return
+    }
     if (node.type === 'mathInline' || node.type === 'mathBlock') {
       parts.push(typeof node.attrs?.latex === 'string' ? node.attrs.latex : '')
       return
@@ -221,7 +226,7 @@ export function richTextToPlain(doc: RichDoc): string {
 }
 
 export function isEmptyDoc(doc: RichDoc): boolean {
-  return richTextToPlain(doc) === '' && !hasNode(doc, 'image')
+  return richTextToPlain(doc) === '' && !hasNode(doc, 'image') && !hasNode(doc, 'video')
 }
 
 function hasNode(doc: RichDoc, type: string): boolean {

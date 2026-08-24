@@ -12,6 +12,8 @@ const MAX_BYTES = 10 * 1024 * 1024
 /** 압축 전 원본 상한. 이보다 크면 디코딩에서 브라우저가 버벅인다. */
 const INPUT_MAX_BYTES = 40 * 1024 * 1024
 const ALLOWED = new Set(['image/webp', 'image/png', 'image/jpeg', 'image/gif'])
+const VIDEO_MAX_BYTES = 100 * 1024 * 1024
+const VIDEO_ALLOWED = new Set(['video/mp4', 'video/webm'])
 
 /**
  * WebP 재인코딩 품질.
@@ -140,6 +142,30 @@ export async function uploadQuestionImage(file: File, userId: string): Promise<s
  */
 export async function uploadTopicImage(file: File, userId: string): Promise<string> {
   return uploadImageTo('topic-images', file, userId)
+}
+
+/** 레옵스 공지 사용설명 영상. 변환하지 않고 MP4/WebM 원본을 비공개로 저장한다. */
+export async function uploadTopicVideo(file: File, userId: string): Promise<string> {
+  if (!VIDEO_ALLOWED.has(file.type)) {
+    throw new Error('MP4 또는 WebM 영상만 올릴 수 있습니다.')
+  }
+  if (file.size > VIDEO_MAX_BYTES) {
+    throw new Error('영상 크기는 100MB까지 가능합니다.')
+  }
+
+  const extension = file.type === 'video/webm' ? 'webm' : 'mp4'
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`
+  await uploadStoredObject('topic-images', path, file, file.type)
+  return `topic-images/${path}`
+}
+
+export function isUploadableVideo(file: File): boolean {
+  return VIDEO_ALLOWED.has(file.type)
+}
+
+export function videoFilesFrom(data: DataTransfer | null): File[] {
+  if (!data) return []
+  return Array.from(data.files).filter(isUploadableVideo)
 }
 
 /** 관리자 이론 편집기의 이미지 업로드. */

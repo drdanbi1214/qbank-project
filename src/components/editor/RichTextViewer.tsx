@@ -310,6 +310,10 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       const width = imageWidthOf(node.attrs?.width)
       return src ? <ViewerImage path={src} alt={alt} width={width} onZoom={context.onZoom} /> : null
     }
+    case 'video': {
+      const src = typeof node.attrs?.src === 'string' ? node.attrs.src : null
+      return src ? <ViewerVideo path={src} /> : null
+    }
     case 'footnote': {
       const text = typeof node.attrs?.text === 'string' ? node.attrs.text : ''
       context.footnotes.push(text)
@@ -400,6 +404,39 @@ function ViewerImage({
         className="h-auto max-w-full rounded-lg border border-slate-200 dark:border-slate-700"
       />
     </button>
+  )
+}
+
+/**
+ * 비공개 공지 영상 플레이어.
+ *
+ * 문서에는 만료되지 않는 Storage 경로만 저장하고, 열람하는 계정의 권한으로
+ * 서명 URL을 새로 받는다. 컨테이너 폭을 넘기지 않아 휴대폰에서도 가로 스크롤 없이
+ * 재생할 수 있다.
+ */
+function ViewerVideo({ path }: { path: string }) {
+  const external = /^https?:\/\//i.test(path)
+  const signedUrl = useSignedUrl(external ? null : path)
+  const src = external ? path : signedUrl
+
+  if (!src) {
+    return (
+      <div className="my-3 flex h-36 items-center justify-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+        영상을 불러오는 중입니다
+      </div>
+    )
+  }
+
+  return (
+    <video
+      src={src}
+      controls
+      playsInline
+      preload="metadata"
+      className="my-3 max-h-[75vh] w-full rounded-lg bg-black"
+    >
+      이 브라우저에서는 영상을 재생할 수 없습니다.
+    </video>
   )
 }
 

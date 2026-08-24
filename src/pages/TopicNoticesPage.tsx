@@ -13,7 +13,7 @@ import {
   fetchAnnouncements,
   type Announcement,
 } from '@/lib/queries/notifications'
-import { uploadTopicImage } from '@/lib/uploads'
+import { uploadTopicImage, uploadTopicVideo } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
 import { emptyDoc, type RichDoc } from '@/types/richtext'
 
@@ -41,7 +41,30 @@ export function TopicNoticesPage() {
   const [title, setTitle] = useState('')
   const [pinned, setPinned] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const draft = useRef<RichDoc>(emptyDoc())
+  const activeUploads = useRef(0)
+
+  /** 큰 영상을 올리는 도중 공지를 먼저 저장해 빈 영상 노드가 남지 않게 한다. */
+  const trackUpload = useCallback(async <T,>(task: () => Promise<T>): Promise<T> => {
+    activeUploads.current += 1
+    setUploading(true)
+    try {
+      return await task()
+    } finally {
+      activeUploads.current -= 1
+      setUploading(activeUploads.current > 0)
+    }
+  }, [])
+
+  const uploadNoticeImage = useCallback(
+    (file: File, ownerId: string) => trackUpload(() => uploadTopicImage(file, ownerId)),
+    [trackUpload],
+  )
+  const uploadNoticeVideo = useCallback(
+    (file: File, ownerId: string) => trackUpload(() => uploadTopicVideo(file, ownerId)),
+    [trackUpload],
+  )
 
   const load = useCallback(() => {
     if (!canUse) return
@@ -56,6 +79,10 @@ export function TopicNoticesPage() {
   useEffect(load, [load])
 
   const submit = useCallback(() => {
+    if (uploading) {
+      setError('첨부 파일이 모두 올라갈 때까지 잠시 기다려 주세요.')
+      return
+    }
     const trimmed = title.trim()
     if (trimmed === '') {
       setError('제목을 입력해 주세요.')
@@ -81,7 +108,7 @@ export function TopicNoticesPage() {
         setError(caught instanceof Error ? caught.message : '올리지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [title, pinned, userId, load])
+  }, [title, pinned, userId, load, uploading])
 
   const remove = useCallback(
     (id: string, subject: string) => {
@@ -135,7 +162,8 @@ export function TopicNoticesPage() {
               draft.current = doc
             }}
             userId={userId}
-            uploadImageFile={uploadTopicImage}
+            uploadImageFile={uploadNoticeImage}
+            uploadVideoFile={uploadNoticeVideo}
             onRequestTheory={embed.onRequestTheory}
             onRequestLecture={embed.onRequestLecture}
             placeholder="공지 내용을 입력하세요."
@@ -156,8 +184,8 @@ export function TopicNoticesPage() {
               <Button size="sm" variant="ghost" onClick={() => setWriting(false)}>
                 취소
               </Button>
-              <Button size="sm" onClick={submit} disabled={busy}>
-                올리기
+              <Button size="sm" onClick={submit} disabled={busy || uploading}>
+                {uploading ? '첨부 파일 업로드 중' : '올리기'}
               </Button>
             </span>
           </div>
