@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
+import { LearningInsights } from '@/components/profile/LearningInsights'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
@@ -114,7 +115,7 @@ export function MyPage() {
       : 0
 
   return (
-    <section className="max-w-2xl space-y-8">
+    <section className="max-w-5xl space-y-8">
       <header>
         <h1 className="text-xl font-bold">마이페이지</h1>
       </header>
@@ -283,6 +284,9 @@ export function MyPage() {
           </label>
         </div>
       </div>
+
+      {/* 오늘의 문제 달성률과 일별 활성 이용 시간 */}
+      <LearningInsights />
 
       {/* 학습 통계 */}
       {summary && (

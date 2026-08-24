@@ -456,3 +456,43 @@ export async function fetchMySummary(): Promise<MySummary> {
     upvotesReceived: asNumber(data.upvotes_received),
   }
 }
+
+// -----------------------------------------------------------------------------
+// 마이페이지 일별 이용 시간
+// -----------------------------------------------------------------------------
+
+export type LearningActivityCategory = 'question' | 'theory' | 'other'
+
+export type LearningActivityDay = {
+  date: string
+  question: number
+  theory: number
+  other: number
+}
+
+/** 최근 일별 활성 이용 시간. 각 값의 단위는 초다. */
+export async function fetchMyLearningActivity(days = 112): Promise<LearningActivityDay[]> {
+  const { data, error } = await supabase.rpc('get_my_learning_activity', { p_days: days })
+  if (error) throw error
+  if (!isRecord(data) || !Array.isArray(data.history)) return []
+
+  return (data.history as unknown[]).filter(isRecord).map((row) => ({
+    date: typeof row.date === 'string' ? row.date : '',
+    question: asNumber(row.question),
+    theory: asNumber(row.theory),
+    other: asNumber(row.other),
+  }))
+}
+
+/** 화면이 실제로 활성화된 짧은 구간을 오늘(KST) 기록에 더한다. */
+export async function addLearningActivity(
+  category: LearningActivityCategory,
+  seconds: number,
+): Promise<void> {
+  const wholeSeconds = Math.max(1, Math.min(300, Math.round(seconds)))
+  const { error } = await supabase.rpc('add_learning_activity', {
+    p_category: category,
+    p_seconds: wholeSeconds,
+  })
+  if (error) throw error
+}

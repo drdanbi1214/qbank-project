@@ -3032,6 +3032,10 @@ export type Database = {
         }[]
       }
       get_my_summary: { Args: never; Returns: Json }
+      get_my_learning_activity: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
       get_progress_by_exam: {
         Args: never
         Returns: {
@@ -3220,6 +3224,10 @@ export type Database = {
           p_time_spent_sec?: number
         }
         Returns: Json
+      }
+      add_learning_activity: {
+        Args: { p_category: string; p_seconds: number }
+        Returns: undefined
       }
       topics_for_question: {
         Args: { p_question_id: string }

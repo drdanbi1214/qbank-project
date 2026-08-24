@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { LearningActivityTracker } from '@/components/analytics/LearningActivityTracker'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { RequireAvatar } from '@/components/layout/RequireAvatar'
 import { StudyLayout } from '@/components/layout/StudyLayout'
@@ -58,6 +59,7 @@ export default function App() {
     <BrowserRouter>
       <ErrorBoundary>
         <AuthProvider>
+          <LearningActivityTracker />
           <ThemeProvider>
             <NotificationProvider>
               <DataProvider>
