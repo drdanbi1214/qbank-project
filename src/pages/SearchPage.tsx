@@ -45,6 +45,12 @@ export function SearchPage() {
   const includeLectures = selectedSources.has('lectures')
   const includeNotes = selectedSources.has('notes') && canSearchNotes
   const includeLectureSearch = includeLectures || includeNotes
+  const selectableSources = SEARCH_SOURCE_ORDER.filter(
+    (source) =>
+      (source !== 'theory' || canSearchTheory) &&
+      (source !== 'notes' || canSearchNotes),
+  )
+  const allSourcesSelected = selectableSources.every((source) => selectedSources.has(source))
   const hasSelectedSource =
     includeQuestionSearch || includeTheory || includeLectures || includeNotes
   const subjectId = params.get('subject')
@@ -201,6 +207,12 @@ export function SearchPage() {
     update({ sources: value, lectures: null, scope: null })
   }
 
+  function toggleAllSources() {
+    const next = allSourcesSelected ? new Set<SearchSource>() : new Set(selectableSources)
+    const value = SEARCH_SOURCE_ORDER.filter((item) => next.has(item)).join(',') || 'none'
+    update({ sources: value, lectures: null, scope: null })
+  }
+
   const selectClass =
     'rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm outline-none dark:border-slate-700 dark:bg-slate-900'
 
@@ -227,6 +239,11 @@ export function SearchPage() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div role="group" aria-label="검색 범위" className="flex flex-wrap gap-1.5">
+          <SourceCheckbox
+            checked={allSourcesSelected}
+            onChange={toggleAllSources}
+            label="전체"
+          />
           <SourceCheckbox
             checked={includeQuestionSearch}
             onChange={() => toggleSource('questions')}
