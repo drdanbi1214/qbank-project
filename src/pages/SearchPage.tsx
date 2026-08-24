@@ -93,6 +93,9 @@ export function SearchPage() {
         })
         .catch((caught: unknown) => {
           if (active) {
+            // 실패한 요청도 완료된 것으로 표시해야 다른 범위의 로딩 표시가
+            // 영원히 남지 않는다. 오류 문구는 아래 결과 영역에서 따로 보여 준다.
+            setLoaded({ key: requestKey, hits: [] })
             setFailed({
               key: requestKey,
               message: caught instanceof Error ? caught.message : '검색하지 못했습니다.',
@@ -164,14 +167,20 @@ export function SearchPage() {
     [taxonomy],
   )
 
-  // 현재 범위에 필요한 검색이 모두 끝날 때까지 로딩을 유지한다. 특히 느린 강의록
-  // 본문 검색 중에 성급하게 "결과 없음"이 보이지 않게 한다.
-  const searching =
-    query.trim() !== '' &&
-    error === null &&
-    ((includeQuestionSearch && loaded?.key !== requestKey) ||
-      (includeLectureSearch && lectureLoaded?.key !== requestKey) ||
-      (includeTheory && theoryLoaded?.key !== requestKey))
+  // 검색 범위마다 끝나는 시간이 다르다. 먼저 끝난 결과는 바로 보여 주되, 아래의
+  // pendingSearchLabels 가 남아 있는 동안에는 절대 "결과 없음"으로 단정하지 않는다.
+  const pendingSearchLabels = [
+    includeQuestionSearch && loaded?.key !== requestKey ? '문제+풀이' : null,
+    includeTheory && theoryLoaded?.key !== requestKey ? '알렌' : null,
+    includeLectureSearch && lectureLoaded?.key !== requestKey
+      ? includeLectures && includeNotes
+        ? '강의록·정리본'
+        : includeLectures
+          ? '강의록'
+          : '정리본'
+      : null,
+  ].filter((label): label is string => label !== null)
+  const searching = query.trim() !== '' && pendingSearchLabels.length > 0
   const hits = includeQuestionSearch && loaded?.key === requestKey ? loaded.hits : []
   const theoryHits = includeTheory && theoryLoaded?.key === requestKey ? theoryLoaded.rows : []
   // 검색어나 조건이 바뀌면 이전 강의록 결과가 잠깐 남지 않게 열쇠로 잠근다.
@@ -193,6 +202,8 @@ export function SearchPage() {
   const noteHits = includeNotes
     ? lectureRows.filter((lecture) => lecture.noteMatchId !== null).slice(0, 30)
     : []
+  const hasSearchResults =
+    hits.length > 0 || theoryHits.length > 0 || lectureHits.length > 0 || noteHits.length > 0
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -304,11 +315,7 @@ export function SearchPage() {
         </select>
       </div>
 
-      {error ? (
-        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-          {error}
-        </p>
-      ) : query.trim() === '' ? (
+      {query.trim() === '' ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">
             찾고 싶은 내용을 입력해주세요.
@@ -320,19 +327,31 @@ export function SearchPage() {
             검색할 범위를 하나 이상 선택해 주세요.
           </p>
         </div>
-      ) : searching ? (
-        <div className="flex justify-center py-10">
+      ) : searching && !hasSearchResults ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-brand-200 py-10 dark:border-brand-900">
           <Spinner className="h-6 w-6" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              검색 결과를 찾고 있습니다.
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {pendingSearchLabels.join(' · ')} 검색이 끝날 때까지 잠시 기다려 주세요.
+            </p>
+          </div>
         </div>
-      ) : hits.length === 0 &&
-        theoryHits.length === 0 &&
-        lectureHits.length === 0 &&
-        noteHits.length === 0 ? (
+      ) : !hasSearchResults ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
-          <p className="text-sm text-slate-500 dark:text-slate-400">검색 결과가 없습니다.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {error ?? '검색 결과가 없습니다.'}
+          </p>
         </div>
       ) : (
         <>
+          {error && (
+            <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+              일부 범위를 검색하지 못했습니다: {error}
+            </p>
+          )}
           {theoryHits.length > 0 && (
             <section className="mb-5">
               <h2 className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
@@ -474,6 +493,20 @@ export function SearchPage() {
               </li>
             ))}
           </ul>
+
+          {searching && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-3 text-sm text-brand-800 dark:border-brand-900 dark:bg-brand-950/30 dark:text-brand-200"
+            >
+              <Spinner className="h-5 w-5" />
+              <span>
+                현재 결과를 먼저 보여드렸습니다. {pendingSearchLabels.join(' · ')}도 계속 검색
+                중입니다…
+              </span>
+            </div>
+          )}
         </>
       )}
     </section>
