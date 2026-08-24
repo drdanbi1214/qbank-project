@@ -43,7 +43,13 @@ export function TopicSidebar({ topics, subjectId, topicId, units }: Props) {
     )
   }, [topics, keyword])
 
-  /** 단원 순서대로 묶는다. 테마가 하나도 없는 단원은 내보내지 않는다. */
+  /**
+   * 단원 순서대로 묶는다.
+   *
+   * 아직 아무도 안 쓴 단원도 내보낸다. 빈 것을 감추면 목차가 쓴 만큼만 보여서
+   * 무엇이 남았는지 알 수 없다. 전체 지도가 보여야 빈 자리를 채우러 간다.
+   * 다만 찾는 중에는 뺀다 — 결과가 없는 줄이 끼면 훑기가 어렵다.
+   */
   const groups = useMemo(() => {
     const byUnit = new Map<string, Topic[]>()
     for (const row of matched) {
@@ -60,12 +66,14 @@ export function TopicSidebar({ topics, subjectId, topicId, units }: Props) {
     for (const unit of units) {
       const rows = byUnit.get(unit.id)
       if (rows) ordered.push({ key: unit.id, name: unit.name, rows })
+      else if (!searching) ordered.push({ key: unit.id, name: unit.name, rows: [] })
     }
-    // 단원이 없는 테마는 맨 아래로 몰아 둔다.
+    // 단원이 없는 테마는 맨 아래로 몰아 둔다. 이 자리는 비면 내보내지 않는다 —
+    // 단원과 달리 채워야 할 칸이 아니라 분류가 덜 된 것들이 잠깐 머무는 곳이다.
     const loose = byUnit.get(NO_UNIT)
     if (loose) ordered.push({ key: NO_UNIT, name: '단원 없음', rows: loose })
     return ordered
-  }, [matched, units])
+  }, [matched, units, searching])
 
   const selectedUnit = useMemo(
     () => (topics ?? []).find((row) => row.id === topicId)?.unitId ?? NO_UNIT,
@@ -89,33 +97,41 @@ export function TopicSidebar({ topics, subjectId, topicId, units }: Props) {
         className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
       />
 
-      {topics.length === 0 ? (
+      {groups.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-          아직 주제가 없습니다.
+          이 과목은 아직 단원도 주제도 없습니다.
         </p>
-      ) : matched.length === 0 ? (
+      ) : matched.length === 0 && searching ? (
         <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
           "{keyword.trim()}" 에 맞는 주제가 없습니다.
         </p>
       ) : (
         groups.map((group) => {
+          const empty = group.rows.length === 0
           // 아직 테마를 안 골랐으면 전부 펼쳐 두고, 고른 뒤에는 그 테마가 든
           // 단원만 남긴다. 사람이 직접 접거나 편 단원은 그 선택을 따른다.
-          const natural = toggled[group.key] ?? (topicId === undefined || group.key === selectedUnit)
+          const natural = topicId === undefined || group.key === selectedUnit
+          // 빈 단원은 펼쳐 봐야 나올 것이 없어 늘 접어 둔다.
           // 검색 중에는 접힌 단원 때문에 결과를 놓치지 않도록 전부 펼친다.
-          const open = searching || natural
+          const open = !empty && (searching || (toggled[group.key] ?? natural))
           return (
             <div key={group.key}>
               <button
                 type="button"
+                disabled={empty}
                 onClick={() =>
-                  setToggled((previous) => ({ ...previous, [group.key]: !natural }))
+                  setToggled((previous) => ({ ...previous, [group.key]: !open }))
                 }
-                className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                className={cn(
+                  'flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-semibold',
+                  empty
+                    ? 'cursor-default text-slate-300 dark:text-slate-600'
+                    : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                )}
               >
-                <span className="w-3 shrink-0 text-[10px]">{open ? '▼' : '▶'}</span>
+                <span className="w-3 shrink-0 text-[10px]">{empty ? '·' : open ? '▼' : '▶'}</span>
                 <span className="min-w-0 flex-1 truncate">{group.name}</span>
-                <span className="shrink-0 tabular-nums text-slate-400">{group.rows.length}</span>
+                <span className="shrink-0 tabular-nums">{empty ? '—' : group.rows.length}</span>
               </button>
 
               {open && (
