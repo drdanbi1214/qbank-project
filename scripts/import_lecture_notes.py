@@ -18,8 +18,16 @@
       --manifest scripts/lecture_note_manifests/2026_endocrine_1.json \
       --category "내분비계(2026)" --apply
 
+    python3 scripts/import_lecture_notes.py \
+      "강의록/정리본/2025 본2-1 소화기 정리본.md" \
+      --course "소화기3주차" \
+      --pdf-folder "강의록/소화기 1차" \
+      --pdf-folder "강의록/소화기 2차" \
+      --pdf-folder "강의록/소화기 3차" \
+      --manifest scripts/lecture_note_manifests/2025_digestive_3.json
+
 PDF 폴더를 생략하면 MD의 상위 강의록 폴더 아래에서 과목명과 같은 폴더를 찾는다.
-다른 위치를 쓸 때만 --pdf-folder를 준다.
+다른 위치를 쓰거나 차수 경계의 PDF를 함께 비교할 때 --pdf-folder를 반복해서 준다.
 """
 from __future__ import annotations
 
@@ -37,8 +45,9 @@ import urllib.request
 from dataclasses import asdict, dataclass
 
 
-# 내부 소제목도 `## 1. ...` 형태이므로 날짜로 시작하는 바깥 제목만 강의 경계다.
-OUTER_HEADING = re.compile(r"^##\s+(\d+)\.\s+(\d{4}_.+?)\s*$")
+# 내부 소제목도 `## 1. ...` 형태다. 제목만으로 가르지 않고 바로 아래에 과목·날짜·
+# 시험 요점 정리 메타데이터가 모두 있는 경우만 바깥 강의 경계로 인정한다.
+OUTER_HEADING = re.compile(r"^##\s+(\d+)\.\s+(.+?)\s*$")
 COURSE_LINE = re.compile(r"^-\s*과목:\s*(.+?)\s*$")
 DATE_LINE = re.compile(r"^-\s*날짜:\s*(\d{4}-\d{2}-\d{2})\s*$")
 SUMMARY_MARKER = re.compile(r"^###\s+시험 요점 정리\s*$")
@@ -47,6 +56,8 @@ SCHEDULE_PROFESSOR_FIRST = re.compile(
     r"^(\d{4})_([가-힣]{2,4})_([\d,\s-]+)교시_(.+)$",
     re.IGNORECASE,
 )
+WEEKLY_SOURCE = re.compile(r"^\d+주차[_-](.+)$", re.IGNORECASE)
+NUMBERED_SOURCE = re.compile(r"^\d+\.\s+(.+)$")
 KOREAN_NAME = re.compile(r"^[가-힣]{2,4}$")
 FAILED_PHRASES = (
     "요점 정리 생성에 실패",
@@ -68,7 +79,7 @@ def normalized_words(value: str) -> str:
 
 @dataclass(frozen=True)
 class ScheduleInfo:
-    month_day: str
+    month_day: str | None
     periods: tuple[int, ...]
     professor: str | None
     title: str
@@ -137,7 +148,11 @@ def parse_periods(value: str) -> tuple[int, ...]:
 
 
 def parse_schedule(value: str) -> ScheduleInfo | None:
-    stem = nfc(pathlib.Path(value).stem)
+    # source_key에는 `21. 강의명_교수`처럼 점이 들어갈 수 있다. Path.stem은
+    # 점 뒤 전체를 확장자로 간주하므로 실제 PDF 확장자만 직접 제거한다.
+    stem = nfc(value)
+    if stem.casefold().endswith(".pdf"):
+        stem = stem[:-4]
     found = SCHEDULE.match(stem)
     if found:
         month_day = found.group(1)
@@ -148,12 +163,33 @@ def parse_schedule(value: str) -> ScheduleInfo | None:
         title = pieces[1].strip() if professor and len(pieces) == 2 else rest
     else:
         professor_first = SCHEDULE_PROFESSOR_FIRST.match(stem)
-        if not professor_first:
-            return None
-        month_day = professor_first.group(1)
-        professor = professor_first.group(2).strip()
-        periods = parse_periods(professor_first.group(3))
-        title = professor_first.group(4).strip()
+        if professor_first:
+            month_day = professor_first.group(1)
+            professor = professor_first.group(2).strip()
+            periods = parse_periods(professor_first.group(3))
+            title = professor_first.group(4).strip()
+        else:
+            weekly = WEEKLY_SOURCE.match(stem)
+            numbered = NUMBERED_SOURCE.match(stem)
+            if not weekly and not numbered:
+                return None
+            month_day = None
+            periods = ()
+            rest = (weekly.group(1) if weekly else numbered.group(1)).strip()
+            # 보통 주차 다음의 00, 01 등은 강의 순번이지 실제 교시가 아니다.
+            rest = re.sub(r"^\d+[_-]", "", rest)
+            pieces = rest.split("_") if "_" in rest else rest.rsplit("-", 1)
+            first = pieces[0].strip()
+            last = pieces[-1].strip()
+            if "_" in rest and len(pieces) > 2 and KOREAN_NAME.fullmatch(first):
+                professor = first
+                title = "_".join(pieces[1:])
+            elif len(pieces) > 1 and KOREAN_NAME.fullmatch(last):
+                professor = last
+                title = "_".join(pieces[:-1]) if "_" in rest else pieces[0]
+            else:
+                professor = None
+                title = rest
 
     return ScheduleInfo(
         month_day=month_day,
@@ -182,6 +218,12 @@ def parse_markdown(path: pathlib.Path) -> list[NoteSection]:
     for index, line in enumerate(lines):
         found = OUTER_HEADING.match(nfc(line))
         if found:
+            lookahead = [nfc(item) for item in lines[index + 1 : index + 9]]
+            has_course = any(COURSE_LINE.match(item) for item in lookahead)
+            has_date = any(DATE_LINE.match(item) for item in lookahead)
+            has_summary = any(SUMMARY_MARKER.match(item) for item in lookahead)
+            if not (has_course and has_date and has_summary):
+                continue
             boundaries.append((index, found))
 
     sections: list[NoteSection] = []
@@ -230,15 +272,16 @@ def parse_markdown(path: pathlib.Path) -> list[NoteSection]:
     return sections
 
 
-def load_pdfs(folder: pathlib.Path) -> list[PdfLecture]:
+def load_pdfs(folders: list[pathlib.Path]) -> list[PdfLecture]:
     return [
         PdfLecture(path=path, filename=nfc(path.name), schedule=parse_schedule(path.name))
+        for folder in folders
         for path in sorted(folder.glob("*.pdf"), key=lambda item: nfc(item.name))
         if path.is_file()
     ]
 
 
-def _day_distance(left: str, right: str) -> int | None:
+def _day_distance(left: str | None, right: str | None) -> int | None:
     try:
         left_date = dt.date(2000, int(left[:2]), int(left[2:]))
         right_date = dt.date(2000, int(right[:2]), int(right[2:]))
@@ -255,7 +298,7 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
 
     score = 0
     reasons: list[str] = []
-    same_date = note.month_day == target.month_day
+    same_date = bool(note.month_day and target.month_day and note.month_day == target.month_day)
     distance = _day_distance(note.month_day, target.month_day)
     if same_date:
         score += 50
@@ -263,9 +306,11 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     elif distance == 1:
         score += 8
         reasons.append("날짜 1일 차이")
-    else:
+    elif note.month_day and target.month_day:
         score -= 15
         reasons.append("날짜 불일치")
+    else:
+        reasons.append("날짜 정보 없음")
 
     note_periods = set(note.periods)
     pdf_periods = set(target.periods)
@@ -279,9 +324,11 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     elif overlap:
         score += 18
         reasons.append("교시 일부 겹침")
-    else:
+    elif note_periods:
         score -= 35
         reasons.append("교시 불일치")
+    else:
+        reasons.append("교시 정보 없음")
 
     professor_conflict = False
     if note.professor and target.professor:
@@ -299,7 +346,8 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     # 교시·교수가 같아도 긴 강의명이 전혀 다르면 다른 강의를 잘못 고를 수 있다.
     # RT, MEN 같은 짧은 약어는 이 규칙에서 제외하고 사람이 쓴 시간표 정보를 따른다.
     title_conflict = len(note_title) >= 4 and similarity < 0.18
-    title_points = round(similarity * 35)
+    # 주차형 2025 키는 달력 날짜·교시가 없어 제목을 주된 연결 근거로 쓴다.
+    title_points = round(similarity * (70 if note.month_day is None else 35))
     score += title_points
     reasons.append(f"제목 {similarity:.0%}" + (" (불일치)" if title_conflict else ""))
 
@@ -342,11 +390,22 @@ def match_sections(sections: list[NoteSection], pdfs: list[PdfLecture]) -> list[
                 for alternative in ranked[1:]
             )
         )
-        if (
+        calendar_auto = bool(
             best
-            and best.score >= 75
             and best.same_date
             and best.period_overlap
+            and best.score >= 75
+        )
+        weekly_auto = bool(
+            best
+            and section.schedule
+            and section.schedule.month_day is None
+            and best.score >= 68
+            and best.title_similarity >= 0.62
+        )
+        if (
+            best
+            and (calendar_auto or weekly_auto)
             and not best.professor_conflict
             and not best.title_conflict
             and not likely_swapped_schedule
@@ -408,13 +467,20 @@ def resolve_matches(
     skipped: list[NoteSection] = []
     unresolved: list[MatchResult] = []
 
+    # 원본 MD에 같은 source_key가 여러 번 들어 있는 경우 `키::order=N`으로
+    # 특정 구획만 승인하거나 제외할 수 있다. 일반 키 설정은 모든 중복 구획에
+    # 공통으로 적용하며, order 설정이 있으면 그것을 우선한다.
     selected_keys = {result.section.source_key for result in results}
+    selected_keys.update(
+        f"{result.section.source_key}::order={result.section.order}" for result in results
+    )
     unknown = sorted(set(manifest) - selected_keys)
     if unknown:
         raise ValueError("선택 과목에 없는 manifest 강의 키: " + ", ".join(unknown))
 
     for result in results:
-        override = manifest.get(result.section.source_key, {})
+        ordered_key = f"{result.section.source_key}::order={result.section.order}"
+        override = manifest.get(ordered_key, manifest.get(result.section.source_key, {}))
         if override.get("skip") is True:
             skipped.append(result.section)
             continue
@@ -431,6 +497,23 @@ def resolve_matches(
         else:
             unresolved.append(result)
     return resolved, skipped, unresolved
+
+
+def database_source_keys(resolved: list[ResolvedNote]) -> list[str]:
+    """같은 source_key가 같은 PDF에 반복돼도 각 정리 본문을 모두 보존한다."""
+    pair_counts: dict[tuple[str, str], int] = {}
+    for item in resolved:
+        pair = (item.section.source_key, item.pdf_filename)
+        pair_counts[pair] = pair_counts.get(pair, 0) + 1
+
+    return [
+        (
+            f"{item.section.source_key}::order={item.section.order}"
+            if pair_counts[(item.section.source_key, item.pdf_filename)] > 1
+            else item.section.source_key
+        )
+        for item in resolved
+    ]
 
 
 def markdown_title(section: NoteSection) -> str:
@@ -555,7 +638,8 @@ def apply_notes(
 
     rows: list[dict[str, object]] = []
     errors: list[str] = []
-    for item in resolved:
+    stored_source_keys = database_source_keys(resolved)
+    for item, stored_source_key in zip(resolved, stored_source_keys):
         key_name = safe_pdf_key(item.pdf_filename)
         targets = by_filename.get(key_name, [])
         if len(targets) != 1:
@@ -569,7 +653,7 @@ def apply_notes(
         rows.append(
             {
                 "lecture_id": targets[0]["id"],
-                "source_key": item.section.source_key,
+                "source_key": stored_source_key,
                 "source_course": item.section.course,
                 "lecture_date": item.section.lecture_date,
                 "title": markdown_title(item.section),
@@ -603,7 +687,7 @@ def _display_key(section: NoteSection) -> str:
 
 def print_report(
     markdown_path: pathlib.Path,
-    pdf_folder: pathlib.Path,
+    pdf_folders: list[pathlib.Path],
     course: str,
     all_sections: list[NoteSection],
     selected: list[NoteSection],
@@ -615,7 +699,7 @@ def print_report(
     print("강의 정리본 가져오기 미리보기 (DRY-RUN · DB 변경 없음)")
     print(f"  MD       {markdown_path}")
     print(f"  과목     {course}")
-    print(f"  PDF 폴더 {pdf_folder}")
+    print(f"  PDF 폴더 {', '.join(str(folder) for folder in pdf_folders)}")
     print()
     print(
         f"전체 구획 {len(all_sections)} · 선택 과목 {len(selected)} · PDF {len(pdfs)} · "
@@ -699,7 +783,7 @@ def print_report(
 
 def json_report(
     markdown_path: pathlib.Path,
-    pdf_folder: pathlib.Path,
+    pdf_folders: list[pathlib.Path],
     course: str,
     all_sections: list[NoteSection],
     selected: list[NoteSection],
@@ -710,7 +794,7 @@ def json_report(
     payload = {
         "dry_run": True,
         "markdown": str(markdown_path),
-        "pdf_folder": str(pdf_folder),
+        "pdf_folders": [str(folder) for folder in pdf_folders],
         "course": course,
         "total_sections": len(all_sections),
         "selected_sections": len(selected),
@@ -762,7 +846,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="합쳐진 강의 정리본 MD와 PDF 연결 결과를 미리 본다")
     parser.add_argument("markdown", type=pathlib.Path, help="과목별로 합쳐진 Markdown 파일")
     parser.add_argument("--course", required=True, help='가져올 과목 구획. 예: "내분비 1차"')
-    parser.add_argument("--pdf-folder", type=pathlib.Path, default=None, help="비교할 PDF 폴더")
+    parser.add_argument(
+        "--pdf-folder",
+        type=pathlib.Path,
+        action="append",
+        default=None,
+        help="비교할 PDF 폴더. 차수 경계에 걸친 과목은 여러 번 지정할 수 있습니다.",
+    )
     parser.add_argument("--manifest", type=pathlib.Path, default=None, help="검토 승인·제외 JSON")
     parser.add_argument("--category", default=None, help='운영 DB 강의록 분류. 예: "내분비계(2026)"')
     parser.add_argument(
@@ -779,13 +869,18 @@ def main() -> int:
         parser.error(f"MD 파일을 찾지 못했습니다: {markdown_path}")
 
     course = nfc(args.course)
-    pdf_folder = (
-        args.pdf_folder.expanduser().resolve()
+    pdf_folders = (
+        [folder.expanduser().resolve() for folder in args.pdf_folder]
         if args.pdf_folder
-        else markdown_path.parent.parent.joinpath(course).resolve()
+        else [markdown_path.parent.parent.joinpath(course).resolve()]
     )
-    if not pdf_folder.is_dir():
-        parser.error(f"PDF 폴더를 찾지 못했습니다: {pdf_folder} (--pdf-folder로 지정할 수 있습니다)")
+    missing_pdf_folders = [folder for folder in pdf_folders if not folder.is_dir()]
+    if missing_pdf_folders:
+        parser.error(
+            "PDF 폴더를 찾지 못했습니다: "
+            + ", ".join(str(folder) for folder in missing_pdf_folders)
+            + " (--pdf-folder로 지정할 수 있습니다)"
+        )
 
     manifest_path = args.manifest.expanduser().resolve() if args.manifest else None
     if manifest_path and not manifest_path.is_file():
@@ -801,9 +896,9 @@ def main() -> int:
         available = ", ".join(sorted({section.course for section in all_sections if section.course}))
         parser.error(f"과목 '{course}' 구획이 없습니다. 발견한 과목: {available or '없음'}")
 
-    pdfs = load_pdfs(pdf_folder)
+    pdfs = load_pdfs(pdf_folders)
     if not pdfs:
-        parser.error(f"PDF가 없습니다: {pdf_folder}")
+        parser.error("PDF가 없습니다: " + ", ".join(str(folder) for folder in pdf_folders))
 
     results = match_sections(selected, pdfs)
     try:
@@ -816,14 +911,14 @@ def main() -> int:
     missing_manifest_pdfs = sorted(
         item.pdf_filename
         for item in resolved
-        if item.resolution == "manifest 승인" and item.pdf_filename not in available_pdfs
+        if item.resolution.startswith("manifest") and item.pdf_filename not in available_pdfs
     )
     if missing_manifest_pdfs:
         parser.error("manifest가 가리킨 PDF가 폴더에 없습니다: " + ", ".join(missing_manifest_pdfs))
 
     if args.json:
         payload = json.loads(
-            json_report(markdown_path, pdf_folder, course, all_sections, selected, pdfs, results)
+            json_report(markdown_path, pdf_folders, course, all_sections, selected, pdfs, results)
         )
         payload["resolution"] = {
             "ready": [
@@ -839,7 +934,7 @@ def main() -> int:
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print_report(markdown_path, pdf_folder, course, all_sections, selected, pdfs, results)
+        print_report(markdown_path, pdf_folders, course, all_sections, selected, pdfs, results)
         if manifest_path:
             print_resolution_report(resolved, skipped, unresolved)
 

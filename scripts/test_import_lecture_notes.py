@@ -7,6 +7,8 @@ import unittest
 from scripts.import_lecture_notes import (
     NoteSection,
     PdfLecture,
+    ResolvedNote,
+    database_source_keys,
     find_duplicate_sections,
     markdown_to_text,
     match_sections,
@@ -51,6 +53,69 @@ class LectureNoteImportTest(unittest.TestCase):
         self.assertEqual(2, len(sections))
         self.assertIn("## 1. 내부 소제목", sections[0].markdown)
         self.assertEqual("내분비 1차", sections[1].course)
+
+    def test_weekly_source_is_an_outer_section_and_parses_professor(self) -> None:
+        source = """# 묶음
+
+## 1. 1주차_00_백두진_해부학_합본_강의
+
+- 과목: 소화기1주차
+- 날짜: 2025-08-30
+
+### 시험 요점 정리
+
+# 정리
+## 1. 내부 제목
+"""
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "notes.md"
+            path.write_text(source, encoding="utf-8")
+            sections = parse_markdown(path)
+
+        self.assertEqual(1, len(sections))
+        self.assertEqual("소화기1주차", sections[0].course)
+        self.assertIsNotNone(sections[0].schedule)
+        assert sections[0].schedule
+        self.assertIsNone(sections[0].schedule.month_day)
+        self.assertEqual("백두진", sections[0].schedule.professor)
+        self.assertIn("## 1. 내부 제목", sections[0].markdown)
+
+    def test_weekly_source_can_auto_match_by_professor_and_title(self) -> None:
+        pdf = PdfLecture(
+            pathlib.Path("0413_1,2교시_백두진_소화기 해부학 합본 강의.pdf"),
+            "0413_1,2교시_백두진_소화기 해부학 합본 강의.pdf",
+            parse_schedule("0413_1,2교시_백두진_소화기 해부학 합본 강의.pdf"),
+        )
+        section = NoteSection(
+            order=1,
+            source_key="1주차_00_백두진_소화기_해부학_합본_강의",
+            course="소화기1주차",
+            lecture_date="2025-08-30",
+            markdown="# 정리",
+            start_line=1,
+            failed_reason=None,
+            schedule=parse_schedule("1주차_00_백두진_소화기_해부학_합본_강의"),
+        )
+
+        result = match_sections([section], [pdf])[0]
+
+        self.assertEqual("AUTO", result.status)
+
+    def test_weekly_hyphen_source_uses_last_korean_token_as_professor(self) -> None:
+        schedule = parse_schedule("4주차-45-심근질환-김병식")
+
+        self.assertIsNotNone(schedule)
+        assert schedule
+        self.assertEqual("심근질환", schedule.title)
+        self.assertEqual("김병식", schedule.professor)
+
+    def test_numbered_source_key_is_not_treated_as_a_file_extension(self) -> None:
+        schedule = parse_schedule("21. 복부 대동맥 및 말초혈관질환의 외과적 치료_최지윤")
+
+        self.assertIsNotNone(schedule)
+        assert schedule
+        self.assertEqual("복부 대동맥 및 말초혈관질환의 외과적 치료", schedule.title)
+        self.assertEqual("최지윤", schedule.professor)
 
     def test_combined_pdf_accepts_multiple_note_sections(self) -> None:
         pdf = PdfLecture(
@@ -221,6 +286,43 @@ class LectureNoteImportTest(unittest.TestCase):
         self.assertEqual([], skipped)
         self.assertEqual([], unresolved)
 
+    def test_order_specific_manifest_can_skip_only_one_duplicate(self) -> None:
+        first = self.section(18, "2주차_16_식도 질환의 외과적 접근")
+        second = self.section(19, first.source_key)
+        second = NoteSection(
+            **{
+                **second.__dict__,
+                "failed_reason": "요점 정리 생성에 실패",
+            }
+        )
+        results = match_sections([first, second], [])
+
+        resolved, skipped, unresolved = resolve_matches(
+            results,
+            {
+                f"{first.source_key}::order=18": {"pdf": "식도.pdf"},
+                f"{second.source_key}::order=19": {"skip": True},
+            },
+        )
+
+        self.assertEqual([first], [item.section for item in resolved])
+        self.assertEqual([second], skipped)
+        self.assertEqual([], unresolved)
+
+    def test_database_source_keys_disambiguate_duplicate_notes_on_same_pdf(self) -> None:
+        first = self.section(24, "중복 강의")
+        second = self.section(25, first.source_key)
+        resolved = [
+            ResolvedNote(first, "같은.pdf", "자동"),
+            ResolvedNote(second, "같은.pdf", "자동"),
+            ResolvedNote(first, "다른.pdf", "manifest 복수 승인"),
+        ]
+
+        self.assertEqual(
+            ["중복 강의::order=24", "중복 강의::order=25", "중복 강의"],
+            database_source_keys(resolved),
+        )
+
     def test_markdown_plain_text_and_safe_pdf_key(self) -> None:
         markdown = "# **갑상선** 정리\n\n| 구분 | 내용 |\n| --- | --- |\n| 검사 | `TSH` |"
         plain = markdown_to_text(markdown)
@@ -240,7 +342,11 @@ class LectureNoteImportTest(unittest.TestCase):
             order=order,
             source_key=source_key,
             course="내분비 1차",
-            lecture_date=f"2026-{schedule.month_day[:2]}-{schedule.month_day[2:]}" if schedule else None,
+            lecture_date=(
+                f"2026-{schedule.month_day[:2]}-{schedule.month_day[2:]}"
+                if schedule and schedule.month_day
+                else None
+            ),
             markdown="# 정리",
             start_line=1,
             failed_reason=None,
