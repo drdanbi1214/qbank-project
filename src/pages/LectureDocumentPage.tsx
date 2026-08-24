@@ -147,7 +147,7 @@ export function LectureDocumentPage() {
         <div
           role="tablist"
           aria-label="강의록 보기"
-          className="sticky top-14 z-20 mb-3 grid grid-cols-2 rounded-lg bg-slate-100 p-1 shadow-sm dark:bg-slate-800 xl:hidden"
+          className="sticky top-14 z-20 mb-3 grid grid-cols-2 rounded-lg bg-slate-100 p-1 shadow-sm dark:bg-slate-800 lg:hidden"
         >
           <button
             type="button"
@@ -178,11 +178,11 @@ export function LectureDocumentPage() {
         </div>
       )}
 
-      <div className={showNotesPanel ? 'grid min-w-0 gap-3 xl:grid-cols-2' : ''}>
+      <div className={showNotesPanel ? 'grid min-w-0 gap-4 lg:grid-cols-2' : ''}>
         <div
-          className={`${showNotesPanel && effectiveMobileView !== 'pdf' ? 'hidden' : 'block'} min-w-0 xl:block ${
+          className={`${showNotesPanel && effectiveMobileView !== 'pdf' ? 'hidden' : 'block'} min-w-0 lg:block ${
             showNotesPanel
-              ? 'xl:h-[calc(100dvh-10.5rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-1'
+              ? 'lg:h-[calc(100dvh-10.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1'
               : ''
           }`}
         >
@@ -206,7 +206,7 @@ export function LectureDocumentPage() {
         {showNotesPanel && (
           <aside
             aria-label="2026 학생 정리본"
-            className={`${effectiveMobileView !== 'notes' ? 'hidden' : 'block'} min-w-0 xl:block xl:h-[calc(100dvh-10.5rem)] xl:overflow-y-auto xl:overscroll-contain xl:pl-1`}
+            className={`${effectiveMobileView !== 'notes' ? 'hidden' : 'block'} min-w-0 lg:block lg:h-[calc(100dvh-10.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pl-1`}
           >
             {!notesReady ? (
               <div className="flex flex-col items-center gap-2 py-16">

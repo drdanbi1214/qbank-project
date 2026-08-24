@@ -154,7 +154,7 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
 
   return (
     <div className="min-w-0">
-      <div className="sticky top-[6.75rem] z-10 mb-3 rounded-xl border border-emerald-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-emerald-900 dark:bg-slate-900/95 xl:top-0">
+      <div className="sticky top-[6.75rem] z-10 mb-3 rounded-xl border border-emerald-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-emerald-900 dark:bg-slate-900/95 lg:top-0">
         <div className="mb-2 flex items-center gap-2 px-1">
           <h2 className="text-sm font-bold text-emerald-800 dark:text-emerald-200">
             2026 학생 정리본
@@ -193,7 +193,7 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
                   if (node) noteNodes.current.set(note.id, node)
                   else noteNodes.current.delete(note.id)
                 }}
-                className={`scroll-mt-32 rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 xl:scroll-mt-3 ${
+                className={`scroll-mt-32 rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 lg:scroll-mt-3 ${
                   note.id === activeNoteId
                     ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-600 dark:ring-emerald-900'
                     : 'border-slate-200 dark:border-slate-700'

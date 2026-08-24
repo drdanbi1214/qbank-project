@@ -489,9 +489,14 @@ export function LecturePdfViewer({
     <div className="flex flex-col gap-3">
       <div
         className={`sticky z-10 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 ${
-          paneMode ? 'top-[6.75rem] xl:top-0' : 'top-16'
+          paneMode ? 'top-[6.75rem] lg:top-0' : 'top-16'
         }`}
       >
+        {paneMode && (
+          <span className="text-sm font-bold text-brand-800 dark:text-brand-200">
+            PDF 강의록
+          </span>
+        )}
         {document && (
           <span className="text-sm text-slate-500 dark:text-slate-400">총 {document.numPages}쪽</span>
         )}
