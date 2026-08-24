@@ -22,6 +22,15 @@ type Props = {
   onCancel: () => void
 }
 
+function lectureSearchErrorMessage(caught: unknown): string {
+  if (caught instanceof Error) return caught.message
+  if (caught && typeof caught === 'object' && 'message' in caught) {
+    const message = (caught as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return '강의록을 검색하지 못했습니다.'
+}
+
 /**
  * 강의록에서 원하는 쪽을 골라 글에 넣는다.
  *
@@ -63,7 +72,7 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
         setLoaded({
           key: searchKey,
           rows: [],
-          error: caught instanceof Error ? caught.message : '강의록을 검색하지 못했습니다.',
+          error: lectureSearchErrorMessage(caught),
         }),
       )
     return () => {
