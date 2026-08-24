@@ -735,6 +735,7 @@ export type Database = {
           content: Json
           created_at: string
           id: string
+          metadata: Json
           target_key: string
           target_type: string
           updated_at: string
@@ -744,6 +745,7 @@ export type Database = {
           content: Json
           created_at?: string
           id?: string
+          metadata?: Json
           target_key: string
           target_type: string
           updated_at?: string
@@ -753,6 +755,7 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          metadata?: Json
           target_key?: string
           target_type?: string
           updated_at?: string

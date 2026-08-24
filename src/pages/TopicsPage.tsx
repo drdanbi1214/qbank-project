@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
+import { useDraft } from '@/components/editor/useDraft'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/lib/auth'
@@ -23,7 +24,7 @@ import { TheoryPicker } from '@/components/question/TheoryPicker'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { TopicSidebar } from '@/components/question/TopicSidebar'
 import { uploadTopicImage } from '@/lib/uploads'
-import { formatShortDate } from '@/utils/date'
+import { formatDateTime, formatShortDate } from '@/utils/date'
 import { emptyDoc, type RichDoc } from '@/types/richtext'
 
 /**
@@ -46,6 +47,8 @@ export function TopicsPage() {
   // unitId 는 목차에서 ＋ 를 누른 줄이다.
   const [draft, setDraft] = useState<{ unitId: string | null } | null>(null)
   const [draftTitle, setDraftTitle] = useState('')
+  const [editorSeed, setEditorSeed] = useState(() => ({ doc: emptyDoc(), version: 0 }))
+  const [draftDismissed, setDraftDismissed] = useState(false)
   const [similar, setSimilar] = useState<{ id: string; title: string }[]>([])
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -71,6 +74,24 @@ export function TopicsPage() {
     () => (topics ?? []).find((row) => row.id === topicId) ?? null,
     [topics, topicId],
   )
+
+  const topicDraftKey = draft
+    ? `new:${subjectId ?? ''}`
+    : editing && selected
+      ? `edit:${selected.id}`
+      : null
+  const {
+    savedDraft: savedTopicDraft,
+    status: topicDraftStatus,
+    schedule: scheduleTopicDraft,
+    flush: flushTopicDraft,
+    discard: discardTopicDraft,
+  } = useDraft({
+    userId,
+    targetType: 'topic',
+    targetKey: topicDraftKey,
+    enabled: userId !== '' && topicDraftKey !== null,
+  })
 
   // 레옵스는 게시판이라 목차 줄이 곧 글을 걸어 두는 제목이다. 문제의 단원
   // 목록과는 쓰임이 달라, 목차에 내기로 표시한 줄만 가져온다.
@@ -174,6 +195,7 @@ export function TopicsPage() {
       // 본문이 정본이고 topic_questions 는 거기서 뽑아낸 역인덱스다.
       // 본문 저장이 끝난 뒤에 맞춘다.
       .then(() => syncTopicQuestions(selected.id, content))
+      .then(() => discardTopicDraft())
       .then(() => {
         setEditing(false)
         editedContent.current = null
@@ -183,7 +205,7 @@ export function TopicsPage() {
         setError(caught instanceof Error ? caught.message : '저장하지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [selected, userId, editedUnitId, load])
+  }, [selected, userId, editedUnitId, discardTopicDraft, load])
 
   const saveDraft = useCallback(() => {
     if (!draft || !subjectId) return
@@ -203,6 +225,7 @@ export function TopicsPage() {
           await updateTopic({ id, userId, content })
           await syncTopicQuestions(id, content)
         }
+        await discardTopicDraft()
         setDraft(null)
         setDraftTitle('')
         editedContent.current = null
@@ -213,22 +236,80 @@ export function TopicsPage() {
         setError(caught instanceof Error ? caught.message : '만들지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [draft, draftTitle, subjectId, userId, load, navigate])
+  }, [draft, draftTitle, subjectId, userId, discardTopicDraft, load, navigate])
 
   const cancelDraft = useCallback(() => {
+    void flushTopicDraft()
     setDraft(null)
     setDraftTitle('')
     setSimilar([])
     editedContent.current = null
-  }, [])
+  }, [flushTopicDraft])
 
   const startDraft = useCallback((unitId: string | null) => {
     setEditing(false)
-    editedContent.current = null
+    const doc = emptyDoc()
+    editedContent.current = doc
+    setEditorSeed((previous) => ({ doc, version: previous.version + 1 }))
     setDraftTitle('')
     setSimilar([])
+    setDraftDismissed(false)
     setDraft({ unitId })
   }, [])
+
+  const scheduleNewTopicDraft = useCallback(
+    (content: RichDoc, title = draftTitle, unitId = draft?.unitId ?? null) => {
+      editedContent.current = content
+      scheduleTopicDraft(content, { title, unitId })
+    },
+    [draft, draftTitle, scheduleTopicDraft],
+  )
+
+  const scheduleEditedTopicDraft = useCallback(
+    (content: RichDoc, unitId = editedUnitId) => {
+      editedContent.current = content
+      scheduleTopicDraft(content, { unitId })
+    },
+    [editedUnitId, scheduleTopicDraft],
+  )
+
+  const saveTemporary = useCallback(() => {
+    const content = editedContent.current ?? editorSeed.doc
+    if (draft) scheduleNewTopicDraft(content)
+    else scheduleEditedTopicDraft(content)
+    void flushTopicDraft()
+  }, [draft, editorSeed.doc, scheduleNewTopicDraft, scheduleEditedTopicDraft, flushTopicDraft])
+
+  const restoreTopicDraft = useCallback(() => {
+    if (!savedTopicDraft) return
+    const metadata = savedTopicDraft.metadata
+    const storedUnitId = typeof metadata.unitId === 'string' ? metadata.unitId : null
+
+    if (draft) {
+      setDraftTitle(typeof metadata.title === 'string' ? metadata.title : '')
+      setDraft({ unitId: storedUnitId })
+    } else if (editing) {
+      setEditedUnitId(storedUnitId)
+    }
+
+    editedContent.current = savedTopicDraft.content
+    setEditorSeed((previous) => ({
+      doc: savedTopicDraft.content,
+      version: previous.version + 1,
+    }))
+    setDraftDismissed(true)
+  }, [savedTopicDraft, draft, editing])
+
+  const dismissTopicDraft = useCallback(() => {
+    setDraftDismissed(true)
+    void discardTopicDraft()
+  }, [discardTopicDraft])
+
+  const cancelEditing = useCallback(() => {
+    void flushTopicDraft()
+    setEditing(false)
+    editedContent.current = null
+  }, [flushTopicDraft])
 
   const remove = useCallback(() => {
     if (!selected) return
@@ -289,14 +370,26 @@ export function TopicsPage() {
                 <input
                   autoFocus
                   value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
+                  onChange={(event) => {
+                    const title = event.target.value
+                    setDraftTitle(title)
+                    scheduleNewTopicDraft(editedContent.current ?? editorSeed.doc, title)
+                  }}
                   placeholder="주제 제목 (예: 심부전의 약물치료)"
                   className="min-w-0 flex-1 border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-2xl font-bold tracking-tight outline-none focus:border-brand-500 dark:border-slate-700"
                 />
                 <select
                   aria-label="목차 줄"
                   value={draft.unitId ?? ''}
-                  onChange={(event) => setDraft({ unitId: event.target.value || null })}
+                  onChange={(event) => {
+                    const unitId = event.target.value || null
+                    setDraft({ unitId })
+                    scheduleNewTopicDraft(
+                      editedContent.current ?? editorSeed.doc,
+                      draftTitle,
+                      unitId,
+                    )
+                  }}
                   className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
                 >
                   <option value="">목차 줄 없음</option>
@@ -307,6 +400,10 @@ export function TopicsPage() {
                   ))}
                 </select>
                 <div className="ml-auto flex gap-2">
+                  <DraftStatus status={topicDraftStatus} />
+                  <Button size="sm" variant="secondary" onClick={saveTemporary} disabled={busy}>
+                    임시저장
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={cancelDraft}>
                     취소
                   </Button>
@@ -315,6 +412,14 @@ export function TopicsPage() {
                   </Button>
                 </div>
               </div>
+
+              {savedTopicDraft && !draftDismissed && (
+                <DraftRestoreNotice
+                  updatedAt={savedTopicDraft.updatedAt}
+                  onRestore={restoreTopicDraft}
+                  onDiscard={dismissTopicDraft}
+                />
+              )}
 
               {shownSimilar.length > 0 && (
                 <p className="mb-3 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -325,10 +430,9 @@ export function TopicsPage() {
 
               <TopicScopeProvider authorId={userId} requiredPermission="study_legendob" editing>
                 <LazyRichTextEditor
-                  initialValue={emptyDoc()}
-                  onChange={(content) => {
-                    editedContent.current = content
-                  }}
+                  key={`new-${editorSeed.version}`}
+                  initialValue={editorSeed.doc}
+                  onChange={scheduleNewTopicDraft}
                   userId={userId}
                   uploadImageFile={uploadTopicImage}
                   placeholder="내용을 적어보세요. 캡처는 붙여넣으면 바로 들어갑니다."
@@ -352,7 +456,14 @@ export function TopicsPage() {
                   <select
                     aria-label="대표 단원"
                     value={editedUnitId ?? ''}
-                    onChange={(event) => setEditedUnitId(event.target.value || null)}
+                    onChange={(event) => {
+                      const unitId = event.target.value || null
+                      setEditedUnitId(unitId)
+                      scheduleEditedTopicDraft(
+                        editedContent.current ?? editorSeed.doc,
+                        unitId,
+                      )
+                    }}
                     className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
                   >
                     <option value="">단원 없음</option>
@@ -370,7 +481,11 @@ export function TopicsPage() {
                 <div className="ml-auto flex gap-2">
                   {editing ? (
                     <>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                      <DraftStatus status={topicDraftStatus} />
+                      <Button size="sm" variant="secondary" onClick={saveTemporary} disabled={busy}>
+                        임시저장
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEditing}>
                         취소
                       </Button>
                       <Button size="sm" onClick={save} disabled={busy}>
@@ -389,6 +504,12 @@ export function TopicsPage() {
                         variant="secondary"
                         onClick={() => {
                           setEditedUnitId(selected.unitId)
+                          editedContent.current = selected.content
+                          setEditorSeed((previous) => ({
+                            doc: selected.content,
+                            version: previous.version + 1,
+                          }))
+                          setDraftDismissed(false)
                           setEditing(true)
                         }}
                       >
@@ -398,6 +519,14 @@ export function TopicsPage() {
                   )}
                 </div>
               </div>
+
+              {editing && savedTopicDraft && !draftDismissed && (
+                <DraftRestoreNotice
+                  updatedAt={savedTopicDraft.updatedAt}
+                  onRestore={restoreTopicDraft}
+                  onDiscard={dismissTopicDraft}
+                />
+              )}
 
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 {selected.author && (
@@ -423,11 +552,9 @@ export function TopicsPage() {
               >
               {editing && session ? (
                 <LazyRichTextEditor
-                  key={selected.id}
-                  initialValue={selected.content}
-                  onChange={(content) => {
-                    editedContent.current = content
-                  }}
+                  key={`${selected.id}-${editorSeed.version}`}
+                  initialValue={editorSeed.doc}
+                  onChange={scheduleEditedTopicDraft}
                   userId={userId}
                   uploadImageFile={uploadTopicImage}
                   placeholder="이 주제의 이론을 정리하세요. 캡처는 붙여넣으면 바로 들어갑니다."
@@ -474,5 +601,43 @@ export function TopicsPage() {
         </div>
       )}
     </section>
+  )
+}
+
+function DraftStatus({ status }: { status: 'idle' | 'saving' | 'saved' | 'failed' }) {
+  return (
+    <span className="self-center text-[11px] text-slate-400 dark:text-slate-500">
+      {status === 'saving'
+        ? '임시저장 중'
+        : status === 'saved'
+          ? '임시저장됨'
+          : status === 'failed'
+            ? '임시저장 실패'
+            : '5초마다 자동저장'}
+    </span>
+  )
+}
+
+function DraftRestoreNotice({
+  updatedAt,
+  onRestore,
+  onDiscard,
+}: {
+  updatedAt: string
+  onRestore: () => void
+  onDiscard: () => void
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+      <span>{formatDateTime(updatedAt)}에 임시저장한 글이 있습니다.</span>
+      <div className="ml-auto flex gap-1">
+        <Button size="sm" variant="secondary" onClick={onRestore}>
+          불러오기
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDiscard}>
+          버리기
+        </Button>
+      </div>
+    </div>
   )
 }

@@ -91,12 +91,18 @@ export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: 
   }
 
   return (
-    <nav className="space-y-1">
+    <nav className="h-fit space-y-1 rounded-xl border border-slate-300 bg-white p-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900 md:sticky md:top-20">
+      <div className="flex items-center justify-between px-1 pb-1">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">목차</h2>
+        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+          {(topics ?? []).length}개 글
+        </span>
+      </div>
       <input
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
         placeholder="주제 찾기 (제목·본문)"
-        className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
+        className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-900 outline-none placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
       />
 
       {groups.length === 0 ? (
@@ -121,20 +127,29 @@ export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: 
               <div className="group/unit flex items-center gap-0.5">
                 <button
                   type="button"
-                  disabled={empty}
-                  onClick={() =>
+                  disabled={empty && !onNewTopic}
+                  onClick={() => {
+                    if (empty) {
+                      onNewTopic?.(group.key === NO_UNIT ? null : group.key)
+                      return
+                    }
                     setToggled((previous) => ({ ...previous, [group.key]: !open }))
-                  }
+                  }}
+                  title={empty ? `${group.name}에 첫 글 작성` : undefined}
                   className={cn(
-                    'flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-semibold',
+                    'flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-semibold transition-colors',
                     empty
-                      ? 'cursor-default text-slate-300 dark:text-slate-600'
-                      : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                      ? onNewTopic
+                        ? 'border border-dashed border-slate-300 text-slate-700 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-600 dark:hover:bg-brand-950/30 dark:hover:text-brand-200'
+                        : 'cursor-default text-slate-500 dark:text-slate-500'
+                      : 'text-slate-800 hover:bg-slate-100 hover:text-brand-700 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-brand-200',
                   )}
                 >
-                  <span className="w-3 shrink-0 text-[10px]">{empty ? '·' : open ? '▼' : '▶'}</span>
+                  <span className="w-3 shrink-0 text-[10px]">
+                    {empty ? '＋' : open ? '▼' : '▶'}
+                  </span>
                   <span className="min-w-0 flex-1 truncate">{group.name}</span>
-                  <span className="shrink-0 tabular-nums">{empty ? '—' : group.rows.length}</span>
+                  <span className="shrink-0 tabular-nums text-xs">{group.rows.length}</span>
                 </button>
                 {onNewTopic && (
                   <button
@@ -143,7 +158,10 @@ export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: 
                     onClick={() => onNewTopic(group.key === NO_UNIT ? null : group.key)}
                     aria-label={`${group.name}에 새 주제`}
                     title={`${group.name}에 새 주제`}
-                    className="shrink-0 rounded px-1.5 py-1 text-xs text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-brand-600 focus-visible:opacity-100 group-hover/unit:opacity-100 dark:hover:bg-slate-800"
+                    className={cn(
+                      'shrink-0 rounded px-1.5 py-1 text-xs text-slate-500 transition-opacity hover:bg-slate-100 hover:text-brand-600 focus-visible:opacity-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                      empty ? 'opacity-100' : 'opacity-0 group-hover/unit:opacity-100',
+                    )}
                   >
                     ＋
                   </button>
@@ -159,12 +177,12 @@ export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: 
                       className={cn(
                         'block rounded-lg px-3 py-1.5 text-sm transition-colors',
                         row.id === topicId
-                          ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
-                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
+                          ? 'bg-brand-100 font-semibold text-brand-800 ring-1 ring-brand-200 dark:bg-brand-900/50 dark:text-brand-100 dark:ring-brand-800'
+                          : 'font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white',
                       )}
                     >
                       <span className="block truncate">{row.title}</span>
-                      <span className="mt-0.5 block truncate text-xs text-slate-400">
+                      <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
                         {formatShortDate(row.updatedAt)}
                       </span>
                     </Link>

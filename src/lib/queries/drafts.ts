@@ -1,11 +1,20 @@
 import { supabase } from '@/lib/supabase'
 import { parseRichDoc, toJson, type RichDoc } from '@/types/richtext'
 
-export type DraftTarget = 'solution' | 'note' | 'discussion'
+export type DraftTarget = 'solution' | 'note' | 'discussion' | 'topic'
+
+export type DraftMetadata = Record<string, unknown>
 
 export type Draft = {
   content: RichDoc
+  metadata: DraftMetadata
   updatedAt: string
+}
+
+function metadataOf(value: unknown): DraftMetadata {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as DraftMetadata)
+    : {}
 }
 
 export async function fetchDraft(
@@ -14,14 +23,18 @@ export async function fetchDraft(
 ): Promise<Draft | null> {
   const { data, error } = await supabase
     .from('drafts')
-    .select('content, updated_at')
+    .select('content, metadata, updated_at')
     .eq('target_type', targetType)
     .eq('target_key', targetKey)
     .maybeSingle()
 
   if (error) throw error
   if (!data) return null
-  return { content: parseRichDoc(data.content), updatedAt: data.updated_at }
+  return {
+    content: parseRichDoc(data.content),
+    metadata: metadataOf(data.metadata),
+    updatedAt: data.updated_at,
+  }
 }
 
 export async function saveDraft(params: {
@@ -29,6 +42,7 @@ export async function saveDraft(params: {
   targetType: DraftTarget
   targetKey: string
   content: RichDoc
+  metadata?: DraftMetadata
 }): Promise<void> {
   const { error } = await supabase.from('drafts').upsert(
     {
@@ -36,6 +50,7 @@ export async function saveDraft(params: {
       target_type: params.targetType,
       target_key: params.targetKey,
       content: toJson(params.content),
+      metadata: toJson(params.metadata ?? {}),
     },
     { onConflict: 'user_id,target_type,target_key' },
   )
