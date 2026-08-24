@@ -109,7 +109,7 @@ export type SearchHit = {
   questionNumber: number
   stemText: string | null
   score: number
-  /** `문제` 또는 `풀이` */
+  /** `문제`, `선지` 또는 `풀이` */
   matchedIn: string
   snippet: string | null
 }

@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  DEFAULT_TEXT_BACKGROUND,
+  DEFAULT_TEXT_BORDER,
   DEFAULT_TEXT_SIZE,
   isPageText,
   NOMINAL_PT_WIDTH,
   simplify,
   STROKE_COLORS,
+  TEXT_BOX_BACKGROUNDS,
+  TEXT_BOX_BORDERS,
   toPath,
   TOOL_OPACITY,
   TOOL_WIDTH,
   type MarkTool,
   type PageMark,
+  type PageText,
   type Stroke,
 } from '@/components/lecture/pageMarks'
 import { cn } from '@/utils/cn'
@@ -18,7 +23,14 @@ const VIEW = 1000
 /** 이만큼 안 움직였으면 끌어 옮긴 게 아니라 누른 것으로 본다. */
 const DRAG_SLOP = 0.006
 
-type Editing = { index: number | null; value: string; x: number; y: number }
+type Editing = {
+  index: number | null
+  value: string
+  x: number
+  y: number
+  background: string
+  borderColor: string
+}
 
 type Props = {
   marks: PageMark[]
@@ -84,6 +96,8 @@ export function PageMarkLayer({
       updated.push({
         tool: 'text',
         color: color ?? STROKE_COLORS[0],
+        background: next.background,
+        borderColor: next.borderColor,
         size: textSize,
         text: value,
         points: [next.x, next.y],
@@ -93,7 +107,15 @@ export function PageMarkLayer({
       if (!current || !isPageText(current)) return
       // 비우면 지운다. 글자를 없애는 가장 손에 익은 길이다.
       if (value === '') updated.splice(next.index, 1)
-      else updated[next.index] = { ...current, text: value, points: [next.x, next.y] }
+      else {
+        updated[next.index] = {
+          ...current,
+          text: value,
+          background: next.background,
+          borderColor: next.borderColor,
+          points: [next.x, next.y],
+        }
+      }
     }
     onChange(updated)
   }
@@ -107,7 +129,14 @@ export function PageMarkLayer({
     if (tool === 'text') {
       // 쓰던 것이 있으면 먼저 갈무리하고 새 자리를 연다.
       if (editing) commitText()
-      setEditing({ index: null, value: '', x: at[0], y: at[1] })
+      setEditing({
+        index: null,
+        value: '',
+        x: at[0],
+        y: at[1],
+        background: DEFAULT_TEXT_BACKGROUND,
+        borderColor: DEFAULT_TEXT_BORDER,
+      })
       return
     }
 
@@ -136,7 +165,7 @@ export function PageMarkLayer({
   }
 
   /** 이미 얹은 글자를 누르면 옮기거나(끌면) 고친다(그냥 놓으면). */
-  function grabText(event: React.PointerEvent<SVGTextElement>, index: number) {
+  function grabText(event: React.PointerEvent<SVGGElement>, index: number) {
     if (!onChange) return
     event.stopPropagation()
     if (tool === 'erase') {
@@ -172,7 +201,14 @@ export function PageMarkLayer({
       window.removeEventListener('pointercancel', onUp)
       setDragging(null)
       if (!moved) {
-        setEditing({ index, value: mark.text, x: at[0], y: at[1] })
+        setEditing({
+          index,
+          value: mark.text,
+          x: at[0],
+          y: at[1],
+          background: mark.background,
+          borderColor: mark.borderColor,
+        })
         return
       }
       const next = [...marks]
@@ -214,29 +250,17 @@ export function PageMarkLayer({
             const size = (mark.size / NOMINAL_PT_WIDTH) * VIEW
             const at = dragging?.index === index ? dragging.at : mark.points
             return (
-              <text
+              <PageTextShape
                 key={index}
+                mark={mark}
                 x={at[0] * VIEW}
                 y={at[1] * height}
-                fill={mark.color}
-                fontSize={size}
-                fontFamily="ui-sans-serif, system-ui, -apple-system, sans-serif"
-                fontWeight={600}
-                dominantBaseline="hanging"
-                // 강의록 바탕이 어두울 때도 읽히도록 얇은 흰 테를 두른다.
-                stroke="#ffffff"
-                strokeWidth={size * 0.16}
-                strokeLinejoin="round"
-                paintOrder="stroke"
-                className={cn(
-                  editing?.index === index && 'opacity-0',
-                  grabbable && (tool === 'erase' ? 'cursor-pointer' : 'cursor-move'),
-                )}
-                style={{ pointerEvents: grabbable ? 'auto' : 'none', userSelect: 'none' }}
+                size={size}
+                hidden={editing?.index === index}
+                grabbable={grabbable}
+                erase={tool === 'erase'}
                 onPointerDown={grabbable ? (event) => grabText(event, index) : undefined}
-              >
-                {mark.text}
-              </text>
+              />
             )
           }
           return (
@@ -266,32 +290,151 @@ export function PageMarkLayer({
       </svg>
 
       {editing && onChange && (
-        <input
-          autoFocus
-          value={editing.value}
-          onChange={(event) => setEditing({ ...editing, value: event.target.value })}
-          onKeyDown={(event) => {
-            event.stopPropagation()
-            if (event.key === 'Enter') commitText()
-            if (event.key === 'Escape') setEditing(null)
-          }}
+        <div
+          data-text-editor=""
           onBlur={(event) => {
-            // 크기 고르개를 누른 것뿐이면 쓰던 글자를 버리지 않는다.
             const moved = event.relatedTarget
+            if (moved instanceof HTMLElement && event.currentTarget.contains(moved)) return
             if (moved instanceof HTMLElement && moved.closest('[data-page-tools]')) return
             commitText()
           }}
-          placeholder="글자 입력 후 Enter"
           style={{
             left: `${editing.x * 100}%`,
             top: `${editing.y * 100}%`,
-            color: editStyle.color,
-            fontSize: pxWidth > 0 ? (editStyle.size / NOMINAL_PT_WIDTH) * pxWidth : editStyle.size,
             maxWidth: `${Math.max(100 - editing.x * 100, 20)}%`,
           }}
-          className="absolute w-40 rounded border border-brand-500 bg-white/95 px-1 font-semibold leading-tight outline-none dark:bg-slate-900/95"
-        />
+          className="absolute z-10 w-44"
+        >
+          <input
+            autoFocus
+            value={editing.value}
+            onChange={(event) => setEditing({ ...editing, value: event.target.value })}
+            onKeyDown={(event) => {
+              event.stopPropagation()
+              if (event.key === 'Enter') commitText()
+              if (event.key === 'Escape') setEditing(null)
+            }}
+            placeholder="글자 입력"
+            style={{
+              color: editStyle.color,
+              fontSize:
+                pxWidth > 0 ? (editStyle.size / NOMINAL_PT_WIDTH) * pxWidth : editStyle.size,
+              backgroundColor: editing.background,
+              borderColor: editing.borderColor,
+            }}
+            className="w-full rounded border px-1 font-semibold leading-tight outline-none ring-1 ring-brand-500/70"
+          />
+          <div className="mt-1 flex flex-wrap items-center gap-1 rounded-md bg-slate-900/90 p-1 text-[10px] text-white shadow-lg">
+            <select
+              value={editing.background}
+              onChange={(event) => setEditing({ ...editing, background: event.target.value })}
+              aria-label="글자 배경색"
+              className="min-w-0 flex-1 rounded bg-white/15 px-1 py-0.5 outline-none"
+            >
+              {TEXT_BOX_BACKGROUNDS.map((item) => (
+                <option key={item.value} value={item.value} className="text-slate-900">
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={editing.borderColor}
+              onChange={(event) => setEditing({ ...editing, borderColor: event.target.value })}
+              aria-label="글자 테두리색"
+              className="min-w-0 flex-1 rounded bg-white/15 px-1 py-0.5 outline-none"
+            >
+              {TEXT_BOX_BORDERS.map((item) => (
+                <option key={item.value} value={item.value} className="text-slate-900">
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => commitText()}
+              className="rounded bg-white px-1.5 py-0.5 font-semibold text-slate-900"
+            >
+              적용
+            </button>
+          </div>
+        </div>
       )}
     </>
+  )
+}
+
+/** SVG 글자 크기를 잰 뒤 그 뒤에 꼭 맞는 배경과 테두리를 그린다. */
+function PageTextShape({
+  mark,
+  x,
+  y,
+  size,
+  hidden,
+  grabbable,
+  erase,
+  onPointerDown,
+}: {
+  mark: PageText
+  x: number
+  y: number
+  size: number
+  hidden: boolean
+  grabbable: boolean
+  erase: boolean
+  onPointerDown?: (event: React.PointerEvent<SVGGElement>) => void
+}) {
+  const text = useRef<SVGTextElement | null>(null)
+  const [box, setBox] = useState<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  )
+
+  useLayoutEffect(() => {
+    if (!text.current) return
+    const measured = text.current.getBBox()
+    setBox({ x: measured.x, y: measured.y, width: measured.width, height: measured.height })
+  }, [mark.text, size, x, y])
+
+  const paddingX = size * 0.32
+  const paddingY = size * 0.18
+  const hasBackground = mark.background !== 'transparent'
+  const hasBorder = mark.borderColor !== 'transparent'
+
+  return (
+    <g
+      className={cn(hidden && 'opacity-0', grabbable && (erase ? 'cursor-pointer' : 'cursor-move'))}
+      style={{ pointerEvents: grabbable ? 'auto' : 'none', userSelect: 'none' }}
+      onPointerDown={onPointerDown}
+    >
+      {box && (hasBackground || hasBorder) && (
+        <rect
+          x={box.x - paddingX}
+          y={box.y - paddingY}
+          width={box.width + paddingX * 2}
+          height={box.height + paddingY * 2}
+          rx={size * 0.2}
+          fill={hasBackground ? mark.background : 'none'}
+          stroke={hasBorder ? mark.borderColor : 'none'}
+          strokeWidth={hasBorder ? Math.max(size * 0.08, 1.5) : 0}
+        />
+      )}
+      <text
+        ref={text}
+        x={x}
+        y={y}
+        fill={mark.color}
+        fontSize={size}
+        fontFamily="ui-sans-serif, system-ui, -apple-system, sans-serif"
+        fontWeight={600}
+        dominantBaseline="hanging"
+        // 상자가 없을 때만 얇은 흰 테를 둘러 어두운 강의록에서도 읽히게 한다.
+        stroke={hasBackground ? 'none' : '#ffffff'}
+        strokeWidth={hasBackground ? 0 : size * 0.16}
+        strokeLinejoin="round"
+        paintOrder="stroke"
+      >
+        {mark.text}
+      </text>
+    </g>
   )
 }

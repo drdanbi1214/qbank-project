@@ -35,7 +35,7 @@ type Props = {
 export function LecturePicker({ userId, onPick, onCancel }: Props) {
   const [keyword, setKeyword] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [results, setResults] = useState<LectureDocument[] | null>(null)
+  const [loaded, setLoaded] = useState<{ key: string; rows: LectureDocument[] } | null>(null)
   const [chosen, setChosen] = useState<LectureDocument | null>(null)
   const [pages, setPages] = useState<number[]>([])
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null)
@@ -51,12 +51,15 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
     if (chosen) return
     let active = true
     void fetchLectureDocuments({ keyword: debounced })
-      .then((rows) => active && setResults(rows))
-      .catch(() => active && setResults([]))
+      .then((rows) => active && setLoaded({ key: debounced, rows }))
+      .catch(() => active && setLoaded({ key: debounced, rows: [] }))
     return () => {
       active = false
     }
   }, [debounced, chosen])
+
+  // 입력 대기(디바운스)부터 서버 응답까지 이전 결과를 감추고 로딩을 보여 준다.
+  const results = keyword === debounced && loaded?.key === debounced ? loaded.rows : null
 
   const togglePage = useCallback((pageNumber: number) => {
     setPages((prev) =>

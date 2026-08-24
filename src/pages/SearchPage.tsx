@@ -23,27 +23,32 @@ export function SearchPage() {
   const canViewStudySolutions = hasPermission('study_hapbon3')
 
   const query = params.get('q') ?? ''
-  const includeSolutions = canViewStudySolutions && params.get('scope') === 'all'
+  const includeLectures = params.get('lectures') === '1'
+  const includeQuestionSearch = !includeLectures
+  const includeSolutions =
+    includeQuestionSearch && canViewStudySolutions && params.get('scope') === 'all'
   const subjectId = params.get('subject')
   const cohort = params.get('cohort')
 
   const [input, setInput] = useState(query)
   const [loaded, setLoaded] = useState<{ key: string; hits: SearchHit[] } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState<{ key: string; message: string } | null>(null)
   // 테마는 레옵스 전용이라 권한이 있을 때만 찾는다. RLS 도 같은 조건으로 막지만
   // 없는 사람에게 헛조회를 보내지 않는다.
   const canSearchTopics = hasPermission('study_legendob')
-  const [topicHits, setTopicHits] = useState<TopicForQuestion[]>([])
+  const [topicLoaded, setTopicLoaded] = useState<{
+    key: string
+    rows: TopicForQuestion[]
+  } | null>(null)
 
-  // 강의록은 문제와 다른 축이라 켜고 끌 수 있게 한다. 늘 함께 찾으면 문제를
-  // 찾는 사람에게 관계없는 강의록이 섞여 들어온다.
-  const includeLectures = params.get('lectures') === '1'
   const [lectureLoaded, setLectureLoaded] = useState<{
     key: string
     rows: LectureDocument[]
   } | null>(null)
 
+  const searchTopicsEnabled = canSearchTopics && includeQuestionSearch
   const requestKey = `${query}|${includeSolutions}|${includeLectures}|${subjectId ?? ''}|${cohort ?? ''}`
+  const error = failed?.key === requestKey ? failed.message : null
 
   useEffect(() => {
     if (query.trim() === '') {
@@ -51,18 +56,28 @@ export function SearchPage() {
     }
     let active = true
 
-    void searchQuestions({ query, includeSolutions, subjectId, cohort })
-      .then((hits) => {
-        if (active) {
-          setLoaded({ key: requestKey, hits })
-          setError(null)
-        }
+    if (includeQuestionSearch) {
+      void searchQuestions({
+        query,
+        includeSolutions,
+        subjectId,
+        cohort,
       })
-      .catch((caught: unknown) => {
-        if (active) {
-          setError(caught instanceof Error ? caught.message : '검색하지 못했습니다.')
-        }
-      })
+        .then((hits) => {
+          if (active) {
+            setLoaded({ key: requestKey, hits })
+            setFailed(null)
+          }
+        })
+        .catch((caught: unknown) => {
+          if (active) {
+            setFailed({
+              key: requestKey,
+              message: caught instanceof Error ? caught.message : '검색하지 못했습니다.',
+            })
+          }
+        })
+    }
 
     if (includeLectures) {
       // 강의록 분류는 임상 과목과 다른 축이라 과목 거르개를 넘기지 않는다.
@@ -76,20 +91,29 @@ export function SearchPage() {
         })
     }
 
-    if (canSearchTopics) {
+    if (searchTopicsEnabled) {
       void searchTopics(query, subjectId)
         .then((rows) => {
-          if (active) setTopicHits(rows)
+          if (active) setTopicLoaded({ key: requestKey, rows })
         })
         .catch(() => {
-          if (active) setTopicHits([])
+          if (active) setTopicLoaded({ key: requestKey, rows: [] })
         })
     }
 
     return () => {
       active = false
     }
-  }, [query, includeSolutions, includeLectures, subjectId, cohort, requestKey, canSearchTopics])
+  }, [
+    query,
+    includeSolutions,
+    includeLectures,
+    includeQuestionSearch,
+    subjectId,
+    cohort,
+    requestKey,
+    searchTopicsEnabled,
+  ])
 
   const update = useCallback(
     (patch: Record<string, string | null>) => {
@@ -117,8 +141,16 @@ export function SearchPage() {
     [taxonomy],
   )
 
-  const searching = query.trim() !== '' && loaded?.key !== requestKey && error === null
-  const hits = loaded?.key === requestKey ? loaded.hits : []
+  // 현재 범위에 필요한 검색이 모두 끝날 때까지 로딩을 유지한다. 특히 느린 강의록
+  // 본문 검색 중에 성급하게 "결과 없음"이 보이지 않게 한다.
+  const searching =
+    query.trim() !== '' &&
+    error === null &&
+    ((includeQuestionSearch && loaded?.key !== requestKey) ||
+      (includeLectures && lectureLoaded?.key !== requestKey) ||
+      (searchTopicsEnabled && topicLoaded?.key !== requestKey))
+  const hits = includeQuestionSearch && loaded?.key === requestKey ? loaded.hits : []
+  const topicHits = searchTopicsEnabled && topicLoaded?.key === requestKey ? topicLoaded.rows : []
   // 검색어나 조건이 바뀌면 이전 강의록 결과가 잠깐 남지 않게 열쇠로 잠근다.
   const lectureHits = lectureLoaded?.key === requestKey ? lectureLoaded.rows : []
 
@@ -126,6 +158,20 @@ export function SearchPage() {
     event.preventDefault()
     update({ q: input.trim() })
   }
+
+  const changeScope = useCallback(
+    (target: 'problems' | 'all' | 'lectures') => {
+      if (target === 'lectures') {
+        update({ lectures: '1' })
+        return
+      }
+      update({
+        lectures: null,
+        scope: target === 'all' ? 'all' : null,
+      })
+    },
+    [update],
+  )
 
   const selectClass =
     'rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm outline-none dark:border-slate-700 dark:bg-slate-900'
@@ -143,35 +189,47 @@ export function SearchPage() {
           placeholder="문제·풀이·강의록 내용을 검색하세요"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
         />
-        <Button type="submit">검색</Button>
+        <Button type="submit" disabled={searching || input.trim() === ''}>
+          {searching && (
+            <Spinner className="h-4 w-4 border-white/40 border-t-white dark:border-white/40 dark:border-t-white" />
+          )}
+          {searching ? '검색 중…' : '검색'}
+        </Button>
       </form>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {canViewStudySolutions && (
-          <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-            <ScopeButton active={!includeSolutions} onClick={() => update({ scope: null })}>
-              문제만
-            </ScopeButton>
-            <ScopeButton active={includeSolutions} onClick={() => update({ scope: 'all' })}>
+        <div
+          role="group"
+          aria-label="검색 범위"
+          className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
+        >
+          <ScopeButton
+            active={includeQuestionSearch && !includeSolutions}
+            onClick={() => changeScope('problems')}
+          >
+            문제만
+          </ScopeButton>
+          {canViewStudySolutions && (
+            <ScopeButton
+              active={includeQuestionSearch && includeSolutions}
+              onClick={() => changeScope('all')}
+            >
               문제 + 풀이
             </ScopeButton>
-          </div>
-        )}
-
-        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-700">
-          <input
-            type="checkbox"
-            checked={includeLectures}
-            onChange={(event) => update({ lectures: event.target.checked ? '1' : null })}
-            className="accent-brand-600"
-          />
-          강의록
-        </label>
+          )}
+          <ScopeButton
+            active={includeLectures}
+            onClick={() => changeScope('lectures')}
+          >
+            강의록만
+          </ScopeButton>
+        </div>
 
         <select
           value={subjectId ?? ''}
           onChange={(event) => update({ subject: event.target.value || null })}
-          className={selectClass}
+          disabled={!includeQuestionSearch}
+          className={cn(selectClass, !includeQuestionSearch && 'cursor-not-allowed opacity-45')}
           aria-label="과목"
         >
           <option value="">과목 전체</option>
@@ -185,7 +243,8 @@ export function SearchPage() {
         <select
           value={cohort ?? ''}
           onChange={(event) => update({ cohort: event.target.value || null })}
-          className={selectClass}
+          disabled={!includeQuestionSearch}
+          className={cn(selectClass, !includeQuestionSearch && 'cursor-not-allowed opacity-45')}
           aria-label="학번"
         >
           <option value="">학번 전체</option>
@@ -360,6 +419,7 @@ function ScopeButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         'rounded-md px-3 py-1 text-sm font-medium transition-colors',
@@ -373,26 +433,9 @@ function ScopeButton({
   )
 }
 
-/** 검색어와 일치하는 부분을 굵게 표시한다. */
+/** 문제·선지·풀이도 여러 낱말과 공백이 갈라진 일치를 각각 표시한다. */
 function Highlighted({ text, needle }: { text: string; needle: string }) {
-  const trimmed = needle.trim()
-  if (trimmed === '') return <>{text}</>
-
-  const parts: { text: string; hit: boolean }[] = []
-  const lowerText = text.toLowerCase()
-  const lowerNeedle = trimmed.toLowerCase()
-
-  let cursor = 0
-  while (cursor < text.length) {
-    const found = lowerText.indexOf(lowerNeedle, cursor)
-    if (found === -1) {
-      parts.push({ text: text.slice(cursor), hit: false })
-      break
-    }
-    if (found > cursor) parts.push({ text: text.slice(cursor, found), hit: false })
-    parts.push({ text: text.slice(found, found + trimmed.length), hit: true })
-    cursor = found + trimmed.length
-  }
+  const parts = splitLectureSearchText(text, needle)
 
   return (
     <>

@@ -35,8 +35,10 @@ type SearchHit = { pageNumber: number; occurrenceIndex: number }
 
 
 function markTextLayer(container: HTMLDivElement, query: string, activeOccurrence: number | null) {
-  let occurrenceIndex = 0
   let activeMark: HTMLElement | null = null
+  const entries: { span: HTMLSpanElement; source: string; start: number; end: number }[] = []
+  let combined = ''
+
   for (const span of container.querySelectorAll<HTMLSpanElement>('span')) {
     // markedContent를 감싼 PDF.js 부모 span만 건너뛴다. 우리가 앞선 검색에서
     // 넣은 mark는 원문으로 되돌린 뒤 새 검색어에 맞춰 다시 만든다.
@@ -44,25 +46,47 @@ function markTextLayer(container: HTMLDivElement, query: string, activeOccurrenc
     const source = span.dataset.sourceText ?? span.textContent ?? ''
     span.dataset.sourceText = source
     span.replaceChildren(source)
-    const parts = splitLectureSearchText(source, query)
-    if (!parts.some((part) => part.hit)) continue
+
+    // PDF.js는 `ABC`를 A/B/C 여러 span으로 쪼갤 수 있다. 쪽 전체 문자열에서
+    // 일치 위치를 먼저 구한 뒤 각 span으로 되돌려야 갈라진 글자도 모두 칠해진다.
+    if (entries.length > 0) combined += ' '
+    const start = combined.length
+    combined += source
+    entries.push({ span, source, start, end: combined.length })
+  }
+
+  const combinedParts = splitLectureSearchText(combined, query, true)
+  const ranges: { start: number; end: number; occurrence: number }[] = []
+  let combinedCursor = 0
+  for (const part of combinedParts) {
+    const start = combinedCursor
+    combinedCursor += part.text.length
+    if (part.hit && part.occurrence !== null) {
+      ranges.push({ start, end: combinedCursor, occurrence: part.occurrence })
+    }
+  }
+
+  for (const entry of entries) {
+    const hits = ranges.filter((range) => range.end > entry.start && range.start < entry.end)
+    if (hits.length === 0) continue
 
     const fragment = window.document.createDocumentFragment()
-    for (const part of parts) {
-      if (!part.hit) {
-        fragment.append(part.text)
-        continue
-      }
+    let cursor = 0
+    for (const hit of hits) {
+      const start = Math.max(hit.start, entry.start) - entry.start
+      const end = Math.min(hit.end, entry.end) - entry.start
+      if (start > cursor) fragment.append(entry.source.slice(cursor, start))
       const mark = window.document.createElement('mark')
       mark.className = `lecture-pdf-search-hit${
-        occurrenceIndex === activeOccurrence ? ' lecture-pdf-search-hit-active' : ''
+        hit.occurrence === activeOccurrence ? ' lecture-pdf-search-hit-active' : ''
       }`
-      if (occurrenceIndex === activeOccurrence) activeMark = mark
-      mark.textContent = part.text
+      if (hit.occurrence === activeOccurrence && !activeMark) activeMark = mark
+      mark.textContent = entry.source.slice(start, end)
       fragment.append(mark)
-      occurrenceIndex += 1
+      cursor = end
     }
-    span.replaceChildren(fragment)
+    if (cursor < entry.source.length) fragment.append(entry.source.slice(cursor))
+    entry.span.replaceChildren(fragment)
   }
   return activeMark
 }

@@ -27,6 +27,9 @@ export type Stroke = {
 export type PageText = {
   tool: 'text'
   color: string
+  /** 글자 상자의 배경과 테두리. transparent 면 그리지 않는다. */
+  background: string
+  borderColor: string
   /** 글자 크기(pt). 자리는 [x, y] 한 쌍이며 글자의 왼쪽 위를 가리킨다. */
   size: number
   text: string
@@ -40,6 +43,31 @@ export function isPageText(mark: PageMark): mark is PageText {
 }
 
 export const STROKE_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#f59e0b', '#111827'] as const
+
+/** 글자 상자 배경. 살짝 투명하게 두어 강의록 원문이 완전히 가려지지 않게 한다. */
+export const TEXT_BOX_BACKGROUNDS = [
+  { value: 'transparent', label: '배경 없음' },
+  { value: '#ffffffeb', label: '흰색' },
+  { value: '#fef3c7eb', label: '노란색' },
+  { value: '#dcfce7eb', label: '연두색' },
+  { value: '#dbeafeeb', label: '하늘색' },
+  { value: '#fce7f3eb', label: '분홍색' },
+  { value: '#e2e8f0eb', label: '회색' },
+] as const
+
+/** 글자 상자 테두리. 글자색과 별도로 고를 수 있다. */
+export const TEXT_BOX_BORDERS = [
+  { value: 'transparent', label: '테두리 없음' },
+  { value: '#111827', label: '검정색' },
+  { value: '#ffffff', label: '흰색' },
+  { value: '#e11d48', label: '빨간색' },
+  { value: '#2563eb', label: '파란색' },
+  { value: '#16a34a', label: '초록색' },
+  { value: '#f59e0b', label: '주황색' },
+] as const
+
+export const DEFAULT_TEXT_BACKGROUND = TEXT_BOX_BACKGROUNDS[0].value
+export const DEFAULT_TEXT_BORDER = TEXT_BOX_BORDERS[0].value
 
 export const TOOL_WIDTH: Record<StrokeTool, number> = {
   pen: 0.004,
@@ -114,7 +142,23 @@ export function parsePageMarks(value: unknown): PageMark[] {
       // 빈 글자는 화면에 아무것도 남기지 않으면서 자리만 차지한다.
       if (text === '') return []
       const size = typeof record.size === 'number' && record.size > 0 ? record.size : DEFAULT_TEXT_SIZE
-      return [{ tool: 'text' as const, color, size, text, points: [points[0], points[1]] }]
+      const background = TEXT_BOX_BACKGROUNDS.some((item) => item.value === record.background)
+        ? String(record.background)
+        : DEFAULT_TEXT_BACKGROUND
+      const borderColor = TEXT_BOX_BORDERS.some((item) => item.value === record.borderColor)
+        ? String(record.borderColor)
+        : DEFAULT_TEXT_BORDER
+      return [
+        {
+          tool: 'text' as const,
+          color,
+          background,
+          borderColor,
+          size,
+          text,
+          points: [points[0], points[1]],
+        },
+      ]
     }
 
     const tool: StrokeTool = record.tool === 'highlight' ? 'highlight' : 'pen'

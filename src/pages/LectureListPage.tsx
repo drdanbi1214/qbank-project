@@ -48,9 +48,10 @@ export function LectureListPage() {
     professors: [],
     years: [],
   })
-  const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState<{ key: string; message: string } | null>(null)
 
   const requestKey = [categoryId ?? '', professor ?? '', year ?? '', debounced].join('|')
+  const error = failed?.key === requestKey ? failed.message : null
 
   // 본문까지 훑는 검색이라 글자마다 왕복하면 느리다.
   useEffect(() => {
@@ -73,10 +74,18 @@ export function LectureListPage() {
   useEffect(() => {
     let active = true
     void fetchLectureDocuments({ categoryId, professor, year, keyword: debounced })
-      .then((next) => active && setLoaded({ key: requestKey, items: next }))
+      .then((next) => {
+        if (!active) return
+        setLoaded({ key: requestKey, items: next })
+        setFailed(null)
+      })
       .catch((caught: unknown) => {
         if (!active) return
-        setError(caught instanceof Error ? caught.message : '강의록을 불러오지 못했습니다.')
+        setFailed({
+          key: requestKey,
+          message:
+            caught instanceof Error ? caught.message : '강의록을 불러오지 못했습니다.',
+        })
         setLoaded({ key: requestKey, items: [] })
       })
     return () => {
@@ -94,7 +103,8 @@ export function LectureListPage() {
     }
   }, [categoryId])
 
-  const rows = loaded?.key === requestKey ? loaded.items : null
+  // 300ms 입력 대기 중에도 이전 결과 대신 로딩을 표시한다.
+  const rows = keyword === debounced && loaded?.key === requestKey ? loaded.items : null
   const hasFilter = Boolean(professor || year || keyword.trim())
 
   return (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
+import { Spinner } from '@/components/ui/Spinner'
 import { fetchLectureDocuments, mixLectureHits, type LectureDocument } from '@/lib/queries/lectures'
 import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
 import type { SolutionReference } from '@/lib/queries/solutions'
@@ -28,7 +29,10 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
   const [loaded, setLoaded] = useState<TheoryDocument[] | null>(null)
   const [preview, setPreview] = useState<TheoryDocument | null>(null)
   const [lectureQuery, setLectureQuery] = useState('')
-  const [lectures, setLectures] = useState<LectureDocument[] | null>(null)
+  const [lectureLoaded, setLectureLoaded] = useState<{
+    key: string
+    rows: LectureDocument[]
+  } | null>(null)
   const [lecturePage, setLecturePage] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -46,8 +50,10 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
       // 강의록 분류는 임상 과목과 다른 축이라 과목으로 좁히지 않는다.
       // 제목·교수·본문 검색만으로 찾는다.
       void fetchLectureDocuments({ keyword })
-        .then((next) => active && setLectures(mixLectureHits(next, keyword, 20)))
-        .catch(() => active && setLectures([]))
+        .then((next) =>
+          active && setLectureLoaded({ key: keyword, rows: mixLectureHits(next, keyword, 20) }),
+        )
+        .catch(() => active && setLectureLoaded({ key: keyword, rows: [] }))
     }, 250)
     return () => {
       active = false
@@ -57,6 +63,8 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
 
   const documents = useMemo(() => loaded ?? [], [loaded])
   const loading = allenOpen && loaded === null
+  const lectureKeyword = lectureQuery.trim()
+  const lectures = lectureLoaded?.key === lectureKeyword ? lectureLoaded.rows : null
 
   const results = useMemo<Result[]>(() => {
     const keyword = query.trim().toLowerCase()
@@ -111,7 +119,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
     </div>}
     {lectureOpen && <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
       <input autoFocus value={lectureQuery} onChange={(event) => setLectureQuery(event.target.value)} placeholder="강의록 제목·교수·본문 검색" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />
-      {lectures === null ? <p className="mt-2 text-xs text-slate-400">강의록을 불러오는 중…</p> : lectures.length === 0 ? <p className="mt-2 text-xs text-slate-400">{lectureQuery.trim() ? '검색 결과가 없습니다.' : '등록된 강의록이 없습니다.'}</p> : <ul className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      {lectures === null ? <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400"><Spinner className="h-4 w-4" />강의록 검색 중…</p> : lectures.length === 0 ? <p className="mt-2 text-xs text-slate-400">{lectureQuery.trim() ? '검색 결과가 없습니다.' : '등록된 강의록이 없습니다.'}</p> : <ul className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
         {lectures.map((lecture) => <li key={lecture.id} className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-0 dark:border-slate-800">
           <button type="button" onClick={() => addLecture(lecture)} className="min-w-0 flex-1 text-left text-sm hover:text-brand-700 dark:hover:text-brand-200">
             <span className="block truncate">{lecture.title}</span>
