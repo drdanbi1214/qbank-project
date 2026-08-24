@@ -15,6 +15,14 @@ const STATUS_LABEL: Record<string, string> = {
   done: '완료',
 }
 
+/** 가까운 기한이 먼저 오고, 기한이 없는 배정은 맨 뒤로 보낸다. */
+function compareDueDate(left: string | null, right: string | null): number {
+  if (left === right) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return left.localeCompare(right)
+}
+
 /**
  * 나에게 배정된 문항만 모아 과목별로 보여준다.
  * 여기서 바로 해당 문제로 이동해 풀이를 작성한다.
@@ -82,7 +90,16 @@ export function MyAssignmentsPage() {
   const grouped = useMemo(() => {
     const groups = new Map<
       string,
-      { label: string; latest: string; count: number; subjects: Map<string, { name: string; items: MyAssignment[] }> }
+      {
+        label: string
+        latest: string
+        nearestDue: string | null
+        count: number
+        subjects: Map<
+          string,
+          { name: string; nearestDue: string | null; items: MyAssignment[] }
+        >
+      }
     >()
 
     for (const row of filtered) {
@@ -90,40 +107,64 @@ export function MyAssignmentsPage() {
       const group = groups.get(groupKey) ?? {
         label: groupKey,
         latest: '',
+        nearestDue: null,
         count: 0,
-        subjects: new Map<string, { name: string; items: MyAssignment[] }>(),
+        subjects: new Map<
+          string,
+          { name: string; nearestDue: string | null; items: MyAssignment[] }
+        >(),
       }
       if ((row.examDate ?? '') > group.latest) group.latest = row.examDate ?? ''
+      if (row.dueDate !== null && compareDueDate(row.dueDate, group.nearestDue) < 0) {
+        group.nearestDue = row.dueDate
+      }
       group.count += 1
 
       const subjectKey = row.examSubjectLabel ?? row.subjectId
       const subject = group.subjects.get(subjectKey) ?? {
         name: row.examSubjectLabel ?? row.subjectName,
+        nearestDue: null,
         items: [],
+      }
+      if (row.dueDate !== null && compareDueDate(row.dueDate, subject.nearestDue) < 0) {
+        subject.nearestDue = row.dueDate
       }
       subject.items.push(row)
       group.subjects.set(subjectKey, subject)
       groups.set(groupKey, group)
     }
 
-    const byExamThenNumber = (a: MyAssignment, b: MyAssignment) =>
-      (a.examDate ?? '').localeCompare(b.examDate ?? '') || a.questionNumber - b.questionNumber
+    const byDueThenExamAndNumber = (a: MyAssignment, b: MyAssignment) =>
+      compareDueDate(a.dueDate, b.dueDate) ||
+      (a.examDate ?? '').localeCompare(b.examDate ?? '') ||
+      a.questionNumber - b.questionNumber
 
     return [...groups.entries()]
-      // 최근 시험군을 위로. 지금 작업 중인 시험이 맨 앞에 오게 한다.
-      .sort(([, a], [, b]) => b.latest.localeCompare(a.latest) || a.label.localeCompare(b.label, 'ko'))
+      // 마감이 가까운 시험군을 가장 먼저 보여 준다. 기한이 같거나 없으면
+      // 기존처럼 최근 시험군을 우선해 익숙한 순서를 유지한다.
+      .sort(
+        ([, a], [, b]) =>
+          compareDueDate(a.nearestDue, b.nearestDue) ||
+          b.latest.localeCompare(a.latest) ||
+          a.label.localeCompare(b.label, 'ko'),
+      )
       .map(([key, group]) => {
         const subjects = [...group.subjects.entries()].map(([subjectKey, subject]) => ({
           key: subjectKey,
           name: subject.name,
-          items: [...subject.items].sort(byExamThenNumber),
+          nearestDue: subject.nearestDue,
+          items: [...subject.items].sort(byDueThenExamAndNumber),
         }))
 
-        // 과목으로 나뉜 묶음(학년말고사)은 rows 가 이미 과목 정렬순으로 오므로
-        // 들어온 순서를 그대로 둔다. 계통명으로 나뉜 묶음(계통 Y)은 전부 같은
-        // 과목이라 그 순서가 무의미하므로 시험 날짜순으로 세운다.
+        // 과목 안에서도 마감이 가까운 묶음을 먼저 둔다. 기한이 같으면 학년말고사는
+        // 기존 과목 순서를 지키고, 계통 Y처럼 계통명으로 나뉜 묶음만 시험 날짜순이다.
+        subjects.sort((a, b) => compareDueDate(a.nearestDue, b.nearestDue))
         if (subjects.every((subject) => subject.items[0].examSubjectLabel !== null)) {
-          subjects.sort((a, b) => byExamThenNumber(a.items[0], b.items[0]))
+          subjects.sort(
+            (a, b) =>
+              compareDueDate(a.nearestDue, b.nearestDue) ||
+              byDueThenExamAndNumber(a.items[0], b.items[0]),
+          )
         }
 
         return { key, label: group.label, count: group.count, subjects }
