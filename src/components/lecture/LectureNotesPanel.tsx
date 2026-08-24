@@ -48,6 +48,8 @@ function displayMarkdown(markdown: string): string {
     // 닫는 ** 바로 뒤에 한글 조사가 오면 CommonMark가 굵게로 해석하지 않는다.
     // 보이지 않는 구분 문자를 넣어 원본 문구는 유지하면서 정상 렌더링한다.
     .replace(/\*\*([^*\n]+?)\*\*(?=[가-힣])/gu, '**$1**&ZeroWidthSpace;')
+    // GFM 취소선도 바로 뒤에 한글 조사가 붙으면 닫는 ~~를 놓칠 수 있다.
+    .replace(/~~([^~\n]+?)~~(?=[가-힣])/gu, '~~$1~~&ZeroWidthSpace;')
 }
 
 function initialTimelineVisibility(): boolean {
@@ -198,6 +200,11 @@ function markdownComponents(
       </strong>
     ),
     em: ({ children }) => <em>{markedChildren(children, query)}</em>,
+    del: ({ children }) => (
+      <del className="text-slate-500 line-through decoration-slate-500 decoration-1 dark:text-slate-400 dark:decoration-slate-400">
+        {markedChildren(children, query)}
+      </del>
+    ),
     blockquote: ({ children }) => (
       <blockquote className="my-3 border-l-4 border-brand-300 bg-brand-50/60 py-1 pl-3 text-sm dark:border-brand-700 dark:bg-brand-950/20">
         {children}
