@@ -338,7 +338,7 @@ def match_sections(sections: list[NoteSection], pdfs: list[PdfLecture]) -> list[
                 alternative.same_date
                 and not alternative.professor_conflict
                 and alternative.title_similarity >= 0.72
-                and alternative.title_similarity - best.title_similarity >= 0.35
+                and alternative.title_similarity - best.title_similarity >= 0.15
                 for alternative in ranked[1:]
             )
         )

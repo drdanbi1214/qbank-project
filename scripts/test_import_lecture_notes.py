@@ -146,6 +146,24 @@ class LectureNoteImportTest(unittest.TestCase):
         self.assertEqual(pdfs[0].filename, result.candidate.filename if result.candidate else None)
         self.assertEqual(pdfs[1].filename, result.alternatives[0].filename)
 
+    def test_partial_title_match_does_not_hide_swapped_period(self) -> None:
+        pdfs = [
+            PdfLecture(
+                pathlib.Path("0629_2교시_김원규_신장-요로 발생.pdf"),
+                "0629_2교시_김원규_신장-요로 발생.pdf",
+                parse_schedule("0629_2교시_김원규_신장-요로 발생.pdf"),
+            ),
+            PdfLecture(
+                pathlib.Path("0629_3,4교시_김원규_신장,요로 구조(해부).pdf"),
+                "0629_3,4교시_김원규_신장,요로 구조(해부).pdf",
+                parse_schedule("0629_3,4교시_김원규_신장,요로 구조(해부).pdf"),
+            ),
+        ]
+        section = self.section(1, "0629_2교시_김원규_신장,요로 구조")
+        result = match_sections([section], pdfs)[0]
+
+        self.assertEqual("REVIEW", result.status)
+
     def test_duplicate_source_key_is_reported_across_courses(self) -> None:
         first = self.section(22, "0529_1교시_문신제_갑상선기능 저하증")
         second = NoteSection(
