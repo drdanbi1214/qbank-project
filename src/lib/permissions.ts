@@ -9,6 +9,7 @@ export const PERMISSION = {
   studyHapbon3: 'study_hapbon3',
   aiSolutionView: 'ai_solution_view',
   seniorSolutionView: 'senior_solution_view',
+  mediprepLectureNotesView: 'mediprep_lecture_notes_view',
 } as const
 
 /**

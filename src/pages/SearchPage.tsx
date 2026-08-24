@@ -329,10 +329,19 @@ export function SearchPage() {
                             {lecture.matchPageCount > 1 && ` 외 ${lecture.matchPageCount - 1}쪽`}
                           </span>
                         )}
+                        {lecture.noteMatchId !== null && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200">
+                            정리본에서 일치
+                            {lecture.noteMatchCount > 1 && ` · 외 ${lecture.noteMatchCount - 1}개`}
+                          </span>
+                        )}
                       </div>
-                      {lecture.matchSnippet && (
+                      {(lecture.noteMatchSnippet || lecture.matchSnippet) && (
                         <p className="mt-1 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">
-                          <LectureHighlighted text={lecture.matchSnippet} query={query} />
+                          <LectureHighlighted
+                            text={lecture.noteMatchSnippet ?? lecture.matchSnippet ?? ''}
+                            query={query}
+                          />
                         </p>
                       )}
                     </a>
@@ -383,8 +392,14 @@ export function SearchPage() {
 /** 일치한 쪽으로 바로 열고, 뷰어가 그 자리에서 검색어를 칠하게 한다. */
 function lectureLink(lecture: LectureDocument, query: string): string {
   const search = new URLSearchParams()
-  if (lecture.matchPage !== null) search.set('page', String(lecture.matchPage))
-  if (query.trim() !== '') search.set('q', query.trim())
+  if (lecture.noteMatchId !== null) {
+    search.set('view', 'notes')
+    search.set('note', lecture.noteMatchId)
+    if (query.trim() !== '') search.set('nq', query.trim())
+  } else {
+    if (lecture.matchPage !== null) search.set('page', String(lecture.matchPage))
+    if (query.trim() !== '') search.set('q', query.trim())
+  }
   const tail = search.toString()
   return `/lectures/${lecture.id}${tail === '' ? '' : `?${tail}`}`
 }

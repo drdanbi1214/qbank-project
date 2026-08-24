@@ -36,6 +36,24 @@ export type LectureDocument = {
   matchPage: number | null
   matchSnippet: string | null
   matchPageCount: number
+  /** 메디프렙 권한이 있을 때만 서버가 돌려주는 학생 정리본 검색 결과. */
+  noteMatchId: string | null
+  noteMatchTitle: string | null
+  noteMatchSnippet: string | null
+  noteMatchCount: number
+}
+
+export type LectureStudentNote = {
+  id: string
+  lectureId: string
+  sourceKey: string
+  sourceCourse: string | null
+  lectureDate: string | null
+  title: string
+  contentMd: string
+  contentText: string
+  sortOrder: number
+  updatedAt: string
 }
 
 const LIST_SELECT =
@@ -57,6 +75,10 @@ type LectureRow = {
   match_page?: number | null
   match_snippet?: string | null
   match_page_count?: number | null
+  note_match_id?: string | null
+  note_match_title?: string | null
+  note_match_snippet?: string | null
+  note_match_count?: number | null
 }
 
 function toLecture(row: LectureRow): LectureDocument {
@@ -76,6 +98,10 @@ function toLecture(row: LectureRow): LectureDocument {
     matchPage: row.match_page ?? null,
     matchSnippet: row.match_snippet ?? null,
     matchPageCount: row.match_page_count ?? 0,
+    noteMatchId: row.note_match_id ?? null,
+    noteMatchTitle: row.note_match_title ?? null,
+    noteMatchSnippet: row.note_match_snippet ?? null,
+    noteMatchCount: row.note_match_count ?? 0,
   }
 }
 
@@ -170,6 +196,37 @@ export async function fetchLectureDocument(id: string): Promise<LectureDocument 
     .maybeSingle()
   if (error) throw error
   return data ? toLecture(data as LectureRow) : null
+}
+
+/**
+ * 한 PDF에 연결된 학생 정리본. 합본 PDF에는 여러 구획이 올 수 있다.
+ * RLS가 메디프렙 권한을 검사하므로 권한이 없으면 빈 배열만 돌아온다.
+ */
+export async function fetchLectureStudentNotes(lectureId: string): Promise<LectureStudentNote[]> {
+  const { data, error } = await supabase
+    .from('lecture_student_notes')
+    .select(
+      'id, lecture_id, source_key, source_course, lecture_date, title, content_md, content_text, sort_order, updated_at',
+    )
+    .eq('lecture_id', lectureId)
+    .eq('is_published', true)
+    .order('sort_order')
+    .order('lecture_date')
+    .order('id')
+  if (error) throw error
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    lectureId: row.lecture_id,
+    sourceKey: row.source_key,
+    sourceCourse: row.source_course,
+    lectureDate: row.lecture_date,
+    title: row.title,
+    contentMd: row.content_md,
+    contentText: row.content_text,
+    sortOrder: row.sort_order,
+    updatedAt: row.updated_at,
+  }))
 }
 
 /**
@@ -284,7 +341,10 @@ export function splitLectureHits(rows: LectureDocument[], query: string) {
   const byText: LectureDocument[] = []
   for (const row of rows) {
     const metadata = [row.title, row.professor, row.curriculum].filter(Boolean).join(' ')
-    if (row.matchPage !== null && !includesLectureSearchTerms(metadata, query)) {
+    if (
+      (row.matchPage !== null || row.noteMatchId !== null) &&
+      !includesLectureSearchTerms(metadata, query)
+    ) {
       byText.push(row)
     } else {
       byTitle.push(row)

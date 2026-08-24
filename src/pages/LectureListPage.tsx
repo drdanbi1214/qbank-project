@@ -192,10 +192,18 @@ export function LectureListPage() {
                 sizeLabel(lecture.byteSize),
               ].filter(Boolean)
               const targetParams = new URLSearchParams()
-              if (lecture.matchPage) targetParams.set('page', String(lecture.matchPage))
-              if (debounced.trim()) targetParams.set('q', debounced.trim())
+              const noteHit = Boolean(lecture.noteMatchId && lecture.noteMatchSnippet)
+              if (noteHit) {
+                targetParams.set('view', 'notes')
+                targetParams.set('note', lecture.noteMatchId as string)
+                if (debounced.trim()) targetParams.set('nq', debounced.trim())
+              } else {
+                if (lecture.matchPage) targetParams.set('page', String(lecture.matchPage))
+                if (debounced.trim()) targetParams.set('q', debounced.trim())
+              }
               const encodedParams = targetParams.toString()
               const suffix = encodedParams ? `?${encodedParams}` : ''
+              const snippet = noteHit ? lecture.noteMatchSnippet : lecture.matchSnippet
 
               return (
                 <li key={lecture.id}>
@@ -208,13 +216,23 @@ export function LectureListPage() {
                       <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
                         {meta.join(' · ') || '정보 없음'}
                       </span>
-                      {lecture.matchSnippet && lecture.matchPage && (
+                      {snippet && (
                         <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">
                           <span className="mr-1 font-medium text-slate-600 dark:text-slate-300">
-                            {lecture.matchPage}쪽
-                            {lecture.matchPageCount > 1 && ` · 외 ${lecture.matchPageCount - 1}쪽`}
+                            {noteHit ? (
+                              <>
+                                정리본
+                                {lecture.noteMatchCount > 1 && ` · 외 ${lecture.noteMatchCount - 1}개`}
+                              </>
+                            ) : (
+                              <>
+                                {lecture.matchPage}쪽
+                                {lecture.matchPageCount > 1 &&
+                                  ` · 외 ${lecture.matchPageCount - 1}쪽`}
+                              </>
+                            )}
                           </span>
-                          <SearchSnippet text={lecture.matchSnippet} keyword={debounced} />
+                          <SearchSnippet text={snippet} keyword={debounced} />
                         </span>
                       )}
                     </span>

@@ -1088,6 +1088,82 @@ export type Database = {
           },
         ]
       }
+      lecture_student_notes: {
+        Row: {
+          content_md: string
+          content_text: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_published: boolean
+          lecture_date: string | null
+          lecture_id: string
+          required_permission: string
+          sort_order: number
+          source_course: string | null
+          source_hash: string
+          source_key: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content_md: string
+          content_text: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          lecture_date?: string | null
+          lecture_id: string
+          required_permission?: string
+          sort_order?: number
+          source_course?: string | null
+          source_hash: string
+          source_key: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content_md?: string
+          content_text?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          lecture_date?: string | null
+          lecture_id?: string
+          required_permission?: string
+          sort_order?: number
+          source_course?: string | null
+          source_hash?: string
+          source_key?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_student_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_student_notes_lecture_id_fkey"
+            columns: ["lecture_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_student_notes_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       lecture_sources: {
         Row: {
           created_at: string
@@ -3090,6 +3166,10 @@ export type Database = {
           match_page: number
           match_page_count: number
           match_snippet: string
+          note_match_count: number
+          note_match_id: string
+          note_match_snippet: string
+          note_match_title: string
           page_count: number
           professor: string
           required_permission: string

@@ -20,6 +20,8 @@ type Props = {
   title: string
   initialPage?: number | null
   initialQuery?: string
+  /** 독립 스크롤 분할 화면에서는 데스크톱 sticky 기준을 패널 맨 위로 둔다. */
+  paneMode?: boolean
   /**
    * 글에 넣을 쪽을 고르는 모드. 쪽마다 체크칸이 생기고, 고른 쪽은 바깥에서
    * 알 수 있게 알려 준다. 읽기만 하는 화면에서는 끈다.
@@ -266,6 +268,7 @@ export function LecturePdfViewer({
   title,
   initialPage,
   initialQuery = '',
+  paneMode = false,
   selectable = false,
   selectedPages,
   onTogglePage,
@@ -484,7 +487,11 @@ export function LecturePdfViewer({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <div
+        className={`sticky z-10 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 ${
+          paneMode ? 'top-[6.75rem] xl:top-0' : 'top-16'
+        }`}
+      >
         {document && (
           <span className="text-sm text-slate-500 dark:text-slate-400">총 {document.numPages}쪽</span>
         )}

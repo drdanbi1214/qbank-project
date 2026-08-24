@@ -99,6 +99,34 @@ PDF는 폰트 메타데이터(굵은 글씨 비트, 폰트명)를 그대로 갖�
 다시 봐서 "진짜로 표시가 없는지" 확인한다 (진짜로 없는 경우도 있다 — 정답
 표시 없이 문제만 있는 문항은 실제로 존재한다).
 
+## 학생 강의 정리본 가져오기 (`import_lecture_notes.py`)
+
+MediPrep에서 합쳐 받은 Markdown을 강의별로 나누고 강의록 PDF와 연결한다. 기본은
+dry-run이며 날짜·교시·교수·제목을 비교해 자동 연결과 사람 확인 항목을 나눈다.
+합본 PDF 한 건에 여러 정리본이 연결되는 것도 지원한다.
+
+```bash
+python3 scripts/import_lecture_notes.py \
+  "강의록/정리본/2026 본2-1 내분비 정리본.md" \
+  --course "내분비 1차"
+```
+
+검토가 끝난 항목은 manifest에 `pdf` 또는 `skip`으로 고정한다. 실제 등록은
+manifest와 운영 DB 강의록 분류를 모두 명시해야만 실행된다. 같은 명령을 다시
+실행하면 `(lecture_id, source_key)` 기준으로 갱신되어 중복 행이 생기지 않는다.
+
+```bash
+python3 scripts/import_lecture_notes.py \
+  "강의록/정리본/2026 본2-1 내분비 정리본.md" \
+  --course "내분비 1차" \
+  --manifest scripts/lecture_note_manifests/2026_endocrine_1.json \
+  --category "내분비계(2026)" \
+  --apply
+```
+
+등록된 본문과 검색 결과는 `메디프렙 강의정리본` 권한자와 관리자에게만 보인다.
+일반 회원의 권한은 웹의 `관리자 → 사용자 관리 → 콘텐츠 권한`에서 부여한다.
+
 ## AI 풀이 일괄 입력 (`import_ai_solutions.py`)
 
 `AI 풀이 탭` 권한이 체크된 사용자에게만 보이는 별도 풀이 트랙
