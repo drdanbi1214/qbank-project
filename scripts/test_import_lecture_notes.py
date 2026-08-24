@@ -116,15 +116,35 @@ class LectureNoteImportTest(unittest.TestCase):
 
     def test_unrelated_long_title_is_not_automatically_matched(self) -> None:
         pdf = PdfLecture(
-            pathlib.Path("0602_3교시_이창범_Obesity.pdf"),
-            "0602_3교시_이창범_Obesity.pdf",
-            parse_schedule("0602_3교시_이창범_Obesity.pdf"),
+            pathlib.Path("0611_1교시_금지현_사춘기.pdf"),
+            "0611_1교시_금지현_사춘기.pdf",
+            parse_schedule("0611_1교시_금지현_사춘기.pdf"),
         )
-        section = self.section(38, "0602_3교시_이창범_지단백 대사 이상과 이상지질 혈증")
+        section = self.section(9, "0611_1교시_금지현_내분비 장애")
         result = match_sections([section], [pdf])[0]
 
         self.assertEqual("REVIEW", result.status)
         self.assertTrue(result.candidate and result.candidate.title_conflict)
+
+    def test_swapped_periods_with_better_title_candidate_require_review(self) -> None:
+        pdfs = [
+            PdfLecture(
+                pathlib.Path("0622_1교시_이원무_복강경 자궁경 로봇수술.pdf"),
+                "0622_1교시_이원무_복강경 자궁경 로봇수술.pdf",
+                parse_schedule("0622_1교시_이원무_복강경 자궁경 로봇수술.pdf"),
+            ),
+            PdfLecture(
+                pathlib.Path("0622_2교시_이원무_자궁체부암.pdf"),
+                "0622_2교시_이원무_자궁체부암.pdf",
+                parse_schedule("0622_2교시_이원무_자궁체부암.pdf"),
+            ),
+        ]
+        section = self.section(27, "0622_1교시_이원무_자궁체부암")
+        result = match_sections([section], pdfs)[0]
+
+        self.assertEqual("REVIEW", result.status)
+        self.assertEqual(pdfs[0].filename, result.candidate.filename if result.candidate else None)
+        self.assertEqual(pdfs[1].filename, result.alternatives[0].filename)
 
     def test_duplicate_source_key_is_reported_across_courses(self) -> None:
         first = self.section(22, "0529_1교시_문신제_갑상선기능 저하증")

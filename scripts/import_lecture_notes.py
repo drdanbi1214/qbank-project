@@ -102,6 +102,7 @@ class Candidate:
     period_overlap: bool
     professor_conflict: bool
     title_conflict: bool
+    title_similarity: float
 
 
 @dataclass(frozen=True)
@@ -250,7 +251,7 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     note = section.schedule
     target = pdf.schedule
     if not note or not target:
-        return Candidate(pdf.filename, -100, ("시간표 형식 해석 실패",), False, False, False, False)
+        return Candidate(pdf.filename, -100, ("시간표 형식 해석 실패",), False, False, False, False, 0.0)
 
     score = 0
     reasons: list[str] = []
@@ -297,7 +298,7 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     similarity = difflib.SequenceMatcher(None, note_title, pdf_title).ratio() if note_title and pdf_title else 0
     # 교시·교수가 같아도 긴 강의명이 전혀 다르면 다른 강의를 잘못 고를 수 있다.
     # RT, MEN 같은 짧은 약어는 이 규칙에서 제외하고 사람이 쓴 시간표 정보를 따른다.
-    title_conflict = len(note_title) >= 5 and len(pdf_title) >= 5 and similarity < 0.18
+    title_conflict = len(note_title) >= 4 and similarity < 0.18
     title_points = round(similarity * 35)
     score += title_points
     reasons.append(f"제목 {similarity:.0%}" + (" (불일치)" if title_conflict else ""))
@@ -310,6 +311,7 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
         overlap,
         professor_conflict,
         title_conflict,
+        similarity,
     )
 
 
@@ -328,6 +330,18 @@ def match_sections(sections: list[NoteSection], pdfs: list[PdfLecture]) -> list[
         )
         best = ranked[0] if ranked else None
         runner_up = ranked[1].score if len(ranked) > 1 else -999
+        note_title = normalized_words(section.schedule.title) if section.schedule else ""
+        likely_swapped_schedule = bool(
+            best
+            and len(note_title) >= 4
+            and any(
+                alternative.same_date
+                and not alternative.professor_conflict
+                and alternative.title_similarity >= 0.72
+                and alternative.title_similarity - best.title_similarity >= 0.35
+                for alternative in ranked[1:]
+            )
+        )
         if (
             best
             and best.score >= 75
@@ -335,6 +349,7 @@ def match_sections(sections: list[NoteSection], pdfs: list[PdfLecture]) -> list[
             and best.period_overlap
             and not best.professor_conflict
             and not best.title_conflict
+            and not likely_swapped_schedule
             and best.score - runner_up >= 8
         ):
             status = "AUTO"
