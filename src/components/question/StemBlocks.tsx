@@ -4,6 +4,7 @@ import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
 import { useSignedUrl } from '@/lib/storage'
 import type { StemBlock } from '@/types/question'
+import { cn } from '@/utils/cn'
 
 /**
  * 문제 본문은 텍스트/랩박스/표/이미지/수식이 임의 순서로 섞이므로
@@ -72,15 +73,18 @@ function computeOffsets(blocks: StemBlock[]): BlockOffsets[] {
 export function StemBlocks({
   blocks,
   marks = [],
+  compact = false,
 }: {
   blocks: StemBlock[]
   marks?: RenderMark[]
+  /** 야마 카드처럼 문제보다 해설이 중심인 좁은 자리에서만 지문을 작게 표시한다. */
+  compact?: boolean
 }) {
   const [zoomed, setZoomed] = useState<{ src: string; caption: string | null } | null>(null)
   const offsets = useMemo(() => computeOffsets(blocks), [blocks])
 
   return (
-    <div className="space-y-3">
+    <div className={compact ? 'space-y-1.5' : 'space-y-3'}>
       {blocks.map((block, index) => {
         const offset = offsets[index]
 
@@ -89,7 +93,10 @@ export function StemBlocks({
             return (
               <p
                 key={index}
-                className="whitespace-pre-wrap text-[15px] leading-7 text-slate-800 dark:text-slate-100"
+                className={cn(
+                  'whitespace-pre-wrap text-slate-800 dark:text-slate-100',
+                  compact ? 'text-[13px] font-normal leading-snug' : 'text-[15px] leading-7',
+                )}
               >
                 {renderMarkedText(
                   block.content,

@@ -23,9 +23,8 @@ type Props = {
 /**
  * 테마 본문 안에 그려지는 야마 카드.
  *
- * 좌(문제) · 우(해설) 로 나누고, 유사 문제는 아래에 전체 폭으로 깐다. 변주는
- * 문제 전체를 봐야 하는데 좁은 칼럼에 넣으면 원본과 무엇이 다른지 비교가 되지
- * 않는다. 넓은 화면에서만 2단이고 좁으면 세로로 쌓인다.
+ * 대표와 유사 문제를 카드 수에 따라 1~3열로 나눈다. 한두 문제뿐일 때는 빈 열을
+ * 만들지 않고 가능한 폭을 전부 쓰며, 좁은 화면에서는 모두 세로로 쌓인다.
  *
  * 문제를 못 가져오면 자리표시자를 그린다. 지워졌거나, 시험이 draft 거나, 보는
  * 사람에게 그 학번 열람 권한이 없는 경우다. 본문 흐름은 끊기지 않는다.
@@ -97,7 +96,7 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
 /**
  * 문제를 받아온 뒤의 본문. 훅 순서가 흔들리지 않도록 컴포넌트를 나눴다.
  *
- * 판본을 2열 격자에 같은 크기 카드로 깐다. 카드 안에 그 문제의 해설이 작은
+ * 판본을 최대 3열에 같은 크기 카드로 깐다. 카드 안에 그 문제의 해설이 작은
  * 박스로 들어가고, 그 카드와 글자까지 같은 판본은 칩으로 붙는다. 격자 전체가
  * 하나의 유사 문제 묶음이다.
  */
@@ -154,6 +153,22 @@ function YamaBody({
       row.stemBlocks.some((block) => block.type === 'image')
     return [...cards].sort((a, b) => Number(hasImage(a)) - Number(hasImage(b)))
   }, [cards, editing])
+
+  // 한 문제면 카드가 본문 폭을 전부 쓰고, 두 문제면 반씩, 세 문제 이상이면
+  // 최대 3열로 둔다. 고정 3열이면 한두 문제뿐일 때 오른쪽이 비고 카드가
+  // 불필요하게 좁아진다.
+  const cardCount = cards.length + 1
+  const columnClass = editing
+    ? cardCount >= 3
+      ? 'grid gap-2.5 lg:grid-cols-3'
+      : cardCount === 2
+        ? 'grid gap-2.5 lg:grid-cols-2'
+        : 'grid gap-2.5'
+    : cardCount >= 3
+      ? 'lg:columns-3 lg:gap-x-2.5'
+      : cardCount === 2
+        ? 'lg:columns-2 lg:gap-x-2.5'
+        : undefined
 
   // 해설은 항상 그룹에 붙인다. 그룹 없이 문제에 붙이면 나중에 판본을 묶어도
   // 해설이 따라가지 않는다. 테마에 꽂힌 야마는 어차피 묶을 대상이므로 미리 만든다.
@@ -222,9 +237,7 @@ function YamaBody({
         격자는 행 단위라 그 행만 커지고 다른 카드가 움직이지 않는다.
       */}
       <div
-        className={cn(
-          editing ? 'grid gap-2.5 lg:grid-cols-2' : 'lg:columns-2 lg:gap-x-2.5',
-        )}
+        className={columnClass}
       >
         <QuestionCard
           className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
@@ -426,10 +439,10 @@ function QuestionCard({
         />
       )}
 
-      {/* 카드 안에서는 해설이 주인공이다. 문제는 무엇을 설명하는지 알아볼
-          정도만 하고, 해설(13px)보다 한 눈금만 크게 둔다. */}
-      <div className="text-sm font-semibold leading-snug">
-        <StemBlocks blocks={stemBlocks} />
+      {/* 카드 안에서는 해설이 주인공이다. 문제 지문은 선지와 같은 크기·굵기로
+          낮춰, 본문 중간에서 문제만 지나치게 튀지 않게 한다. */}
+      <div>
+        <StemBlocks blocks={stemBlocks} compact />
       </div>
       <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
         {choices.map((choice) => (
