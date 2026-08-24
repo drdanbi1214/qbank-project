@@ -14,6 +14,8 @@ type Props = {
   topicId: string | undefined
   /** 이 과목의 단원. taxonomy 순서 그대로 넘긴다. */
   units: Unit[]
+  /** 그 단원에 새 주제를 만든다. 없으면 만들기 버튼을 내지 않는다. */
+  onNewTopic?: (unitId: string | null) => void
 }
 
 /** 대표 단원이 없는 테마를 모으는 자리. 단원 id 와 겹치지 않는 값이면 된다. */
@@ -26,7 +28,7 @@ const NO_UNIT = ''
  * 검색 중에는 묶음을 풀고 결과만 늘어놓는다 — 어느 단원에 있었는지보다
  * 찾았는지가 먼저다.
  */
-export function TopicSidebar({ topics, subjectId, topicId, units }: Props) {
+export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: Props) {
   const [keyword, setKeyword] = useState('')
   // 사람이 직접 접거나 편 것만 담는다. 손대지 않은 단원은 아래 규칙대로 열린다.
   const [toggled, setToggled] = useState<Record<string, boolean>>({})
@@ -116,23 +118,37 @@ export function TopicSidebar({ topics, subjectId, topicId, units }: Props) {
           const open = !empty && (searching || (toggled[group.key] ?? natural))
           return (
             <div key={group.key}>
-              <button
-                type="button"
-                disabled={empty}
-                onClick={() =>
-                  setToggled((previous) => ({ ...previous, [group.key]: !open }))
-                }
-                className={cn(
-                  'flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-semibold',
-                  empty
-                    ? 'cursor-default text-slate-300 dark:text-slate-600'
-                    : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+              <div className="group/unit flex items-center gap-0.5">
+                <button
+                  type="button"
+                  disabled={empty}
+                  onClick={() =>
+                    setToggled((previous) => ({ ...previous, [group.key]: !open }))
+                  }
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-semibold',
+                    empty
+                      ? 'cursor-default text-slate-300 dark:text-slate-600'
+                      : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                  )}
+                >
+                  <span className="w-3 shrink-0 text-[10px]">{empty ? '·' : open ? '▼' : '▶'}</span>
+                  <span className="min-w-0 flex-1 truncate">{group.name}</span>
+                  <span className="shrink-0 tabular-nums">{empty ? '—' : group.rows.length}</span>
+                </button>
+                {onNewTopic && (
+                  <button
+                    type="button"
+                    // 단원 줄에서 바로 만들면 어느 단원에 넣을지 다시 고를 일이 없다.
+                    onClick={() => onNewTopic(group.key === NO_UNIT ? null : group.key)}
+                    aria-label={`${group.name}에 새 주제`}
+                    title={`${group.name}에 새 주제`}
+                    className="shrink-0 rounded px-1.5 py-1 text-xs text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-brand-600 focus-visible:opacity-100 group-hover/unit:opacity-100 dark:hover:bg-slate-800"
+                  >
+                    ＋
+                  </button>
                 )}
-              >
-                <span className="w-3 shrink-0 text-[10px]">{empty ? '·' : open ? '▼' : '▶'}</span>
-                <span className="min-w-0 flex-1 truncate">{group.name}</span>
-                <span className="shrink-0 tabular-nums">{empty ? '—' : group.rows.length}</span>
-              </button>
+              </div>
 
               {open && (
                 <div className="space-y-0.5 pl-2">

@@ -68,8 +68,13 @@ export function TopicsPage() {
     [topics, topicId],
   )
 
+  // 레옵스는 게시판이라 목차 줄이 곧 글을 걸어 두는 제목이다. 문제의 단원
+  // 목록과는 쓰임이 달라, 목차에 내기로 표시한 줄만 가져온다.
   const subjectUnits = useMemo(
-    () => (taxonomy?.units ?? []).filter((unit) => unit.subjectId === subjectId),
+    () =>
+      (taxonomy?.units ?? []).filter(
+        (unit) => unit.subjectId === subjectId && unit.topicOutline,
+      ),
     [taxonomy, subjectId],
   )
 

@@ -15,6 +15,8 @@ export type Unit = {
   sortOrder: number
   /** "총론"/"각론"처럼 단원을 묶는 상위 그룹. 없으면 평평한 목록으로 보여준다 */
   groupName: string | null
+  /** 레옵스 목차에 낼 줄인지. 문제의 단원 목록과 레옵스 게시판은 쓰는 목록이 다르다. */
+  topicOutline: boolean
 }
 export type Exam = {
   id: string
@@ -54,7 +56,7 @@ export type Taxonomy = {
 export async function fetchTaxonomy(): Promise<Taxonomy> {
   const [subjectsRes, unitsRes, examsRes] = await Promise.all([
     supabase.from('subjects').select('id, name, icon_key, sort_order, code'),
-    supabase.from('units').select('id, subject_id, name, sort_order, group_name'),
+    supabase.from('units').select('id, subject_id, name, sort_order, group_name, topic_outline'),
     supabase
       .from('exams')
       .select(
@@ -82,6 +84,7 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
       name: row.name,
       sortOrder: row.sort_order,
       groupName: row.group_name,
+      topicOutline: row.topic_outline ?? false,
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ko'))
 
@@ -133,7 +136,7 @@ export async function createUnit(subjectId: string, name: string, existingUnits:
   const { data, error } = await supabase
     .from('units')
     .insert({ subject_id: subjectId, name: trimmed, sort_order: maxSortOrder + 1 })
-    .select('id, subject_id, name, sort_order, group_name')
+    .select('id, subject_id, name, sort_order, group_name, topic_outline')
     .single()
   if (error) {
     if (error.code === '23505') throw new Error('이미 있는 단원 이름입니다.')
@@ -146,6 +149,8 @@ export async function createUnit(subjectId: string, name: string, existingUnits:
     name: data.name,
     sortOrder: data.sort_order,
     groupName: data.group_name,
+    // 여기서 만드는 것은 문제의 단원이다. 레옵스 목차 줄은 따로 둔다.
+    topicOutline: data.topic_outline,
   }
 }
 
