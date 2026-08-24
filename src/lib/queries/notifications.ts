@@ -142,6 +142,8 @@ export type Announcement = {
   createdAt: string
 }
 
+export type AnnouncementPreview = Pick<Announcement, 'id' | 'title' | 'content' | 'createdAt'>
+
 /**
  * 공지사항.
  *
@@ -184,6 +186,34 @@ export async function fetchAnnouncements(
     author: row.author_id ? toAuthor(row.profiles, row.author_id) : null,
     createdAt: row.created_at,
   }))
+}
+
+/** 첫 화면 미리보기용으로 가장 최근에 작성된 공지 하나만 가져온다. */
+export async function fetchLatestAnnouncement(
+  requiredPermission: string | null = null,
+): Promise<AnnouncementPreview | null> {
+  let query = supabase
+    .from('announcements')
+    .select('id, title, content, created_at')
+
+  query = requiredPermission
+    ? query.eq('required_permission', requiredPermission)
+    : query.is('required_permission', null)
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+
+  return {
+    id: data.id,
+    title: data.title,
+    content: parseRichDoc(data.content),
+    createdAt: data.created_at,
+  }
 }
 
 export async function createAnnouncement(params: {

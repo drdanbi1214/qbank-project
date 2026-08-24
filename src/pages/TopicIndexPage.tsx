@@ -6,7 +6,15 @@ import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { subjectVisual } from '@/lib/subjectVisual'
 import { fetchAllTopicCounts } from '@/lib/queries/topics'
+import {
+  fetchLatestAnnouncement,
+  type AnnouncementPreview,
+} from '@/lib/queries/notifications'
+import { richTextToPlain } from '@/types/richtext'
 import { cn } from '@/utils/cn'
+
+const SCOPE = 'study_legendob'
+const NEW_NOTICE_MS = 3 * 24 * 60 * 60 * 1000
 
 /**
  * 테마 첫 화면. 과목을 고르는 자리다.
@@ -20,19 +28,25 @@ export function TopicIndexPage() {
   const canUse = isAdmin || hasPermission('study_legendob')
 
   const [counts, setCounts] = useState<Map<string, number> | null>(null)
+  const [latestNotice, setLatestNotice] = useState<AnnouncementPreview | null | undefined>()
   const [error, setError] = useState<string | null>(null)
+  const [openedAt] = useState(Date.now)
 
   useEffect(() => {
     if (!canUse) return
     let active = true
-    void fetchAllTopicCounts()
-      .then((rows) => {
-        if (active) setCounts(rows)
+    void Promise.all([fetchAllTopicCounts(), fetchLatestAnnouncement(SCOPE)])
+      .then(([rows, notice]) => {
+        if (active) {
+          setCounts(rows)
+          setLatestNotice(notice)
+        }
       })
       .catch((caught: unknown) => {
         if (active) {
           setError(caught instanceof Error ? caught.message : '주제를 불러오지 못했습니다.')
           setCounts(new Map())
+          setLatestNotice(null)
         }
       })
     return () => {
@@ -42,13 +56,19 @@ export function TopicIndexPage() {
 
   if (!canUse) return <Navigate to="/study" replace />
 
-  if (taxonomyLoading || counts === null) {
+  if (taxonomyLoading || counts === null || latestNotice === undefined) {
     return (
       <div className="flex justify-center py-16">
         <Spinner className="h-7 w-7" />
       </div>
     )
   }
+
+  const noticePreview = latestNotice ? richTextToPlain(latestNotice.content) : ''
+  const noticeCreatedAt = latestNotice ? new Date(latestNotice.createdAt).getTime() : Number.NaN
+  const isNewNotice = Number.isFinite(noticeCreatedAt)
+    && openedAt - noticeCreatedAt >= 0
+    && openedAt - noticeCreatedAt < NEW_NOTICE_MS
 
   return (
     <section>
@@ -69,7 +89,26 @@ export function TopicIndexPage() {
           <Icon name="megaphone" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">공지사항</span>
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+            공지사항
+            {isNewNotice && (
+              <span
+                title="최근 3일 이내 등록된 공지"
+                aria-label="새 공지"
+                className="inline-flex h-4 min-w-4 items-center justify-center rounded bg-rose-500 px-1 text-[10px] font-bold leading-none text-white"
+              >
+                N
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block truncate font-semibold">
+            {latestNotice?.title ?? '등록된 공지가 없습니다.'}
+          </span>
+          {latestNotice && (
+            <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+              {noticePreview || '본문 내용이 없습니다.'}
+            </span>
+          )}
         </span>
         <Icon name="chevron-right" size={18} className="text-slate-400" />
       </Link>
