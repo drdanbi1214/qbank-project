@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { LectureNotesPanel } from '@/components/lecture/LectureNotesPanel'
 import { Spinner } from '@/components/ui/Spinner'
@@ -18,6 +18,20 @@ const LecturePdfViewer = lazy(() =>
     default: module.LecturePdfViewer,
   })),
 )
+
+const LECTURE_SPLIT_STORAGE_KEY = 'lecture-reader-pdf-width'
+const MIN_PDF_PANE_PERCENT = 30
+const MAX_PDF_PANE_PERCENT = 70
+
+function clampPanePercent(value: number): number {
+  return Math.min(MAX_PDF_PANE_PERCENT, Math.max(MIN_PDF_PANE_PERCENT, value))
+}
+
+function initialPanePercent(): number {
+  if (typeof window === 'undefined') return 50
+  const stored = Number(window.localStorage.getItem(LECTURE_SPLIT_STORAGE_KEY))
+  return Number.isFinite(stored) ? clampPanePercent(stored) : 50
+}
 
 function sizeLabel(bytes: number | null): string | null {
   if (!bytes) return null
@@ -50,6 +64,51 @@ export function LectureDocumentPage() {
   const [mobileView, setMobileView] = useState<'pdf' | 'notes'>(() =>
     params.get('view') === 'notes' || initialNoteId ? 'notes' : 'pdf',
   )
+  const splitContainer = useRef<HTMLDivElement>(null)
+  const panePercentRef = useRef(50)
+  const [pdfPanePercent, setPdfPanePercent] = useState(initialPanePercent)
+  const [isResizing, setIsResizing] = useState(false)
+
+  const updatePanePercent = (value: number, persist = false) => {
+    const next = clampPanePercent(value)
+    panePercentRef.current = next
+    setPdfPanePercent(next)
+    if (persist) window.localStorage.setItem(LECTURE_SPLIT_STORAGE_KEY, String(next))
+  }
+
+  useEffect(() => {
+    panePercentRef.current = pdfPanePercent
+  }, [pdfPanePercent])
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const resize = (event: PointerEvent) => {
+      const bounds = splitContainer.current?.getBoundingClientRect()
+      if (!bounds || bounds.width <= 0) return
+      updatePanePercent(((event.clientX - bounds.left) / bounds.width) * 100)
+    }
+    const finish = () => {
+      window.localStorage.setItem(LECTURE_SPLIT_STORAGE_KEY, String(panePercentRef.current))
+      setIsResizing(false)
+    }
+
+    window.addEventListener('pointermove', resize)
+    window.addEventListener('pointerup', finish, { once: true })
+    window.addEventListener('blur', finish, { once: true })
+    return () => {
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+      window.removeEventListener('pointermove', resize)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('blur', finish)
+    }
+  }, [isResizing])
 
   useEffect(() => {
     if (!lectureId) return
@@ -178,11 +237,19 @@ export function LectureDocumentPage() {
         </div>
       )}
 
-      <div className={showNotesPanel ? 'grid min-w-0 gap-4 lg:grid-cols-2' : ''}>
+      <div
+        ref={splitContainer}
+        className={showNotesPanel ? 'min-w-0 lg:flex lg:items-stretch' : ''}
+        style={
+          showNotesPanel
+            ? ({ '--lecture-pdf-width': `${pdfPanePercent}%` } as CSSProperties)
+            : undefined
+        }
+      >
         <div
           className={`${showNotesPanel && effectiveMobileView !== 'pdf' ? 'hidden' : 'block'} min-w-0 lg:block ${
             showNotesPanel
-              ? 'lg:h-[calc(100dvh-10.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1'
+              ? 'lg:h-[calc(100dvh-10.5rem)] lg:w-[var(--lecture-pdf-width)] lg:flex-none lg:overflow-y-auto lg:overscroll-contain lg:pr-1'
               : ''
           }`}
         >
@@ -204,9 +271,45 @@ export function LectureDocumentPage() {
         </div>
 
         {showNotesPanel && (
+          <div
+            role="separator"
+            aria-label="PDF와 요약정리본 너비 조절"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_PDF_PANE_PERCENT}
+            aria-valuemax={MAX_PDF_PANE_PERCENT}
+            aria-valuenow={Math.round(pdfPanePercent)}
+            tabIndex={0}
+            title="드래그하여 너비 조절 · 더블클릭하여 50:50"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              event.preventDefault()
+              setIsResizing(true)
+            }}
+            onDoubleClick={() => updatePanePercent(50, true)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault()
+                updatePanePercent(pdfPanePercent - 2, true)
+              } else if (event.key === 'ArrowRight') {
+                event.preventDefault()
+                updatePanePercent(pdfPanePercent + 2, true)
+              } else if (event.key === 'Home') {
+                event.preventDefault()
+                updatePanePercent(50, true)
+              }
+            }}
+            className={`group hidden w-4 flex-none cursor-col-resize touch-none items-stretch justify-center outline-none lg:flex ${
+              isResizing ? 'bg-brand-50/70 dark:bg-brand-950/30' : ''
+            }`}
+          >
+            <span className="my-2 w-1 rounded-full bg-slate-200 transition-colors group-hover:bg-brand-400 group-focus:bg-brand-400 dark:bg-slate-700 dark:group-hover:bg-brand-500 dark:group-focus:bg-brand-500" />
+          </div>
+        )}
+
+        {showNotesPanel && (
           <aside
             aria-label="2026 학생 정리본"
-            className={`${effectiveMobileView !== 'notes' ? 'hidden' : 'block'} min-w-0 lg:block lg:h-[calc(100dvh-10.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pl-1`}
+            className={`${effectiveMobileView !== 'notes' ? 'hidden' : 'block'} min-w-0 lg:block lg:h-[calc(100dvh-10.5rem)] lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pl-1`}
           >
             {!notesReady ? (
               <div className="flex flex-col items-center gap-2 py-16">

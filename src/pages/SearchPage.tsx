@@ -4,12 +4,16 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
 import { useAuth } from '@/lib/auth'
+import { PERMISSION } from '@/lib/permissions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
-import { searchTopics, type TopicForQuestion } from '@/lib/queries/topics'
 import { fetchLectureDocuments, mixLectureHits, type LectureDocument } from '@/lib/queries/lectures'
-import { splitLectureSearchText } from '@/lib/lectureSearch'
+import { searchTheoryDocuments, type TheorySearchHit } from '@/lib/queries/theory'
+import { includesLectureSearchTerms, splitLectureSearchText } from '@/lib/lectureSearch'
 import { cn } from '@/utils/cn'
+
+type SearchSource = 'questions' | 'theory' | 'lectures' | 'notes'
+const SEARCH_SOURCE_ORDER: SearchSource[] = ['questions', 'theory', 'lectures', 'notes']
 
 /**
  * 검색.
@@ -19,26 +23,39 @@ import { cn } from '@/utils/cn'
 export function SearchPage() {
   const [params, setParams] = useSearchParams()
   const { taxonomy } = useData()
-  const { hasPermission } = useAuth()
-  const canViewStudySolutions = hasPermission('study_hapbon3')
+  const { hasPermission, isAdmin } = useAuth()
+  const canViewStudySolutions = isAdmin || hasPermission('study_hapbon3')
+  const canSearchTheory = canViewStudySolutions
+  const canSearchNotes =
+    isAdmin || hasPermission(PERMISSION.mediprepLectureNotesView)
 
   const query = params.get('q') ?? ''
-  const includeLectures = params.get('lectures') === '1'
-  const includeQuestionSearch = !includeLectures
-  const includeSolutions =
-    includeQuestionSearch && canViewStudySolutions && params.get('scope') === 'all'
+  const encodedSources = params.get('sources')
+  const legacyDefault = params.get('lectures') === '1' ? 'lectures' : 'questions'
+  const selectedSources = new Set(
+    (encodedSources ?? legacyDefault)
+      .split(',')
+      .filter((source): source is SearchSource =>
+        SEARCH_SOURCE_ORDER.includes(source as SearchSource),
+      ),
+  )
+  const includeQuestionSearch = selectedSources.has('questions')
+  const includeSolutions = includeQuestionSearch && canViewStudySolutions
+  const includeTheory = selectedSources.has('theory') && canSearchTheory
+  const includeLectures = selectedSources.has('lectures')
+  const includeNotes = selectedSources.has('notes') && canSearchNotes
+  const includeLectureSearch = includeLectures || includeNotes
+  const hasSelectedSource =
+    includeQuestionSearch || includeTheory || includeLectures || includeNotes
   const subjectId = params.get('subject')
   const cohort = params.get('cohort')
 
   const [input, setInput] = useState(query)
   const [loaded, setLoaded] = useState<{ key: string; hits: SearchHit[] } | null>(null)
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null)
-  // 테마는 레옵스 전용이라 권한이 있을 때만 찾는다. RLS 도 같은 조건으로 막지만
-  // 없는 사람에게 헛조회를 보내지 않는다.
-  const canSearchTopics = hasPermission('study_legendob')
-  const [topicLoaded, setTopicLoaded] = useState<{
+  const [theoryLoaded, setTheoryLoaded] = useState<{
     key: string
-    rows: TopicForQuestion[]
+    rows: TheorySearchHit[]
   } | null>(null)
 
   const [lectureLoaded, setLectureLoaded] = useState<{
@@ -46,8 +63,7 @@ export function SearchPage() {
     rows: LectureDocument[]
   } | null>(null)
 
-  const searchTopicsEnabled = canSearchTopics && includeQuestionSearch
-  const requestKey = `${query}|${includeSolutions}|${includeLectures}|${subjectId ?? ''}|${cohort ?? ''}`
+  const requestKey = `${query}|${includeQuestionSearch}|${includeSolutions}|${includeTheory}|${includeLectures}|${includeNotes}|${subjectId ?? ''}|${cohort ?? ''}`
   const error = failed?.key === requestKey ? failed.message : null
 
   useEffect(() => {
@@ -79,25 +95,24 @@ export function SearchPage() {
         })
     }
 
-    if (includeLectures) {
+    if (includeLectureSearch) {
       // 강의록 분류는 임상 과목과 다른 축이라 과목 거르개를 넘기지 않는다.
       void fetchLectureDocuments({ keyword: query })
         .then((rows) => {
-          // 앞에서부터 자르면 제목 일치가 자리를 다 차지해 본문 일치가 사라진다.
-          if (active) setLectureLoaded({ key: requestKey, rows: mixLectureHits(rows, query, 30) })
+          if (active) setLectureLoaded({ key: requestKey, rows })
         })
         .catch(() => {
           if (active) setLectureLoaded({ key: requestKey, rows: [] })
         })
     }
 
-    if (searchTopicsEnabled) {
-      void searchTopics(query, subjectId)
+    if (includeTheory) {
+      void searchTheoryDocuments(query, subjectId)
         .then((rows) => {
-          if (active) setTopicLoaded({ key: requestKey, rows })
+          if (active) setTheoryLoaded({ key: requestKey, rows })
         })
         .catch(() => {
-          if (active) setTopicLoaded({ key: requestKey, rows: [] })
+          if (active) setTheoryLoaded({ key: requestKey, rows: [] })
         })
     }
 
@@ -108,11 +123,13 @@ export function SearchPage() {
     query,
     includeSolutions,
     includeLectures,
+    includeNotes,
+    includeLectureSearch,
     includeQuestionSearch,
+    includeTheory,
     subjectId,
     cohort,
     requestKey,
-    searchTopicsEnabled,
   ])
 
   const update = useCallback(
@@ -147,31 +164,42 @@ export function SearchPage() {
     query.trim() !== '' &&
     error === null &&
     ((includeQuestionSearch && loaded?.key !== requestKey) ||
-      (includeLectures && lectureLoaded?.key !== requestKey) ||
-      (searchTopicsEnabled && topicLoaded?.key !== requestKey))
+      (includeLectureSearch && lectureLoaded?.key !== requestKey) ||
+      (includeTheory && theoryLoaded?.key !== requestKey))
   const hits = includeQuestionSearch && loaded?.key === requestKey ? loaded.hits : []
-  const topicHits = searchTopicsEnabled && topicLoaded?.key === requestKey ? topicLoaded.rows : []
+  const theoryHits = includeTheory && theoryLoaded?.key === requestKey ? theoryLoaded.rows : []
   // 검색어나 조건이 바뀌면 이전 강의록 결과가 잠깐 남지 않게 열쇠로 잠근다.
-  const lectureHits = lectureLoaded?.key === requestKey ? lectureLoaded.rows : []
+  const lectureRows = lectureLoaded?.key === requestKey ? lectureLoaded.rows : []
+  const lectureHits = includeLectures
+    ? mixLectureHits(
+        lectureRows.filter(
+          (lecture) =>
+            lecture.matchPage !== null ||
+            includesLectureSearchTerms(
+              [lecture.title, lecture.professor, lecture.curriculum].filter(Boolean).join(' '),
+              query,
+            ),
+        ),
+        query,
+        30,
+      )
+    : []
+  const noteHits = includeNotes
+    ? lectureRows.filter((lecture) => lecture.noteMatchId !== null).slice(0, 30)
+    : []
 
   function submit(event: FormEvent) {
     event.preventDefault()
     update({ q: input.trim() })
   }
 
-  const changeScope = useCallback(
-    (target: 'problems' | 'all' | 'lectures') => {
-      if (target === 'lectures') {
-        update({ lectures: '1' })
-        return
-      }
-      update({
-        lectures: null,
-        scope: target === 'all' ? 'all' : null,
-      })
-    },
-    [update],
-  )
+  function toggleSource(source: SearchSource) {
+    const next = new Set(selectedSources)
+    if (next.has(source)) next.delete(source)
+    else next.add(source)
+    const value = SEARCH_SOURCE_ORDER.filter((item) => next.has(item)).join(',') || 'none'
+    update({ sources: value, lectures: null, scope: null })
+  }
 
   const selectClass =
     'rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm outline-none dark:border-slate-700 dark:bg-slate-900'
@@ -186,10 +214,10 @@ export function SearchPage() {
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="문제·풀이·강의록 내용을 검색하세요"
+          placeholder="문제·풀이·알렌·강의록·정리본 내용을 검색하세요"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
         />
-        <Button type="submit" disabled={searching || input.trim() === ''}>
+        <Button type="submit" disabled={searching || input.trim() === '' || !hasSelectedSource}>
           {searching && (
             <Spinner className="h-4 w-4 border-white/40 border-t-white dark:border-white/40 dark:border-t-white" />
           )}
@@ -198,38 +226,41 @@ export function SearchPage() {
       </form>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div
-          role="group"
-          aria-label="검색 범위"
-          className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
-        >
-          <ScopeButton
-            active={includeQuestionSearch && !includeSolutions}
-            onClick={() => changeScope('problems')}
-          >
-            문제만
-          </ScopeButton>
-          {canViewStudySolutions && (
-            <ScopeButton
-              active={includeQuestionSearch && includeSolutions}
-              onClick={() => changeScope('all')}
-            >
-              문제 + 풀이
-            </ScopeButton>
-          )}
-          <ScopeButton
-            active={includeLectures}
-            onClick={() => changeScope('lectures')}
-          >
-            강의록만
-          </ScopeButton>
+        <div role="group" aria-label="검색 범위" className="flex flex-wrap gap-1.5">
+          <SourceCheckbox
+            checked={includeQuestionSearch}
+            onChange={() => toggleSource('questions')}
+            label="문제+풀이"
+          />
+          <SourceCheckbox
+            checked={includeTheory}
+            disabled={!canSearchTheory}
+            onChange={() => toggleSource('theory')}
+            label="알렌"
+            title={!canSearchTheory ? '알렌 권한이 필요합니다.' : undefined}
+          />
+          <SourceCheckbox
+            checked={includeLectures}
+            onChange={() => toggleSource('lectures')}
+            label="강의록"
+          />
+          <SourceCheckbox
+            checked={includeNotes}
+            disabled={!canSearchNotes}
+            onChange={() => toggleSource('notes')}
+            label="정리본"
+            title={!canSearchNotes ? '요약정리노트 권한이 필요합니다.' : undefined}
+          />
         </div>
 
         <select
           value={subjectId ?? ''}
           onChange={(event) => update({ subject: event.target.value || null })}
-          disabled={!includeQuestionSearch}
-          className={cn(selectClass, !includeQuestionSearch && 'cursor-not-allowed opacity-45')}
+          disabled={!includeQuestionSearch && !includeTheory}
+          className={cn(
+            selectClass,
+            !includeQuestionSearch && !includeTheory && 'cursor-not-allowed opacity-45',
+          )}
           aria-label="과목"
         >
           <option value="">과목 전체</option>
@@ -266,35 +297,46 @@ export function SearchPage() {
             찾고 싶은 내용을 입력해주세요.
           </p>
         </div>
+      ) : !hasSelectedSource ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            검색할 범위를 하나 이상 선택해 주세요.
+          </p>
+        </div>
       ) : searching ? (
         <div className="flex justify-center py-10">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : hits.length === 0 && topicHits.length === 0 && lectureHits.length === 0 ? (
+      ) : hits.length === 0 &&
+        theoryHits.length === 0 &&
+        lectureHits.length === 0 &&
+        noteHits.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">검색 결과가 없습니다.</p>
         </div>
       ) : (
         <>
-          {/* 테마는 문제보다 위에 둔다. 개념을 찾는 사람에게는 이쪽이 먼저다. */}
-          {topicHits.length > 0 && (
+          {theoryHits.length > 0 && (
             <section className="mb-5">
-              <h2 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                레옵스 주제 {topicHits.length}개
+              <h2 className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+                알렌 {theoryHits.length}개
               </h2>
               <ul className="space-y-2">
-                {topicHits.map((topic) => (
-                  <li key={topic.id}>
+                {theoryHits.map((theory) => (
+                  <li key={theory.id}>
                     <Link
-                      to={`/topics/${topic.subjectId}/${topic.id}`}
-                      className="block rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 transition-colors hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/20"
+                      to={`/theory/${theory.subjectId}/${theory.id}`}
+                      className="block rounded-xl border border-blue-200 bg-blue-50/50 p-3 transition-colors hover:border-blue-400 dark:border-blue-900 dark:bg-blue-950/20"
                     >
-                      <span className="font-medium">{topic.title}</span>
-                      {topic.preview !== '' && (
-                        <span className="mt-1 line-clamp-2 block text-sm text-slate-600 dark:text-slate-300">
-                          {topic.preview}
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{theory.title}</span>
+                        <span className="text-xs text-slate-400">
+                          {taxonomy?.subjectById.get(theory.subjectId)?.name}
                         </span>
-                      )}
+                      </span>
+                      <span className="mt-1 line-clamp-2 block text-sm text-slate-600 dark:text-slate-300">
+                        <LectureHighlighted text={theory.snippet} query={query} />
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -311,7 +353,7 @@ export function SearchPage() {
                 {lectureHits.map((lecture) => (
                   <li key={lecture.id}>
                     <a
-                      href={lectureLink(lecture, query)}
+                      href={lecturePdfLink(lecture, query)}
                       target="_blank"
                       rel="noreferrer"
                       className="block rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 transition-colors hover:border-indigo-400 dark:border-indigo-900 dark:bg-indigo-950/20"
@@ -329,19 +371,51 @@ export function SearchPage() {
                             {lecture.matchPageCount > 1 && ` 외 ${lecture.matchPageCount - 1}쪽`}
                           </span>
                         )}
-                        {lecture.noteMatchId !== null && (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200">
-                            정리본에서 일치
-                            {lecture.noteMatchCount > 1 && ` · 외 ${lecture.noteMatchCount - 1}개`}
-                          </span>
-                        )}
                       </div>
-                      {(lecture.noteMatchSnippet || lecture.matchSnippet) && (
+                      {lecture.matchSnippet && (
                         <p className="mt-1 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">
                           <LectureHighlighted
-                            text={lecture.noteMatchSnippet ?? lecture.matchSnippet ?? ''}
+                            text={lecture.matchSnippet}
                             query={query}
                           />
+                        </p>
+                      )}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {noteHits.length > 0 && (
+            <section className="mb-5">
+              <h2 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                정리본 {noteHits.length}개
+              </h2>
+              <ul className="space-y-2">
+                {noteHits.map((lecture) => (
+                  <li key={lecture.id}>
+                    <a
+                      href={lectureNoteLink(lecture, query)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 transition-colors hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/20"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-medium text-slate-900 dark:text-slate-100">
+                          {lecture.noteMatchTitle
+                            ? cleanLectureNoteTitle(lecture.noteMatchTitle)
+                            : lecture.title}
+                        </span>
+                        <span className="text-slate-400">{lecture.title}</span>
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200">
+                          요약정리본
+                          {lecture.noteMatchCount > 1 && ` · 외 ${lecture.noteMatchCount - 1}개`}
+                        </span>
+                      </div>
+                      {lecture.noteMatchSnippet && (
+                        <p className="mt-1 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">
+                          <LectureHighlighted text={lecture.noteMatchSnippet} query={query} />
                         </p>
                       )}
                     </a>
@@ -389,19 +463,28 @@ export function SearchPage() {
   )
 }
 
-/** 일치한 쪽으로 바로 열고, 뷰어가 그 자리에서 검색어를 칠하게 한다. */
-function lectureLink(lecture: LectureDocument, query: string): string {
+/** PDF 본문 일치 쪽으로 바로 열고 뷰어가 검색어를 칠하게 한다. */
+function lecturePdfLink(lecture: LectureDocument, query: string): string {
   const search = new URLSearchParams()
-  if (lecture.noteMatchId !== null) {
-    search.set('view', 'notes')
-    search.set('note', lecture.noteMatchId)
-    if (query.trim() !== '') search.set('nq', query.trim())
-  } else {
-    if (lecture.matchPage !== null) search.set('page', String(lecture.matchPage))
-    if (query.trim() !== '') search.set('q', query.trim())
-  }
+  if (lecture.matchPage !== null) search.set('page', String(lecture.matchPage))
+  if (query.trim() !== '') search.set('q', query.trim())
   const tail = search.toString()
   return `/lectures/${lecture.id}${tail === '' ? '' : `?${tail}`}`
+}
+
+/** 정리본 일치 구획으로 바로 열고 오른쪽 패널에서 검색어를 칠한다. */
+function lectureNoteLink(lecture: LectureDocument, query: string): string {
+  const search = new URLSearchParams({ view: 'notes' })
+  if (lecture.noteMatchId) search.set('note', lecture.noteMatchId)
+  if (query.trim() !== '') search.set('nq', query.trim())
+  return `/lectures/${lecture.id}?${search.toString()}`
+}
+
+function cleanLectureNoteTitle(title: string): string {
+  return title.replace(
+    /^(?:📝\s*)?시험\s*대비\s*요점\s*정리\s*[:：]\s*/u,
+    '',
+  )
 }
 
 /** 강의록은 여러 낱말 AND 검색이므로 일치한 낱말을 각각 표시한다. */
@@ -422,29 +505,39 @@ function LectureHighlighted({ text, query }: { text: string; query: string }) {
   )
 }
 
-function ScopeButton({
-  active,
-  onClick,
-  children,
+function SourceCheckbox({
+  checked,
+  disabled = false,
+  onChange,
+  label,
+  title,
 }: {
-  active: boolean
-  onClick: () => void
-  children: string
+  checked: boolean
+  disabled?: boolean
+  onChange: () => void
+  label: string
+  title?: string
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
+    <label
+      title={title}
       className={cn(
-        'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-        active
-          ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100'
-          : 'text-slate-500 dark:text-slate-400',
+        'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors',
+        checked
+          ? 'border-brand-300 bg-brand-50 text-brand-800 dark:border-brand-700 dark:bg-brand-950/40 dark:text-brand-200'
+          : 'border-slate-300 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+        disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer hover:border-brand-400',
       )}
     >
-      {children}
-    </button>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="h-4 w-4 accent-brand-600"
+      />
+      {label}
+    </label>
   )
 }
 

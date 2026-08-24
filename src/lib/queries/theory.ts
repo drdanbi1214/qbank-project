@@ -14,6 +14,15 @@ export type TheoryDocument = {
   updatedAt: string
 }
 
+export type TheorySearchHit = {
+  id: string
+  subjectId: string
+  unitId: string | null
+  title: string
+  snippet: string
+  score: number
+}
+
 type TheoryRow = {
   id: string
   subject_id: string
@@ -50,6 +59,28 @@ export async function fetchTheoryDocuments(subjectId?: string): Promise<TheoryDo
     content: parseRichDoc(row.content),
     sortOrder: row.sort_order,
     updatedAt: row.updated_at,
+  }))
+}
+
+/** 알렌 제목과 리치텍스트 본문을 여러 낱말 AND 규칙으로 검색한다. */
+export async function searchTheoryDocuments(
+  query: string,
+  subjectId?: string | null,
+): Promise<TheorySearchHit[]> {
+  const { data, error } = await supabase.rpc('search_theory_documents', {
+    p_query: query,
+    p_subject_id: subjectId ?? undefined,
+    p_limit: 50,
+  })
+  if (error) throw error
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    subjectId: row.subject_id,
+    unitId: row.unit_id,
+    title: row.title,
+    snippet: row.snippet,
+    score: row.score,
   }))
 }
 

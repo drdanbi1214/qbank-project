@@ -90,6 +90,8 @@ export function renderMarkedText(
   options?: {
     activeMarkId?: string | null
     onMarkClick?: (id: string) => void
+    /** 검색어 강조처럼 표시 안쪽의 글자를 한 번 더 꾸밀 때 사용한다. */
+    renderText?: (text: string) => ReactNode
   },
 ): ReactNode[] {
   return splitByMarks(start, start + text.length, marks).map((segment) => {
@@ -113,6 +115,7 @@ export function renderMarkedText(
 
     // 표시된 구간을 누르면 첫 번째 표시를 대상으로 삼는다.
     const target = segment.marks[0]
+    const content = options?.renderText ? options.renderText(slice) : slice
 
     // mark 요소는 브라우저 기본 배경(노랑)이 있어 span 으로 그린다.
     return (
@@ -131,7 +134,7 @@ export function renderMarkedText(
           options?.onMarkClick && 'cursor-pointer',
         )}
       >
-        {slice}
+        {content}
       </span>
     )
   })

@@ -1,6 +1,9 @@
 import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { MarkableRegion } from '@/components/marking/MarkableRegion'
+import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
+import { useTextMarks } from '@/components/marking/useTextMarks'
 import { includesLectureSearchTerms, splitLectureSearchText } from '@/lib/lectureSearch'
 import type { LectureStudentNote } from '@/lib/queries/lectures'
 
@@ -9,6 +12,9 @@ type Props = {
   initialQuery?: string
   activeNoteId?: string | null
 }
+
+const TIMELINE_VISIBILITY_STORAGE_KEY = 'lecture-notes-hide-timelines'
+const TIMELINE_PATTERN = /[ \t]*\[(?:\d{1,2}:)?\d{1,2}:\d{2}\]/g
 
 function HighlightedText({ text, query }: { text: string; query: string }) {
   return splitLectureSearchText(text, query).map((part, index) =>
@@ -34,14 +40,122 @@ function markedChildren(children: ReactNode, query: string) {
 
 /** AI 정리본 제목의 반복 안내 문구는 감추고 실제 주제만 보여 준다. */
 function displayMarkdown(markdown: string): string {
-  return markdown.replace(
-    /^(#{1,6}\s+)(?:📝\s*)?시험\s*대비\s*요점\s*정리\s*[:：]\s*/gmu,
-    '$1',
-  )
+  return markdown
+    .replace(
+      /^(#{1,6}\s+)(?:📝\s*)?시험\s*대비\s*요점\s*정리\s*[:：]\s*/gmu,
+      '$1',
+    )
+    // 닫는 ** 바로 뒤에 한글 조사가 오면 CommonMark가 굵게로 해석하지 않는다.
+    // 보이지 않는 구분 문자를 넣어 원본 문구는 유지하면서 정상 렌더링한다.
+    .replace(/\*\*([^*\n]+?)\*\*(?=[가-힣])/gu, '**$1**&ZeroWidthSpace;')
 }
 
-function markdownComponents(query: string): Components {
+function initialTimelineVisibility(): boolean {
+  if (typeof window === 'undefined') return true
+  const stored = window.localStorage.getItem(TIMELINE_VISIBILITY_STORAGE_KEY)
+  return stored === null ? true : stored === 'true'
+}
+
+function renderNoteText(
+  text: string,
+  start: number,
+  marks: RenderMark[],
+  query: string,
+  hideTimelines: boolean,
+): ReactNode[] {
+  const result: ReactNode[] = []
+  let cursor = 0
+
+  for (const match of text.matchAll(TIMELINE_PATTERN)) {
+    const matchAt = match.index ?? 0
+    if (matchAt > cursor) {
+      const visible = text.slice(cursor, matchAt)
+      result.push(
+        ...renderMarkedText(visible, start + cursor, marks, {
+          renderText: (value) => <HighlightedText text={value} query={query} />,
+        }),
+      )
+    }
+
+    const timeline = match[0]
+    if (hideTimelines) {
+      // DOM에는 남겨 개인 표시의 문자 위치를 고정하고 시각적으로만 감춘다.
+      result.push(
+        <span key={`timeline-${start + matchAt}`} data-pos={start + matchAt} className="hidden">
+          {timeline}
+        </span>,
+      )
+    } else {
+      result.push(
+        ...renderMarkedText(timeline, start + matchAt, marks, {
+          renderText: (value) => <HighlightedText text={value} query={query} />,
+        }),
+      )
+    }
+    cursor = matchAt + timeline.length
+  }
+
+  if (cursor < text.length) {
+    result.push(
+      ...renderMarkedText(text.slice(cursor), start + cursor, marks, {
+        renderText: (value) => <HighlightedText text={value} query={query} />,
+      }),
+    )
+  }
+  return result
+}
+
+type HastNode = {
+  type: string
+  value?: unknown
+  tagName?: string
+  properties?: Record<string, unknown>
+  children?: HastNode[]
+}
+
+/** Markdown의 모든 텍스트 조각에 문서 전체 기준 문자 위치를 붙인다. */
+function rehypeMarkPositions() {
+  return (tree: unknown) => {
+    let position = 0
+
+    const visit = (node: HastNode) => {
+      if (!Array.isArray(node.children)) return
+      node.children = node.children.map((child) => {
+        if (child.type === 'text' && typeof child.value === 'string') {
+          const start = position
+          position += child.value.length
+          return {
+            type: 'element',
+            tagName: 'span',
+            properties: { dataMarkPos: start },
+            children: [child],
+          }
+        }
+        visit(child)
+        return child
+      })
+    }
+
+    visit(tree as HastNode)
+  }
+}
+
+function markdownComponents(
+  query: string,
+  marks: RenderMark[],
+  hideTimelines: boolean,
+): Components {
   return {
+    span: ({ children, node }) => {
+      if (typeof children !== 'string') return <span>{children}</span>
+      const start = Number(node?.properties.dataMarkPos)
+      if (!Number.isFinite(start)) {
+        return <span>{markedChildren(children, query)}</span>
+      }
+      return (
+        <>{renderNoteText(children, start, marks, query, hideTimelines)}</>
+      )
+    },
     h1: ({ children }) => (
       <h1 className="mb-4 mt-8 text-xl font-bold leading-snug first:mt-0">
         {markedChildren(children, query)}
@@ -79,7 +193,7 @@ function markdownComponents(query: string): Components {
       </li>
     ),
     strong: ({ children }) => (
-      <strong className="font-bold text-slate-950 dark:text-white">
+      <strong className="font-bold text-blue-700 dark:text-blue-300">
         {markedChildren(children, query)}
       </strong>
     ),
@@ -100,7 +214,7 @@ function markdownComponents(query: string): Components {
       </a>
     ),
     code: ({ children }) => (
-      <code className="font-sans font-bold text-blue-950 dark:text-blue-200">
+      <code className="font-sans text-inherit">
         {markedChildren(children, query)}
       </code>
     ),
@@ -137,9 +251,56 @@ function dateLabel(value: string | null): string | null {
   return year && month && day ? `${year}.${month}.${day}` : value
 }
 
+function MarkedLectureNote({
+  note,
+  query,
+  active,
+  hideTimelines,
+  setNode,
+}: {
+  note: LectureStudentNote
+  query: string
+  active: boolean
+  hideTimelines: boolean
+  setNode: (node: HTMLElement | null) => void
+}) {
+  const textMarks = useTextMarks('lecture_note', note.id)
+  const components = markdownComponents(query, textMarks.marks, hideTimelines)
+  const markdown = useMemo(() => displayMarkdown(note.contentMd), [note.contentMd])
+  const meta = [note.sourceCourse, dateLabel(note.lectureDate)].filter(Boolean)
+
+  return (
+    <article
+      ref={setNode}
+      className={`scroll-mt-32 rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 lg:scroll-mt-3 ${
+        active
+          ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-600 dark:ring-emerald-900'
+          : 'border-slate-200 dark:border-slate-700'
+      }`}
+    >
+      <header className="mb-4 border-b border-slate-100 pb-3 dark:border-slate-800">
+        <p className="text-xs text-slate-400">{meta.join(' · ') || note.sourceKey}</p>
+        <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          {note.sourceKey}
+        </p>
+      </header>
+      <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeMarkPositions]}
+          components={components}
+        >
+          {markdown}
+        </ReactMarkdown>
+      </MarkableRegion>
+    </article>
+  )
+}
+
 /** 요약정리노트 권한자에게만 부모 페이지가 마운트하는 학생 정리본 패널. */
 export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Props) {
   const [searchInput, setSearchInput] = useState(initialQuery)
+  const [hideTimelines, setHideTimelines] = useState(initialTimelineVisibility)
   const noteNodes = useRef(new Map<string, HTMLElement>())
 
   const query = searchInput.trim()
@@ -152,8 +313,6 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
           ),
     [notes, query],
   )
-  const components = useMemo(() => markdownComponents(query), [query])
-
   useEffect(() => {
     if (!activeNoteId) return
     const timer = window.setTimeout(() => {
@@ -172,7 +331,20 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
             요약정리본
           </span>
-          <span className="ml-auto text-xs text-slate-400">
+          <label className="ml-auto flex cursor-pointer items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <input
+              type="checkbox"
+              checked={hideTimelines}
+              onChange={(event) => {
+                const next = event.target.checked
+                setHideTimelines(next)
+                window.localStorage.setItem(TIMELINE_VISIBILITY_STORAGE_KEY, String(next))
+              }}
+              className="h-3.5 w-3.5 accent-emerald-600"
+            />
+            타임라인 숨기기
+          </label>
+          <span className="text-xs text-slate-400">
             {query ? `${visible.length}/${notes.length}개` : `${notes.length}개`}
           </span>
         </div>
@@ -184,6 +356,9 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
           aria-label="정리본 안에서 찾기"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-600 dark:bg-slate-800 dark:focus:ring-emerald-950"
         />
+        <p className="mt-1.5 px-1 text-[11px] text-slate-400 dark:text-slate-500">
+          본문을 드래그하면 개인 형광펜·빨간 글씨·굵은 글씨를 표시할 수 있습니다.
+        </p>
       </div>
 
       {visible.length === 0 ? (
@@ -194,33 +369,19 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
         </div>
       ) : (
         <div className="space-y-3">
-          {visible.map((note) => {
-            const meta = [note.sourceCourse, dateLabel(note.lectureDate)].filter(Boolean)
-            return (
-              <article
-                key={note.id}
-                ref={(node) => {
+          {visible.map((note) => (
+            <MarkedLectureNote
+              key={note.id}
+              note={note}
+              query={query}
+              active={note.id === activeNoteId}
+              hideTimelines={hideTimelines}
+              setNode={(node) => {
                   if (node) noteNodes.current.set(note.id, node)
                   else noteNodes.current.delete(note.id)
-                }}
-                className={`scroll-mt-32 rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 lg:scroll-mt-3 ${
-                  note.id === activeNoteId
-                    ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-600 dark:ring-emerald-900'
-                    : 'border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <header className="mb-4 border-b border-slate-100 pb-3 dark:border-slate-800">
-                  <p className="text-xs text-slate-400">{meta.join(' · ') || note.sourceKey}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    {note.sourceKey}
-                  </p>
-                </header>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-                  {displayMarkdown(note.contentMd)}
-                </ReactMarkdown>
-              </article>
-            )
-          })}
+              }}
+            />
+          ))}
         </div>
       )}
     </div>

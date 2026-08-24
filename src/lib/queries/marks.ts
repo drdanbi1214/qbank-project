@@ -8,6 +8,7 @@ export type MarkTargetType =
   | 'ai_solution'
   | 'senior_solution'
   | 'theory'
+  | 'lecture_note'
 
 export type TextMarkRow = {
   id: string

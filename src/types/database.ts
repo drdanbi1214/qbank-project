@@ -3177,6 +3177,21 @@ export type Database = {
           updated_at: string
         }[]
       }
+      search_theory_documents: {
+        Args: {
+          p_limit?: number
+          p_query: string
+          p_subject_id?: string
+        }
+        Returns: {
+          id: string
+          score: number
+          snippet: string
+          subject_id: string
+          title: string
+          unit_id: string
+        }[]
+      }
       search_questions: {
         Args: {
           p_cohort?: string
