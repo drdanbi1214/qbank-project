@@ -43,6 +43,10 @@ COURSE_LINE = re.compile(r"^-\s*과목:\s*(.+?)\s*$")
 DATE_LINE = re.compile(r"^-\s*날짜:\s*(\d{4}-\d{2}-\d{2})\s*$")
 SUMMARY_MARKER = re.compile(r"^###\s+시험 요점 정리\s*$")
 SCHEDULE = re.compile(r"^(\d{4})_([\d,\s-]+)교시_(.+)$", re.IGNORECASE)
+SCHEDULE_PROFESSOR_FIRST = re.compile(
+    r"^(\d{4})_([가-힣]{2,4})_([\d,\s-]+)교시_(.+)$",
+    re.IGNORECASE,
+)
 KOREAN_NAME = re.compile(r"^[가-힣]{2,4}$")
 FAILED_PHRASES = (
     "요점 정리 생성에 실패",
@@ -97,6 +101,7 @@ class Candidate:
     same_date: bool
     period_overlap: bool
     professor_conflict: bool
+    title_conflict: bool
 
 
 @dataclass(frozen=True)
@@ -133,16 +138,25 @@ def parse_periods(value: str) -> tuple[int, ...]:
 def parse_schedule(value: str) -> ScheduleInfo | None:
     stem = nfc(pathlib.Path(value).stem)
     found = SCHEDULE.match(stem)
-    if not found:
-        return None
+    if found:
+        month_day = found.group(1)
+        periods = parse_periods(found.group(2))
+        rest = found.group(3).strip()
+        pieces = rest.split("_", 1)
+        professor = pieces[0].strip() if len(pieces) == 2 and KOREAN_NAME.fullmatch(pieces[0].strip()) else None
+        title = pieces[1].strip() if professor and len(pieces) == 2 else rest
+    else:
+        professor_first = SCHEDULE_PROFESSOR_FIRST.match(stem)
+        if not professor_first:
+            return None
+        month_day = professor_first.group(1)
+        professor = professor_first.group(2).strip()
+        periods = parse_periods(professor_first.group(3))
+        title = professor_first.group(4).strip()
 
-    rest = found.group(3).strip()
-    pieces = rest.split("_", 1)
-    professor = pieces[0].strip() if len(pieces) == 2 and KOREAN_NAME.fullmatch(pieces[0].strip()) else None
-    title = pieces[1].strip() if professor and len(pieces) == 2 else rest
     return ScheduleInfo(
-        month_day=found.group(1),
-        periods=parse_periods(found.group(2)),
+        month_day=month_day,
+        periods=periods,
         professor=professor,
         title=nfc(title),
     )
@@ -236,7 +250,7 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     note = section.schedule
     target = pdf.schedule
     if not note or not target:
-        return Candidate(pdf.filename, -100, ("시간표 형식 해석 실패",), False, False, False)
+        return Candidate(pdf.filename, -100, ("시간표 형식 해석 실패",), False, False, False, False)
 
     score = 0
     reasons: list[str] = []
@@ -281,11 +295,22 @@ def score_candidate(section: NoteSection, pdf: PdfLecture) -> Candidate:
     note_title = normalized_words(note.title)
     pdf_title = normalized_words(target.title)
     similarity = difflib.SequenceMatcher(None, note_title, pdf_title).ratio() if note_title and pdf_title else 0
+    # 교시·교수가 같아도 긴 강의명이 전혀 다르면 다른 강의를 잘못 고를 수 있다.
+    # RT, MEN 같은 짧은 약어는 이 규칙에서 제외하고 사람이 쓴 시간표 정보를 따른다.
+    title_conflict = len(note_title) >= 5 and len(pdf_title) >= 5 and similarity < 0.18
     title_points = round(similarity * 35)
     score += title_points
-    reasons.append(f"제목 {similarity:.0%}")
+    reasons.append(f"제목 {similarity:.0%}" + (" (불일치)" if title_conflict else ""))
 
-    return Candidate(pdf.filename, score, tuple(reasons), same_date, overlap, professor_conflict)
+    return Candidate(
+        pdf.filename,
+        score,
+        tuple(reasons),
+        same_date,
+        overlap,
+        professor_conflict,
+        title_conflict,
+    )
 
 
 def match_sections(sections: list[NoteSection], pdfs: list[PdfLecture]) -> list[MatchResult]:
@@ -309,6 +334,7 @@ def match_sections(sections: list[NoteSection], pdfs: list[PdfLecture]) -> list[
             and best.same_date
             and best.period_overlap
             and not best.professor_conflict
+            and not best.title_conflict
             and best.score - runner_up >= 8
         ):
             status = "AUTO"
@@ -340,13 +366,21 @@ def load_manifest(path: pathlib.Path | None) -> dict[str, dict[str, object]]:
             raise ValueError("manifest의 각 값은 JSON 객체여야 합니다.")
         value = dict(raw_value)
         pdf = value.get("pdf")
+        pdfs = value.get("pdfs")
         skip = value.get("skip")
         if pdf is not None and not isinstance(pdf, str):
             raise ValueError(f"manifest의 pdf는 문자열이어야 합니다: {raw_key}")
+        if pdfs is not None and (
+            not isinstance(pdfs, list)
+            or not pdfs
+            or any(not isinstance(item, str) or not item.strip() for item in pdfs)
+        ):
+            raise ValueError(f"manifest의 pdfs는 비어 있지 않은 문자열 배열이어야 합니다: {raw_key}")
         if skip is not None and not isinstance(skip, bool):
             raise ValueError(f"manifest의 skip은 true/false여야 합니다: {raw_key}")
-        if pdf and skip:
-            raise ValueError(f"pdf와 skip을 동시에 지정할 수 없습니다: {raw_key}")
+        selected_actions = sum((bool(pdf), bool(pdfs), skip is True))
+        if selected_actions > 1:
+            raise ValueError(f"pdf, pdfs, skip 중 하나만 지정할 수 있습니다: {raw_key}")
         manifest[nfc(raw_key)] = value
     return manifest
 
@@ -371,7 +405,11 @@ def resolve_matches(
             continue
 
         override_pdf = override.get("pdf")
-        if isinstance(override_pdf, str) and override_pdf.strip():
+        override_pdfs = override.get("pdfs")
+        if isinstance(override_pdfs, list):
+            for pdf_filename in dict.fromkeys(nfc(str(item)) for item in override_pdfs):
+                resolved.append(ResolvedNote(result.section, pdf_filename, "manifest 복수 승인"))
+        elif isinstance(override_pdf, str) and override_pdf.strip():
             resolved.append(ResolvedNote(result.section, nfc(override_pdf), "manifest 승인"))
         elif result.status == "AUTO" and result.candidate:
             resolved.append(ResolvedNote(result.section, result.candidate.filename, "자동"))

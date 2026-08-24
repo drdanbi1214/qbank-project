@@ -104,6 +104,28 @@ class LectureNoteImportTest(unittest.TestCase):
         result = match_sections([section], [])[0]
         self.assertEqual("FAILED", result.status)
 
+    def test_professor_before_period_filename_is_parsed(self) -> None:
+        schedule = parse_schedule("0602_김용석_2교시_비만증치료의 분자생물학적 접근.pdf")
+
+        self.assertIsNotNone(schedule)
+        assert schedule
+        self.assertEqual("0602", schedule.month_day)
+        self.assertEqual((2,), schedule.periods)
+        self.assertEqual("김용석", schedule.professor)
+        self.assertEqual("비만증치료의 분자생물학적 접근", schedule.title)
+
+    def test_unrelated_long_title_is_not_automatically_matched(self) -> None:
+        pdf = PdfLecture(
+            pathlib.Path("0602_3교시_이창범_Obesity.pdf"),
+            "0602_3교시_이창범_Obesity.pdf",
+            parse_schedule("0602_3교시_이창범_Obesity.pdf"),
+        )
+        section = self.section(38, "0602_3교시_이창범_지단백 대사 이상과 이상지질 혈증")
+        result = match_sections([section], [pdf])[0]
+
+        self.assertEqual("REVIEW", result.status)
+        self.assertTrue(result.candidate and result.candidate.title_conflict)
+
     def test_duplicate_source_key_is_reported_across_courses(self) -> None:
         first = self.section(22, "0529_1교시_문신제_갑상선기능 저하증")
         second = NoteSection(
@@ -142,6 +164,23 @@ class LectureNoteImportTest(unittest.TestCase):
 
         self.assertEqual([pdf.filename], [item.pdf_filename for item in resolved])
         self.assertEqual([unmatched.source_key], [item.source_key for item in skipped])
+        self.assertEqual([], unresolved)
+
+    def test_manifest_can_connect_one_note_to_multiple_pdfs(self) -> None:
+        section = self.section(32, "0601_2,3교시_김원준_부신 질환의 내과 치료")
+        pdfs = [
+            "0601_2교시_김원준_부신질환의 진단과 병태생리.pdf",
+            "0601_3교시_김원준_부신 질환의 내과 치료.pdf",
+        ]
+        result = match_sections([section], [])
+
+        resolved, skipped, unresolved = resolve_matches(
+            result,
+            {section.source_key: {"pdfs": pdfs}},
+        )
+
+        self.assertEqual(pdfs, [item.pdf_filename for item in resolved])
+        self.assertEqual([], skipped)
         self.assertEqual([], unresolved)
 
     def test_markdown_plain_text_and_safe_pdf_key(self) -> None:

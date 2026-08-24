@@ -111,7 +111,8 @@ python3 scripts/import_lecture_notes.py \
   --course "내분비 1차"
 ```
 
-검토가 끝난 항목은 manifest에 `pdf` 또는 `skip`으로 고정한다. 실제 등록은
+검토가 끝난 항목은 manifest에 `pdf`, 복수 연결용 `pdfs`, 또는 `skip`으로
+고정한다. 실제 등록은
 manifest와 운영 DB 강의록 분류를 모두 명시해야만 실행된다. 같은 명령을 다시
 실행하면 `(lecture_id, source_key)` 기준으로 갱신되어 중복 행이 생기지 않는다.
 
