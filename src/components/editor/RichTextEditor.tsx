@@ -837,7 +837,7 @@ function Toolbar({
         <input
           ref={videoInput}
           type="file"
-          accept="video/mp4,video/webm"
+          accept="video/mp4,video/webm,video/quicktime,.mov"
           hidden
           onChange={(event) => {
             const files = Array.from(event.target.files ?? [])

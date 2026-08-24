@@ -13,7 +13,7 @@ const MAX_BYTES = 10 * 1024 * 1024
 const INPUT_MAX_BYTES = 40 * 1024 * 1024
 const ALLOWED = new Set(['image/webp', 'image/png', 'image/jpeg', 'image/gif'])
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024
-const VIDEO_ALLOWED = new Set(['video/mp4', 'video/webm'])
+const VIDEO_ALLOWED = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
 
 /**
  * WebP 재인코딩 품질.
@@ -147,13 +147,17 @@ export async function uploadTopicImage(file: File, userId: string): Promise<stri
 /** 레옵스 공지 사용설명 영상. 변환하지 않고 MP4/WebM 원본을 비공개로 저장한다. */
 export async function uploadTopicVideo(file: File, userId: string): Promise<string> {
   if (!VIDEO_ALLOWED.has(file.type)) {
-    throw new Error('MP4 또는 WebM 영상만 올릴 수 있습니다.')
+    throw new Error('MP4, WebM 또는 QuickTime(MOV) 영상만 올릴 수 있습니다.')
   }
   if (file.size > VIDEO_MAX_BYTES) {
     throw new Error('영상 크기는 100MB까지 가능합니다.')
   }
 
-  const extension = file.type === 'video/webm' ? 'webm' : 'mp4'
+  const extension = file.type === 'video/webm'
+    ? 'webm'
+    : file.type === 'video/quicktime'
+      ? 'mov'
+      : 'mp4'
   const path = `${userId}/${crypto.randomUUID()}.${extension}`
   await uploadStoredObject('topic-images', path, file, file.type)
   return `topic-images/${path}`

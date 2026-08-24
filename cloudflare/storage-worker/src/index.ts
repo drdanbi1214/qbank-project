@@ -19,7 +19,12 @@ interface SignRequest {
 }
 
 const IMAGE_TYPES = new Set(['image/webp', 'image/png', 'image/jpeg', 'image/gif'])
-const TOPIC_MEDIA_TYPES = new Set([...IMAGE_TYPES, 'video/mp4', 'video/webm'])
+const TOPIC_MEDIA_TYPES = new Set([
+  ...IMAGE_TYPES,
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+])
 const LECTURE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
