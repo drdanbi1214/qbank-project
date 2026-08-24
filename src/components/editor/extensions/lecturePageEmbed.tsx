@@ -93,6 +93,12 @@ export const LecturePageEmbed = Node.create({
         renderHTML: (attributes) =>
           attributes.professor ? { 'data-professor': attributes.professor } : {},
       },
+      // 다른 탭에서 붙여넣은 쪽 이미지가 Storage에 올라가는 동안 같은 노드를
+      // 찾아 완성하기 위한 임시 값. 업로드가 끝나면 null로 지운다.
+      uploadId: {
+        default: null,
+        rendered: false,
+      },
       // 쪽 위에 남긴 자국과 글자. 좌표라서 크기를 바꿔도 따라 움직인다.
       // 이름이 strokes 인 건 글자를 뒤에 붙였기 때문이다. 이미 저장된 글이
       // 이 이름으로 담겨 있어 바꾸면 예전 글의 표시가 사라진다.

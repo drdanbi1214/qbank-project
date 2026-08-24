@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
 import { Spinner } from '@/components/ui/Spinner'
+import { renderLecturePageToBlob } from '@/components/lecture/renderLecturePage'
 import {
   countLectureSearchMatches,
   splitLectureSearchText,
 } from '@/lib/lectureSearch'
+import { writeLecturePageClipboard } from '@/lib/lectureClipboard'
 import { getSignedUrl } from '@/lib/storage'
 
 // 워커는 번들러가 별도 파일로 뽑아 준다. CDN 을 가리키면 버전이 어긋나는 순간
@@ -18,6 +20,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 type Props = {
   storagePath: string
   title: string
+  /** 읽기 화면에서 쪽 복사를 허용할 때 함께 담을 원본 정보. */
+  lectureId?: string
+  professor?: string | null
   initialPage?: number | null
   initialQuery?: string
   /** 독립 스크롤 분할 화면에서는 데스크톱 sticky 기준을 패널 맨 위로 둔다. */
@@ -104,6 +109,7 @@ function PdfPage({
   selectable = false,
   checked = false,
   onToggle,
+  onCopy,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
@@ -114,6 +120,7 @@ function PdfPage({
   selectable?: boolean
   checked?: boolean
   onToggle?: () => void
+  onCopy?: (pageNumber: number) => Promise<void>
 }) {
   const holder = useRef<HTMLDivElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
@@ -122,6 +129,20 @@ function PdfPage({
   const latestActiveOccurrence = useRef<number | null>(null)
   const [visible, setVisible] = useState(false)
   const [ratio, setRatio] = useState(1.414) // A4 세로 비율. 실제 크기를 알기 전 자리만 잡는다.
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle')
+
+  async function copyPage() {
+    if (!onCopy || copyState === 'copying') return
+    setCopyState('copying')
+    try {
+      await onCopy(pageNumber)
+      setCopyState('copied')
+      window.setTimeout(() => setCopyState('idle'), 1600)
+    } catch {
+      setCopyState('failed')
+      window.setTimeout(() => setCopyState('idle'), 2200)
+    }
+  }
 
   useEffect(() => {
     latestSearchQuery.current = searchQuery
@@ -256,6 +277,24 @@ function PdfPage({
         </label>
       )}
 
+      {onCopy && (
+        <button
+          type="button"
+          onClick={() => void copyPage()}
+          disabled={copyState === 'copying'}
+          title={copyState === 'failed' ? '복사하지 못했습니다.' : '이 쪽을 풀이에 붙여넣기'}
+          className="absolute bottom-1 left-2 z-[3] rounded bg-slate-900/70 px-2 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-slate-900 disabled:cursor-wait disabled:opacity-70"
+        >
+          {copyState === 'copying'
+            ? '복사 중…'
+            : copyState === 'copied'
+              ? '복사됨 ✓'
+              : copyState === 'failed'
+                ? '복사 실패'
+                : '복사'}
+        </button>
+      )}
+
       <span className="pointer-events-none absolute bottom-1 right-2 z-[2] rounded bg-slate-900/60 px-1.5 text-[11px] text-white">
         {pageNumber}
       </span>
@@ -266,6 +305,8 @@ function PdfPage({
 export function LecturePdfViewer({
   storagePath,
   title,
+  lectureId,
+  professor = null,
   initialPage,
   initialQuery = '',
   paneMode = false,
@@ -288,6 +329,17 @@ export function LecturePdfViewer({
   const searchBox = useRef<HTMLInputElement | null>(null)
 
   const selectedSet = useMemo(() => new Set(selectedPages ?? []), [selectedPages])
+
+  const copyPage = useCallback(
+    async (pageNumber: number) => {
+      if (!document || !lectureId) throw new Error('강의록 정보를 확인하지 못했습니다.')
+      await writeLecturePageClipboard(
+        { lectureId, page: pageNumber, title, professor },
+        renderLecturePageToBlob(document, pageNumber, 'image/png'),
+      )
+    },
+    [document, lectureId, professor, title],
+  )
 
   useEffect(() => {
     onDocumentReady?.(document)
@@ -615,6 +667,7 @@ export function LecturePdfViewer({
               selectable={selectable}
               checked={selectedSet.has(pageNumber)}
               onToggle={() => onTogglePage?.(pageNumber)}
+              onCopy={lectureId ? copyPage : undefined}
               // 여러 낱말 중 일부만 있는 쪽은 결과가 아니므로 부분 강조도 하지 않는다.
               searchQuery={searchPageNumbers.has(pageNumber) ? searchQuery : ''}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}

@@ -22,6 +22,7 @@ import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensio
 import { LINE_HEIGHTS, LineHeight, safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { BlockIndent } from '@/components/editor/extensions/indent'
 import { imageFilesFrom, imageFilesFromHtml, uploadImage } from '@/lib/uploads'
+import { readLecturePageClipboard } from '@/lib/lectureClipboard'
 import {
   NOTE_HIGHLIGHTS,
   NOTE_TEXT_COLORS,
@@ -155,6 +156,38 @@ export function RichTextEditor({
         style: compact ? '' : `min-height:${minHeight}`,
       },
       handlePaste(view, event) {
+        const lecturePage = readLecturePageClipboard(event.clipboardData)
+        if (lecturePage) {
+          // DataTransfer는 이벤트가 끝난 뒤 읽을 수 없으므로 이미지와 HTML을
+          // 지금 확보한다. 자리는 먼저 만들고 업로드 완료 후 같은 노드를 채운다.
+          const directFiles = imageFilesFrom(event.clipboardData)
+          const html = event.clipboardData?.getData('text/html') ?? ''
+          const uploadId = crypto.randomUUID()
+          const { state } = view
+          const node = state.schema.nodes.lecturePageEmbed.create({
+            ...lecturePage,
+            src: null,
+            uploadId,
+          })
+
+          event.preventDefault()
+          view.dispatch(state.tr.insert(state.selection.from, node).scrollIntoView())
+
+          void (async () => {
+            const files = directFiles.length > 0 ? directFiles : await imageFilesFromHtml(html)
+            const file = files[0]
+            if (!file) throw new Error('복사한 강의록 페이지 이미지를 읽지 못했습니다.')
+            const src = await uploadImageRef.current(file, userIdRef.current)
+            replaceLecturePagePlaceholder(view, uploadId, src)
+          })().catch((caught: unknown) => {
+            removePlaceholder(view, uploadId, 'lecturePageEmbed')
+            errorRef.current?.(
+              caught instanceof Error ? caught.message : '강의록 페이지를 붙이지 못했습니다.',
+            )
+          })
+          return true
+        }
+
         const files = imageFilesFrom(event.clipboardData)
         if (files.length > 0) {
           event.preventDefault()
@@ -323,8 +356,20 @@ function replacePlaceholder(
   )
 }
 
-function removePlaceholder(view: EditorView, uploadId: string) {
-  const found = findPlaceholder(view, uploadId)
+function replaceLecturePagePlaceholder(view: EditorView, uploadId: string, src: string) {
+  const found = findPlaceholder(view, uploadId, 'lecturePageEmbed')
+  if (!found) return
+  view.dispatch(
+    view.state.tr.setNodeMarkup(found.pos, undefined, {
+      ...found.attrs,
+      src,
+      uploadId: null,
+    }),
+  )
+}
+
+function removePlaceholder(view: EditorView, uploadId: string, nodeType = 'image') {
+  const found = findPlaceholder(view, uploadId, nodeType)
   if (!found) return
   view.dispatch(view.state.tr.delete(found.pos, found.pos + 1))
 }
@@ -332,11 +377,12 @@ function removePlaceholder(view: EditorView, uploadId: string) {
 function findPlaceholder(
   view: EditorView,
   uploadId: string,
+  nodeType = 'image',
 ): { pos: number; attrs: Record<string, unknown> } | null {
   let result: { pos: number; attrs: Record<string, unknown> } | null = null
   view.state.doc.descendants((node, pos) => {
     if (result) return false
-    if (node.type.name === 'image' && node.attrs.uploadId === uploadId) {
+    if (node.type.name === nodeType && node.attrs.uploadId === uploadId) {
       result = { pos, attrs: node.attrs }
       return false
     }

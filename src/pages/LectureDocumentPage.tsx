@@ -263,6 +263,8 @@ export function LectureDocumentPage() {
             <LecturePdfViewer
               storagePath={detail.filePath}
               title={detail.title}
+              lectureId={detail.id}
+              professor={detail.professor}
               initialPage={initialPage}
               initialQuery={initialQuery}
               paneMode={showNotesPanel}

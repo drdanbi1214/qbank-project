@@ -14,6 +14,7 @@ const EMBED_QUALITY = 0.85
 export async function renderLecturePageToBlob(
   document: PDFDocumentProxy,
   pageNumber: number,
+  imageType: 'image/jpeg' | 'image/png' = 'image/jpeg',
 ): Promise<Blob> {
   const page = await document.getPage(pageNumber)
   const base = page.getViewport({ scale: 1 })
@@ -34,8 +35,8 @@ export async function renderLecturePageToBlob(
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('이미지를 만들지 못했습니다.'))),
-      'image/jpeg',
-      EMBED_QUALITY,
+      imageType,
+      imageType === 'image/jpeg' ? EMBED_QUALITY : undefined,
     )
   })
 }
