@@ -36,7 +36,7 @@ export type LectureDocument = {
   matchPage: number | null
   matchSnippet: string | null
   matchPageCount: number
-  /** 메디프렙 권한이 있을 때만 서버가 돌려주는 학생 정리본 검색 결과. */
+  /** 요약정리노트 권한이 있을 때만 서버가 돌려주는 학생 정리본 검색 결과. */
   noteMatchId: string | null
   noteMatchTitle: string | null
   noteMatchSnippet: string | null
@@ -200,7 +200,7 @@ export async function fetchLectureDocument(id: string): Promise<LectureDocument 
 
 /**
  * 한 PDF에 연결된 학생 정리본. 합본 PDF에는 여러 구획이 올 수 있다.
- * RLS가 메디프렙 권한을 검사하므로 권한이 없으면 빈 배열만 돌아온다.
+ * RLS가 요약정리노트 권한을 검사하므로 권한이 없으면 빈 배열만 돌아온다.
  */
 export async function fetchLectureStudentNotes(lectureId: string): Promise<LectureStudentNote[]> {
   const { data, error } = await supabase

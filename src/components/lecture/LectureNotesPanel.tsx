@@ -32,36 +32,46 @@ function markedChildren(children: ReactNode, query: string) {
   )
 }
 
+/** AI 정리본 제목의 반복 안내 문구는 감추고 실제 주제만 보여 준다. */
+function displayMarkdown(markdown: string): string {
+  return markdown.replace(
+    /^(#{1,6}\s+)(?:📝\s*)?시험\s*대비\s*요점\s*정리\s*[:：]\s*/gmu,
+    '$1',
+  )
+}
+
 function markdownComponents(query: string): Components {
   return {
     h1: ({ children }) => (
-      <h1 className="mb-3 mt-6 text-xl font-bold leading-snug first:mt-0">
+      <h1 className="mb-4 mt-8 text-xl font-bold leading-snug first:mt-0">
         {markedChildren(children, query)}
       </h1>
     ),
     h2: ({ children }) => (
-      <h2 className="mb-2 mt-6 border-b border-slate-200 pb-1 text-lg font-bold dark:border-slate-700">
+      <h2 className="mb-3 mt-8 border-b border-slate-200 pb-1.5 text-lg font-bold dark:border-slate-700">
         {markedChildren(children, query)}
       </h2>
     ),
     h3: ({ children }) => (
-      <h3 className="mb-1.5 mt-4 text-base font-semibold">
+      <h3 className="mb-2 mt-6 text-base font-semibold">
         {markedChildren(children, query)}
       </h3>
     ),
     h4: ({ children }) => (
-      <h4 className="mb-1 mt-3 text-sm font-semibold">{markedChildren(children, query)}</h4>
+      <h4 className="mb-1.5 mt-5 text-sm font-semibold">
+        {markedChildren(children, query)}
+      </h4>
     ),
     p: ({ children }) => (
-      <p className="my-2 text-sm leading-7 text-slate-700 dark:text-slate-200">
+      <p className="my-3 text-sm leading-6 text-slate-700 dark:text-slate-200">
         {markedChildren(children, query)}
       </p>
     ),
     ul: ({ children }) => (
-      <ul className="my-2 list-disc space-y-1 pl-5 text-sm leading-7">{children}</ul>
+      <ul className="my-3 list-disc space-y-1.5 pl-5 text-sm leading-6">{children}</ul>
     ),
     ol: ({ children }) => (
-      <ol className="my-2 list-decimal space-y-1 pl-5 text-sm leading-7">{children}</ol>
+      <ol className="my-3 list-decimal space-y-1.5 pl-5 text-sm leading-6">{children}</ol>
     ),
     li: ({ children }) => (
       <li className="pl-0.5 text-slate-700 marker:text-slate-400 dark:text-slate-200">
@@ -90,16 +100,16 @@ function markdownComponents(query: string): Components {
       </a>
     ),
     code: ({ children }) => (
-      <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em] text-rose-700 dark:bg-slate-800 dark:text-rose-300">
+      <code className="font-sans font-bold text-blue-950 dark:text-blue-200">
         {markedChildren(children, query)}
       </code>
     ),
     pre: ({ children }) => (
-      <pre className="my-3 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs leading-6 text-slate-100">
+      <pre className="my-4 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs leading-6 text-slate-100 [&_code]:font-mono [&_code]:font-normal [&_code]:text-inherit">
         {children}
       </pre>
     ),
-    hr: () => <hr className="my-6 border-slate-200 dark:border-slate-700" />,
+    hr: () => <hr className="my-8 border-slate-200 dark:border-slate-700" />,
     table: ({ children }) => (
       <div className="my-4 max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
         <table className="w-full min-w-[520px] border-collapse text-left text-xs">{children}</table>
@@ -127,7 +137,7 @@ function dateLabel(value: string | null): string | null {
   return year && month && day ? `${year}.${month}.${day}` : value
 }
 
-/** 메디프렙 권한자에게만 부모 페이지가 마운트하는 학생 정리본 패널. */
+/** 요약정리노트 권한자에게만 부모 페이지가 마운트하는 학생 정리본 패널. */
 export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Props) {
   const [searchInput, setSearchInput] = useState(initialQuery)
   const noteNodes = useRef(new Map<string, HTMLElement>())
@@ -160,7 +170,7 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
             2026 학생 정리본
           </h2>
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
-            메디프렙
+            요약정리본
           </span>
           <span className="ml-auto text-xs text-slate-400">
             {query ? `${visible.length}/${notes.length}개` : `${notes.length}개`}
@@ -206,7 +216,7 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
                   </p>
                 </header>
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-                  {note.contentMd}
+                  {displayMarkdown(note.contentMd)}
                 </ReactMarkdown>
               </article>
             )
