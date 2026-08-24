@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
-import { fetchLectureDocuments, type LectureDocument } from '@/lib/queries/lectures'
+import { fetchLectureDocuments, mixLectureHits, type LectureDocument } from '@/lib/queries/lectures'
 import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
 import type { SolutionReference } from '@/lib/queries/solutions'
 
@@ -46,7 +46,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
       // 강의록 분류는 임상 과목과 다른 축이라 과목으로 좁히지 않는다.
       // 제목·교수·본문 검색만으로 찾는다.
       void fetchLectureDocuments({ keyword })
-        .then((next) => active && setLectures(next.slice(0, 20)))
+        .then((next) => active && setLectures(mixLectureHits(next, keyword, 20)))
         .catch(() => active && setLectures([]))
     }, 250)
     return () => {
@@ -115,7 +115,8 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
         {lectures.map((lecture) => <li key={lecture.id} className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-0 dark:border-slate-800">
           <button type="button" onClick={() => addLecture(lecture)} className="min-w-0 flex-1 text-left text-sm hover:text-brand-700 dark:hover:text-brand-200">
             <span className="block truncate">{lecture.title}</span>
-            <span className="text-xs text-slate-400">{[lecture.professor, lecture.lectureYear ? `${lecture.lectureYear}년` : null, lecture.pageCount ? `${lecture.pageCount}쪽` : null].filter(Boolean).join(' · ') || '정보 없음'}</span>
+            <span className="text-xs text-slate-400">{[lecture.professor, lecture.lectureYear ? `${lecture.lectureYear}년` : null, lecture.pageCount ? `${lecture.pageCount}쪽` : null, lecture.matchPage ? `${lecture.matchPage}쪽 본문 일치` : null].filter(Boolean).join(' · ') || '정보 없음'}</span>
+            {lecture.matchSnippet && <span className="block truncate text-xs text-slate-400">“{lecture.matchSnippet}”</span>}
           </button>
           {/* 강의록은 길어서 몇 쪽인지 함께 남겨 두면 다시 찾기 쉽다. */}
           <input value={lecturePage[lecture.id] ?? ''} onChange={(event) => setLecturePage((prev) => ({ ...prev, [lecture.id]: event.target.value }))} inputMode="numeric" placeholder="쪽" aria-label={`${lecture.title} 쪽 번호`} className="w-14 shrink-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />

@@ -8,6 +8,7 @@ import { examShortLabel } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
 import { searchTopics, type TopicForQuestion } from '@/lib/queries/topics'
 import { fetchLectureDocuments, mixLectureHits, type LectureDocument } from '@/lib/queries/lectures'
+import { splitLectureSearchText } from '@/lib/lectureSearch'
 import { cn } from '@/utils/cn'
 
 /**
@@ -272,7 +273,7 @@ export function SearchPage() {
                       </div>
                       {lecture.matchSnippet && (
                         <p className="mt-1 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">
-                          <Highlighted text={lecture.matchSnippet} needle={query} />
+                          <LectureHighlighted text={lecture.matchSnippet} query={query} />
                         </p>
                       )}
                     </a>
@@ -327,6 +328,24 @@ function lectureLink(lecture: LectureDocument, query: string): string {
   if (query.trim() !== '') search.set('q', query.trim())
   const tail = search.toString()
   return `/lectures/${lecture.id}${tail === '' ? '' : `?${tail}`}`
+}
+
+/** 강의록은 여러 낱말 AND 검색이므로 일치한 낱말을 각각 표시한다. */
+function LectureHighlighted({ text, query }: { text: string; query: string }) {
+  const parts = splitLectureSearchText(text, query)
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.hit ? (
+          <span key={index} className="rounded bg-amber-200 font-semibold dark:bg-amber-500/40">
+            {part.text}
+          </span>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  )
 }
 
 function ScopeButton({

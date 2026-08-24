@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
 import { Spinner } from '@/components/ui/Spinner'
+import {
+  countLectureSearchMatches,
+  splitLectureSearchText,
+} from '@/lib/lectureSearch'
 import { getSignedUrl } from '@/lib/storage'
 
 // 워커는 번들러가 별도 파일로 뽑아 준다. CDN 을 가리키면 버전이 어긋나는 순간
@@ -30,21 +34,7 @@ type Props = {
 type SearchHit = { pageNumber: number; occurrenceIndex: number }
 
 
-function countMatches(text: string, query: string): number {
-  if (!query) return 0
-  const haystack = text.toLocaleLowerCase()
-  const needle = query.toLocaleLowerCase()
-  let cursor = 0
-  let count = 0
-  while ((cursor = haystack.indexOf(needle, cursor)) >= 0) {
-    count += 1
-    cursor += needle.length
-  }
-  return count
-}
-
 function markTextLayer(container: HTMLDivElement, query: string, activeOccurrence: number | null) {
-  const needle = query.trim().toLocaleLowerCase()
   let occurrenceIndex = 0
   let activeMark: HTMLElement | null = null
   for (const span of container.querySelectorAll<HTMLSpanElement>('span')) {
@@ -54,28 +44,24 @@ function markTextLayer(container: HTMLDivElement, query: string, activeOccurrenc
     const source = span.dataset.sourceText ?? span.textContent ?? ''
     span.dataset.sourceText = source
     span.replaceChildren(source)
-    if (!needle) continue
-
-    const lower = source.toLocaleLowerCase()
-    let cursor = 0
-    let found = lower.indexOf(needle)
-    if (found < 0) continue
+    const parts = splitLectureSearchText(source, query)
+    if (!parts.some((part) => part.hit)) continue
 
     const fragment = window.document.createDocumentFragment()
-    while (found >= 0) {
-      if (found > cursor) fragment.append(source.slice(cursor, found))
+    for (const part of parts) {
+      if (!part.hit) {
+        fragment.append(part.text)
+        continue
+      }
       const mark = window.document.createElement('mark')
       mark.className = `lecture-pdf-search-hit${
         occurrenceIndex === activeOccurrence ? ' lecture-pdf-search-hit-active' : ''
       }`
       if (occurrenceIndex === activeOccurrence) activeMark = mark
-      mark.textContent = source.slice(found, found + query.trim().length)
+      mark.textContent = part.text
       fragment.append(mark)
       occurrenceIndex += 1
-      cursor = found + query.trim().length
-      found = lower.indexOf(needle, cursor)
     }
-    if (cursor < source.length) fragment.append(source.slice(cursor))
     span.replaceChildren(fragment)
   }
   return activeMark
@@ -406,13 +392,18 @@ export function LecturePdfViewer({
   const searchHits = useMemo<SearchHit[]>(() => {
     if (!pageTexts || !searchQuery) return []
     return pageTexts.flatMap((text, index) => {
-      const count = countMatches(text, searchQuery)
+      const count = countLectureSearchMatches(text, searchQuery)
       return Array.from({ length: count }, (_, occurrenceIndex) => ({
         pageNumber: index + 1,
         occurrenceIndex,
       }))
     })
   }, [pageTexts, searchQuery])
+
+  const searchPageNumbers = useMemo(
+    () => new Set(searchHits.map((hit) => hit.pageNumber)),
+    [searchHits],
+  )
 
   const scrollToPage = useCallback((pageNumber: number) => {
     const target = window.document.querySelector(`[data-page="${pageNumber}"]`)
@@ -588,7 +579,8 @@ export function LecturePdfViewer({
               selectable={selectable}
               checked={selectedSet.has(pageNumber)}
               onToggle={() => onTogglePage?.(pageNumber)}
-              searchQuery={searchQuery}
+              // 여러 낱말 중 일부만 있는 쪽은 결과가 아니므로 부분 강조도 하지 않는다.
+              searchQuery={searchPageNumbers.has(pageNumber) ? searchQuery : ''}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
               activeSearchOccurrence={
                 searchHits[activeResult]?.pageNumber === pageNumber

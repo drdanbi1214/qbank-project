@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { includesLectureSearchTerms } from '@/lib/lectureSearch'
 
 /**
  * 강의록 라이브러리.
@@ -124,7 +125,7 @@ export type LectureFilter = {
   categoryId?: string | null
   professor?: string | null
   year?: number | null
-  /** 제목과 본문에서 함께 찾는다. 본문 색인은 트라이그램이라 부분 문자열도 걸린다. */
+  /** 제목·교수·본문에서 함께 찾는다. 여러 낱말은 같은 곳에 모두 있어야 한다. */
   keyword?: string
 }
 
@@ -136,7 +137,9 @@ export async function fetchLectureDocuments(filter: LectureFilter = {}): Promise
       p_category_id: filter.categoryId ?? undefined,
       p_professor: filter.professor ?? undefined,
       p_year: filter.year ?? undefined,
-      p_limit: 200,
+      // 응답에는 본문 전체가 실리지 않아 500건이어도 가볍다. 흔한 제목 낱말이
+      // 앞자리를 채워 본문 일치가 잘리지 않도록 서버의 허용 상한까지 받는다.
+      p_limit: 500,
     })
     if (error) throw error
     return ((data ?? []) as LectureRow[]).map(toLecture)
@@ -277,11 +280,11 @@ export function collectLectureReferences(
  * 검색어가 없는 목록은 모두 앞쪽으로 보낸다. 가를 기준 자체가 없기 때문이다.
  */
 export function splitLectureHits(rows: LectureDocument[], query: string) {
-  const needle = query.trim().toLowerCase()
   const byTitle: LectureDocument[] = []
   const byText: LectureDocument[] = []
   for (const row of rows) {
-    if (needle !== '' && row.matchPage !== null && !row.title.toLowerCase().includes(needle)) {
+    const metadata = [row.title, row.professor, row.curriculum].filter(Boolean).join(' ')
+    if (row.matchPage !== null && !includesLectureSearchTerms(metadata, query)) {
       byText.push(row)
     } else {
       byTitle.push(row)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Spinner } from '@/components/ui/Spinner'
+import { splitLectureSearchText } from '@/lib/lectureSearch'
 import {
   fetchLectureCategories,
   fetchLectureDocuments,
@@ -16,24 +17,10 @@ function sizeLabel(bytes: number | null): string | null {
 }
 
 function SearchSnippet({ text, keyword }: { text: string; keyword: string }) {
-  const needle = keyword.trim()
-  if (!needle) return text
-
-  const pieces: { text: string; match: boolean }[] = []
-  const lowerText = text.toLocaleLowerCase()
-  const lowerNeedle = needle.toLocaleLowerCase()
-  let cursor = 0
-  for (;;) {
-    const found = lowerText.indexOf(lowerNeedle, cursor)
-    if (found < 0) break
-    if (found > cursor) pieces.push({ text: text.slice(cursor, found), match: false })
-    pieces.push({ text: text.slice(found, found + needle.length), match: true })
-    cursor = found + needle.length
-  }
-  if (cursor < text.length) pieces.push({ text: text.slice(cursor), match: false })
+  const pieces = splitLectureSearchText(text, keyword)
 
   return pieces.map((piece, index) =>
-    piece.match ? (
+    piece.hit ? (
       <mark
         key={`${index}-${piece.text}`}
         className="rounded bg-amber-200/80 px-0.5 text-inherit dark:bg-amber-700/60"
@@ -46,7 +33,7 @@ function SearchSnippet({ text, keyword }: { text: string; keyword: string }) {
   )
 }
 
-/** 한 분류 안의 강의록 목록. 교수·연도로 추리고 제목·본문으로 찾는다. */
+/** 한 분류 안의 강의록 목록. 교수·연도로 추리고 제목·교수·본문으로 찾는다. */
 export function LectureListPage() {
   const { categoryId } = useParams()
 
@@ -123,7 +110,7 @@ export function LectureListPage() {
         <input
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder="제목 또는 본문 검색"
+          placeholder="제목·교수·본문 검색"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950"
         />
         <div className="flex flex-wrap gap-2">
