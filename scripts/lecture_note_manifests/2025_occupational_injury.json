@@ -1,0 +1,7 @@
+{
+  "1218_1교시::order=18": { "skip": true },
+  "1218_2교시::order=19": { "skip": true },
+  "1218_3or4교시::order=20": { "skip": true },
+  "1218_3or4교시(2)::order=21": { "skip": true },
+  "1218_6교시::order=22": { "skip": true }
+}

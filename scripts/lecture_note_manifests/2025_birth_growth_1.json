@@ -1,0 +1,15 @@
+{
+  "0109_2교시_박현경_선천성 대사질환::order=1": { "skip": true },
+  "0105_3교시_강주섭약리::order=2": { "skip": true },
+  "0108_1교시(에 했어야함) 신생아감염 1::order=10": { "skip": true },
+  "0108_1교시(에 했어야함) 신생아감염 2::order=11": { "skip": true },
+  "0108_2교시::order=12": { "skip": true },
+  "0108_3교시::order=13": { "skip": true },
+  "0108_4교시::order=14": { "skip": true },
+  "0109_3, 4교시::order=16": { "skip": true },
+  "0114_2교시_김용석_인본에러::order=28": { "skip": true },
+  "0115_3교시::order=31": { "skip": true },
+  "0115_3교시::order=32": { "skip": true },
+  "0115_4교시::order=33": { "skip": true },
+  "0115_김진수::order=36": { "skip": true }
+}
