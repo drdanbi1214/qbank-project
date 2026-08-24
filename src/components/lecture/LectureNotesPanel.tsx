@@ -363,9 +363,6 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
           aria-label="정리본 안에서 찾기"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-600 dark:bg-slate-800 dark:focus:ring-emerald-950"
         />
-        <p className="mt-1.5 px-1 text-[11px] text-slate-400 dark:text-slate-500">
-          본문을 드래그하면 개인 형광펜·빨간 글씨·굵은 글씨를 표시할 수 있습니다.
-        </p>
       </div>
 
       {visible.length === 0 ? (

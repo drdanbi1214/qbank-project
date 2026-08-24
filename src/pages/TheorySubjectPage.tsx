@@ -341,18 +341,13 @@ function MarkedTheoryContent({ document }: { document: TheoryDocument }) {
   const textMarks = useTextMarks('theory', document.id)
 
   return (
-    <>
-      <p className="mb-3 text-right text-xs text-slate-400 dark:text-slate-500">
-        본문을 드래그하면 개인 형광펜·빨간 글씨·굵은 글씨를 표시할 수 있습니다.
-      </p>
-      <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
-        <RichTextViewer
-          doc={document.content}
-          hierarchicalIndent
-          marks={textMarks.marks}
-        />
-      </MarkableRegion>
-    </>
+    <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
+      <RichTextViewer
+        doc={document.content}
+        hierarchicalIndent
+        marks={textMarks.marks}
+      />
+    </MarkableRegion>
   )
 }
 
