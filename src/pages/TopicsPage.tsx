@@ -24,7 +24,7 @@ import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { TopicSidebar } from '@/components/question/TopicSidebar'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatShortDate } from '@/utils/date'
-import type { RichDoc } from '@/types/richtext'
+import { emptyDoc, type RichDoc } from '@/types/richtext'
 
 /**
  * 테마 — 주제별 이론 정리.
@@ -42,7 +42,11 @@ export function TopicsPage() {
 
   const [topics, setTopics] = useState<Topic[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
+  // 새 글은 오른쪽 편집창에서 제목까지 함께 쓴다. 값이 있으면 초안을 쓰는 중이고,
+  // unitId 는 목차에서 ＋ 를 누른 줄이다.
+  const [draft, setDraft] = useState<{ unitId: string | null } | null>(null)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [similar, setSimilar] = useState<{ id: string; title: string }[]>([])
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const editedContent = useRef<RichDoc | null>(null)
@@ -77,6 +81,21 @@ export function TopicsPage() {
       ),
     [taxonomy, subjectId],
   )
+
+  // 두 사람이 같은 주제를 각각 만들면 정리가 갈라진다. 비슷한 제목이 있으면
+  // 알려 주되 막지는 않는다 — 정말 다른 주제인데 제목만 닮은 경우가 있다.
+  const draftKeyword = draftTitle.trim()
+  useEffect(() => {
+    if (!draft || draftKeyword.length < 2 || !subjectId) return
+    const timer = window.setTimeout(() => {
+      void findSimilarTopics(subjectId, draftKeyword)
+        .then(setSimilar)
+        .catch(() => setSimilar([]))
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [draft, draftKeyword, subjectId])
+  // 두 글자가 안 되면 이전 결과를 내보내지 않는다. 지우는 동안 옛 경고가 남는다.
+  const shownSimilar = draftKeyword.length >= 2 ? similar : []
 
   const unitNameOf = useCallback(
     (id: string | null) => (id ? (taxonomy?.unitById.get(id)?.name ?? '미분류') : '미분류'),
@@ -166,6 +185,51 @@ export function TopicsPage() {
       .finally(() => setBusy(false))
   }, [selected, userId, editedUnitId, load])
 
+  const saveDraft = useCallback(() => {
+    if (!draft || !subjectId) return
+    const title = draftTitle.trim()
+    if (title === '') {
+      setError('제목을 입력해 주세요.')
+      return
+    }
+    const content = editedContent.current
+    setBusy(true)
+    setError(null)
+    void createTopic({ subjectId, unitId: draft.unitId, title, userId })
+      .then(async (id) => {
+        // 본문을 쓴 채로 저장했으면 만들자마자 이어서 넣는다. 빈 채로 만들었다가
+        // 다시 저장하게 하면 목록에 빈 글이 잠깐 남는다.
+        if (content) {
+          await updateTopic({ id, userId, content })
+          await syncTopicQuestions(id, content)
+        }
+        setDraft(null)
+        setDraftTitle('')
+        editedContent.current = null
+        load()
+        navigate(`/topics/${subjectId}/${id}`)
+      })
+      .catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : '만들지 못했습니다.')
+      })
+      .finally(() => setBusy(false))
+  }, [draft, draftTitle, subjectId, userId, load, navigate])
+
+  const cancelDraft = useCallback(() => {
+    setDraft(null)
+    setDraftTitle('')
+    setSimilar([])
+    editedContent.current = null
+  }, [])
+
+  const startDraft = useCallback((unitId: string | null) => {
+    setEditing(false)
+    editedContent.current = null
+    setDraftTitle('')
+    setSimilar([])
+    setDraft({ unitId })
+  }, [])
+
   const remove = useCallback(() => {
     if (!selected) return
     if (!window.confirm(`"${selected.title}" 주제를 지웁니다. 되돌릴 수 없습니다.`)) return
@@ -198,7 +262,7 @@ export function TopicsPage() {
         </Link>
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <h1 className="text-xl font-bold">{subject?.name ?? ''}</h1>
-        <Button size="sm" className="ml-auto" onClick={() => setCreating(true)}>
+        <Button size="sm" className="ml-auto" onClick={() => startDraft(null)}>
           새 주제
         </Button>
       </div>
@@ -209,34 +273,74 @@ export function TopicsPage() {
         </p>
       )}
 
-      {creating && (
-        <CreateForm
-          subjectId={subjectId}
-          userId={userId}
-          units={subjectUnits}
-          onCancel={() => setCreating(false)}
-          onCreated={(id, createdUnitId) => {
-            setCreating(false)
-            load()
-            // 갓 만든 주제는 본문이 비어 있다. 읽기 화면을 한 번 거칠 이유가 없어
-            // 바로 편집으로 들어간다. 편집 버튼과 같은 준비를 여기서 해 둔다.
-            setEditedUnitId(createdUnitId)
-            setEditing(true)
-            navigate(`/topics/${subjectId}/${id}`)
-          }}
-        />
-      )}
-
       <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
         <TopicSidebar
           topics={topics}
           subjectId={subjectId}
           topicId={topicId}
           units={subjectUnits}
+          onNewTopic={startDraft}
         />
 
         <article className="min-w-0">
-          {!selected ? (
+          {draft ? (
+            <div className="rounded-xl border border-brand-400 bg-white p-4 dark:bg-slate-900">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <input
+                  autoFocus
+                  value={draftTitle}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                  placeholder="주제 제목 (예: 심부전의 약물치료)"
+                  className="min-w-0 flex-1 border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-2xl font-bold tracking-tight outline-none focus:border-brand-500 dark:border-slate-700"
+                />
+                <select
+                  aria-label="목차 줄"
+                  value={draft.unitId ?? ''}
+                  onChange={(event) => setDraft({ unitId: event.target.value || null })}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+                >
+                  <option value="">목차 줄 없음</option>
+                  {subjectUnits.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="ml-auto flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={cancelDraft}>
+                    취소
+                  </Button>
+                  <Button size="sm" onClick={saveDraft} disabled={busy}>
+                    저장
+                  </Button>
+                </div>
+              </div>
+
+              {shownSimilar.length > 0 && (
+                <p className="mb-3 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  비슷한 주제가 이미 있습니다 — {shownSimilar.map((row) => row.title).join(', ')}. 같은
+                  주제라면 기존 것에 이어서 쓰는 편이 낫습니다.
+                </p>
+              )}
+
+              <TopicScopeProvider authorId={userId} requiredPermission="study_legendob" editing>
+                <LazyRichTextEditor
+                  initialValue={emptyDoc()}
+                  onChange={(content) => {
+                    editedContent.current = content
+                  }}
+                  userId={userId}
+                  uploadImageFile={uploadTopicImage}
+                  placeholder="내용을 적어보세요. 캡처는 붙여넣으면 바로 들어갑니다."
+                  minHeight="30rem"
+                  onUploadError={setError}
+                  onRequestYama={requestYama}
+                  onRequestTheory={requestTheory}
+                  onRequestLecture={userId ? requestLecture : undefined}
+                />
+              </TopicScopeProvider>
+            </div>
+          ) : !selected ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
               왼쪽에서 주제를 고르거나 새로 만드세요.
             </p>
@@ -370,106 +474,5 @@ export function TopicsPage() {
         </div>
       )}
     </section>
-  )
-}
-
-// -----------------------------------------------------------------------------
-
-type Unit = { id: string; name: string; subjectId: string }
-
-/**
- * 새 테마 만들기.
- *
- * 두 사람이 같은 주제를 각각 만들면 이론이 갈라진다. 비슷한 제목이 있으면
- * 경고하되 막지는 않는다 — 정말 다른 주제인데 제목만 닮은 경우가 있다.
- */
-function CreateForm({
-  subjectId,
-  userId,
-  units,
-  onCancel,
-  onCreated,
-}: {
-  subjectId: string
-  userId: string
-  units: Unit[]
-  onCancel: () => void
-  onCreated: (id: string, unitId: string | null) => void
-}) {
-  const [title, setTitle] = useState('')
-  const [unitId, setUnitId] = useState<string>('')
-  const [similar, setSimilar] = useState<{ id: string; title: string }[]>([])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // 입력이 멎으면 비슷한 제목을 찾아본다. 두 글자가 안 되면 조회하지 않고,
-  // 이전 결과는 아래 keyword 검사로 화면에서 걸러진다.
-  const keyword = title.trim()
-  useEffect(() => {
-    if (keyword.length < 2) return
-    const timer = window.setTimeout(() => {
-      void findSimilarTopics(subjectId, keyword)
-        .then(setSimilar)
-        .catch(() => setSimilar([]))
-    }, 400)
-    return () => window.clearTimeout(timer)
-  }, [keyword, subjectId])
-
-  const submit = useCallback(() => {
-    const trimmed = title.trim()
-    if (trimmed === '') {
-      setError('제목을 입력해 주세요.')
-      return
-    }
-    setBusy(true)
-    void createTopic({ subjectId, unitId: unitId || null, title: trimmed, userId })
-      .then((id) => onCreated(id, unitId || null))
-      .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : '만들지 못했습니다.')
-      })
-      .finally(() => setBusy(false))
-  }, [title, unitId, subjectId, userId, onCreated])
-
-  return (
-    <div className="mb-4 rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={unitId}
-          onChange={(event) => setUnitId(event.target.value)}
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
-        >
-          <option value="">대표 단원 없음</option>
-          {units.map((unit) => (
-            <option key={unit.id} value={unit.id}>
-              {unit.name}
-            </option>
-          ))}
-        </select>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') submit()
-          }}
-          placeholder="주제 제목 (예: 심부전의 약물치료)"
-          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
-        />
-        <Button size="sm" onClick={submit} disabled={busy}>
-          만들기
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          취소
-        </Button>
-      </div>
-
-      {error && <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-
-      {keyword.length >= 2 && similar.length > 0 && (
-        <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          비슷한 주제가 이미 있습니다 — {similar.map((row) => row.title).join(', ')}. 같은 주제라면
-          기존 것에 이어서 쓰는 편이 낫습니다.
-        </p>
-      )}
-    </div>
   )
 }
