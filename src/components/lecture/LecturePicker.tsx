@@ -35,7 +35,12 @@ type Props = {
 export function LecturePicker({ userId, onPick, onCancel }: Props) {
   const [keyword, setKeyword] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [loaded, setLoaded] = useState<{ key: string; rows: LectureDocument[] } | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
+  const [loaded, setLoaded] = useState<{
+    key: string
+    rows: LectureDocument[]
+    error: string | null
+  } | null>(null)
   const [chosen, setChosen] = useState<LectureDocument | null>(null)
   const [pages, setPages] = useState<number[]>([])
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null)
@@ -49,17 +54,29 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
 
   useEffect(() => {
     if (chosen) return
+    const searchKey = debounced.trim()
     let active = true
-    void fetchLectureDocuments({ keyword: debounced })
-      .then((rows) => active && setLoaded({ key: debounced, rows }))
-      .catch(() => active && setLoaded({ key: debounced, rows: [] }))
+    void fetchLectureDocuments({ keyword: searchKey })
+      .then((rows) => active && setLoaded({ key: searchKey, rows, error: null }))
+      .catch((caught: unknown) =>
+        active &&
+        setLoaded({
+          key: searchKey,
+          rows: [],
+          error: caught instanceof Error ? caught.message : '강의록을 검색하지 못했습니다.',
+        }),
+      )
     return () => {
       active = false
     }
-  }, [debounced, chosen])
+  }, [debounced, chosen, retryKey])
 
   // 입력 대기(디바운스)부터 서버 응답까지 이전 결과를 감추고 로딩을 보여 준다.
-  const results = keyword === debounced && loaded?.key === debounced ? loaded.rows : null
+  const currentKey = keyword.trim()
+  const debouncedKey = debounced.trim()
+  const currentLoaded = currentKey === debouncedKey && loaded?.key === debouncedKey ? loaded : null
+  const results = currentLoaded?.rows ?? null
+  const searchError = currentLoaded?.error ?? null
 
   const togglePage = useCallback((pageNumber: number) => {
     setPages((prev) =>
@@ -158,8 +175,21 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
               />
 
               {results === null ? (
-                <div className="flex justify-center py-12">
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-xs text-slate-500 dark:text-slate-400">
                   <Spinner className="h-6 w-6" />
+                  <span>강의록 제목·교수·본문을 검색하고 있습니다.</span>
+                </div>
+              ) : searchError ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                  <p className="text-sm text-rose-600 dark:text-rose-400">
+                    강의록 검색을 완료하지 못했습니다.
+                  </p>
+                  <p className="max-w-xl text-xs text-slate-500 dark:text-slate-400">
+                    {searchError}
+                  </p>
+                  <Button size="sm" variant="secondary" onClick={() => setRetryKey((value) => value + 1)}>
+                    다시 검색
+                  </Button>
                 </div>
               ) : hits.byTitle.length + hits.byText.length === 0 ? (
                 <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
