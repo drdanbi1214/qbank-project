@@ -163,16 +163,27 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
           <code>{children}</code>
         </pre>
       )
-    case 'table':
+    case 'table': {
+      const columns = tableColumnsOf(node)
+      const tableWidth =
+        columns && columns.every((width): width is number => width !== null && width > 0)
+          ? columns.reduce((sum, width) => sum + width, 0)
+          : null
+
       return (
         <div className="overflow-x-auto">
-          {/* 편집기에서 정한 열 너비·테두리를 읽기 화면에서도 그대로 살린다. */}
-          <table data-border={tableBorderOf(node.attrs?.border) ?? undefined}>
-            {colGroupOf(node)}
+          {/* 편집기에서 정한 열 너비의 합을 표 전체 폭에도 적용한다. 열만 복원하고
+              표를 w-full 로 두면 저장 후 본문 폭 끝까지 다시 늘어난다. */}
+          <table
+            data-border={tableBorderOf(node.attrs?.border) ?? undefined}
+            style={tableWidth ? { width: tableWidth } : undefined}
+          >
+            {colGroupOf(columns)}
             <tbody>{children}</tbody>
           </table>
         </div>
       )
+    }
     case 'tableRow':
       return <tr>{children}</tr>
     case 'tableHeader':
@@ -255,7 +266,7 @@ function nodeText(node: RichNode): string {
  * Tiptap 은 너비를 첫 행 셀들의 colwidth 에 담아 둔다. 병합된 칸은 colspan
  * 만큼 열을 차지하므로 그만큼 col 을 만들어야 열이 밀리지 않는다.
  */
-function colGroupOf(node: RichNode) {
+function tableColumnsOf(node: RichNode): (number | null)[] | null {
   const firstRow = node.content?.find((child) => child.type === 'tableRow')
   if (!firstRow?.content) return null
 
@@ -268,6 +279,11 @@ function colGroupOf(node: RichNode) {
   }
   if (cols.every((width) => width === null)) return null
 
+  return cols
+}
+
+function colGroupOf(cols: (number | null)[] | null) {
+  if (!cols) return null
   return (
     <colgroup>
       {cols.map((width, index) => (
