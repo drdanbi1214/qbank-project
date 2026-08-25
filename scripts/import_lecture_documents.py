@@ -49,6 +49,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import urllib.parse
 import urllib.request
 
@@ -249,7 +250,13 @@ def main() -> int:
 
     manifest: dict[str, dict] = {}
     if args.manifest:
-        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+        loaded_manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+        # macOS 파일명은 한글이 NFD로 저장되는 경우가 있어, NFC로 작성한
+        # manifest 키와 눈으로는 같아도 문자열 비교가 실패할 수 있다.
+        manifest = {
+            unicodedata.normalize("NFC", filename): override
+            for filename, override in loaded_manifest.items()
+        }
 
     base, key = load_supabase_credentials()
 
@@ -289,7 +296,7 @@ def main() -> int:
     print()
 
     for pdf in pdfs:
-        override = manifest.get(pdf.name, {})
+        override = manifest.get(unicodedata.normalize("NFC", pdf.name), {})
         # 같은 강의의 수정 전 판처럼 폴더에 있어도 올리지 않을 파일이 있다.
         # manifest 에 {"skip": true} 로 적는다. 파일을 옮기지 않고도 뺄 수 있다.
         if override.get("skip"):

@@ -96,7 +96,10 @@ class R2Backend:
                         "X-Content-Sha256": digest,
                     },
                     data=data,
-                    timeout=(15, 180),
+                    # requests/urllib3에서는 큰 요청 본문을 소켓에 쓰는 동안에도
+                    # 첫 번째 제한값이 적용될 수 있다. 200MB급 강의록 전송이
+                    # 중간에 끊기지 않도록 연결·전송 모두 10분까지 기다린다.
+                    timeout=(600, 600),
                 )
                 if response.status_code in (200, 201):
                     return
