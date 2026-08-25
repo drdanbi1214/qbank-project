@@ -220,7 +220,15 @@ function PdfPage({
         })
       }
 
-      task = page.render({ canvas: target, canvasContext: context, viewport })
+      task = page.render({
+        canvas: target,
+        canvasContext: context,
+        viewport,
+        // PowerPoint에서 만든 일부 PDF는 PDF.js가 투명 바탕을 검게 합성한다.
+        // 캔버스를 미리 칠하는 것만으로는 렌더 시작 시 다시 지워질 수 있어,
+        // PDF.js 자체에도 종이 배경색을 명시한다.
+        background: '#ffffff',
+      })
       try {
         await (task as unknown as { promise: Promise<void> }).promise
       } catch {
@@ -261,7 +269,7 @@ function PdfPage({
       }`}
       style={{ aspectRatio: visible ? undefined : `1 / ${ratio}` }}
     >
-      <canvas ref={canvas} className="block w-full" />
+      <canvas ref={canvas} className="block w-full bg-white" />
       <div ref={textLayer} className="lecture-pdf-text-layer" />
 
       {selectable && (

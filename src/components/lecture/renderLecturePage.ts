@@ -30,7 +30,12 @@ export async function renderLecturePageToBlob(
   context.fillStyle = '#ffffff'
   context.fillRect(0, 0, canvas.width, canvas.height)
 
-  await page.render({ canvas, canvasContext: context, viewport }).promise
+  await page.render({
+    canvas,
+    canvasContext: context,
+    viewport,
+    background: '#ffffff',
+  }).promise
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
