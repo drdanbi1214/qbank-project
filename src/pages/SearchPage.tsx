@@ -25,7 +25,6 @@ export function SearchPage() {
   const { taxonomy } = useData()
   const { hasPermission, isAdmin } = useAuth()
   const canViewStudySolutions = isAdmin || hasPermission('study_hapbon3')
-  const canSearchTheory = canViewStudySolutions
   const canSearchNotes =
     isAdmin || hasPermission(PERMISSION.mediprepLectureNotesView)
 
@@ -41,14 +40,12 @@ export function SearchPage() {
   )
   const includeQuestionSearch = selectedSources.has('questions')
   const includeSolutions = includeQuestionSearch && canViewStudySolutions
-  const includeTheory = selectedSources.has('theory') && canSearchTheory
+  const includeTheory = selectedSources.has('theory')
   const includeLectures = selectedSources.has('lectures')
   const includeNotes = selectedSources.has('notes') && canSearchNotes
   const includeLectureSearch = includeLectures || includeNotes
   const selectableSources = SEARCH_SOURCE_ORDER.filter(
-    (source) =>
-      (source !== 'theory' || canSearchTheory) &&
-      (source !== 'notes' || canSearchNotes),
+    (source) => source !== 'notes' || canSearchNotes,
   )
   const allSourcesSelected = selectableSources.every((source) => selectedSources.has(source))
   const hasSelectedSource =
@@ -277,10 +274,8 @@ export function SearchPage() {
           />
           <SourceCheckbox
             checked={includeTheory}
-            disabled={!canSearchTheory}
             onChange={() => toggleSource('theory')}
             label="알렌"
-            title={!canSearchTheory ? '알렌 권한이 필요합니다.' : undefined}
           />
           <SourceCheckbox
             checked={includeLectures}

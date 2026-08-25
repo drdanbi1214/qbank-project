@@ -12,7 +12,7 @@ export type NavItem = {
 /** 웹 상단 메인 네비게이션 */
 export const MAIN_NAV: NavItem[] = [
   { to: '/study', label: '학습하기', icon: 'study' },
-  { to: '/theory', label: '알렌', icon: 'theory', permission: 'study_hapbon3' },
+  { to: '/theory', label: '알렌', icon: 'theory' },
   // 테마는 이론과 완전히 별개다. 이론은 Notion 에서 임포트한 교과 정리이고,
   // 테마는 스터디원이 주제 단위로 쓰고 야마를 붙이는 글이다.
   // 강의록은 활성 회원 전원이 본다. 이론과 달리 스터디 권한을 걸지 않는다.
@@ -30,7 +30,7 @@ export const MAIN_NAV: NavItem[] = [
 /** 모바일 하단 탭바 */
 export const MOBILE_NAV: NavItem[] = [
   { to: '/study', label: '학습', icon: 'study' },
-  { to: '/theory', label: '이론', icon: 'theory', permission: 'study_hapbon3' },
+  { to: '/theory', label: '이론', icon: 'theory' },
   { to: '/assignments', label: '풀이 배정', icon: 'clipboard' },
   { to: '/discussions', label: '게시판', icon: 'board' },
   { to: '/notifications', label: '알림', icon: 'bell' },

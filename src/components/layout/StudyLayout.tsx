@@ -9,7 +9,6 @@ import { ProgressBadge } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
 import { cn } from '@/utils/cn'
-import { useAuth } from '@/lib/auth'
 
 /**
  * 학습 화면 셸. 웹은 좌측 사이드바(과목 -> 단원 트리) + 우측 콘텐츠,
@@ -18,8 +17,6 @@ import { useAuth } from '@/lib/auth'
 export function StudyLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const { taxonomy, loading, subjectProgress, unitProgress } = useData()
-  const { hasPermission } = useAuth()
-  const canViewTheory = hasPermission('study_hapbon3')
   const params = useParams()
   const [expanded, setExpanded] = useState<string | null>(params.subjectId ?? null)
 
@@ -65,22 +62,20 @@ export function StudyLayout() {
                       >
                         <span className="block truncate">{subject.name}</span>
                       </NavLink>
-                      {canViewTheory && (
-                        <NavLink
-                          to={`/theory/${subject.id}`}
-                          onClick={() => setDrawerOpen(false)}
-                          className={({ isActive }) =>
-                            cn(
-                              'shrink-0 rounded-md px-1.5 py-1 text-[11px] font-semibold transition-colors',
-                              isActive
-                                ? 'bg-brand-600 text-white'
-                                : 'bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-200 dark:hover:bg-brand-900/70',
-                            )
-                          }
-                        >
-                          이론
-                        </NavLink>
-                      )}
+                      <NavLink
+                        to={`/theory/${subject.id}`}
+                        onClick={() => setDrawerOpen(false)}
+                        className={({ isActive }) =>
+                          cn(
+                            'shrink-0 rounded-md px-1.5 py-1 text-[11px] font-semibold transition-colors',
+                            isActive
+                              ? 'bg-brand-600 text-white'
+                              : 'bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-200 dark:hover:bg-brand-900/70',
+                          )
+                        }
+                      >
+                        이론
+                      </NavLink>
                       <ProgressBadge
                         progress={subjectProgress(subject.id)}
                         showRate={false}

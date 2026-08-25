@@ -13,12 +13,14 @@ import {
   type Solution,
 } from '@/lib/queries/solutions'
 import { uploadTopicImage } from '@/lib/uploads'
-import { emptyDoc, type RichDoc } from '@/types/richtext'
+import { solutionTemplateDoc, type RichDoc } from '@/types/richtext'
 
 type Props = {
   questionId: string
   /** 있으면 해설이 그룹에 붙어 묶인 판본 전체에서 보인다. */
   groupId: string | null
+  /** 새 해설을 열 때 배정 풀이와 같은 선지별 기본 서식을 만든다. */
+  choiceCount: number
 }
 
 /**
@@ -32,7 +34,7 @@ type Props = {
  * 그래서 테마 작성자가 쓴 것 하나만 고른다. 고칠 수 있는 사람도 그 사람뿐이다
  * (solutions_update 정책이 author_id = auth.uid() 를 요구한다).
  */
-export function TopicSolutionBox({ questionId, groupId }: Props) {
+export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
   const scope = useTopicScope()
   const { session, isAdmin } = useAuth()
   const userId = session?.user.id ?? ''
@@ -41,7 +43,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
   const [solution, setSolution] = useState<Solution | null | 'loading'>('loading')
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
-  const draftRef = useRef<RichDoc>(emptyDoc())
+  const draftRef = useRef<RichDoc>(solutionTemplateDoc(choiceCount))
 
   // 테마가 편집 중일 때만, 그리고 작성자 본인만 고칠 수 있다. 저장된 글을 읽는
   // 중에 해설 입력칸이 보이면 게시물이 아직 작성 중인 것처럼 보인다.
@@ -54,10 +56,10 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
       .then((rows) => {
         const mine = rows.find((row) => row.author.id === scope?.authorId) ?? null
         setSolution(mine)
-        draftRef.current = mine?.content ?? emptyDoc()
+        draftRef.current = mine?.content ?? solutionTemplateDoc(choiceCount)
       })
       .catch(() => setSolution(null))
-  }, [questionId, groupId, scope?.authorId])
+  }, [questionId, groupId, scope?.authorId, choiceCount])
 
   useEffect(load, [load])
 
@@ -108,7 +110,7 @@ export function TopicSolutionBox({ questionId, groupId }: Props) {
     return (
       <div className="mt-2.5">
         <LazyRichTextEditor
-          initialValue={solution?.content ?? emptyDoc()}
+          initialValue={solution?.content ?? solutionTemplateDoc(choiceCount)}
           onChange={(doc) => {
             draftRef.current = doc
           }}

@@ -72,7 +72,7 @@ export type Database = {
           created_at: string
           id: string
           question_id: string
-          required_permission: string
+          required_permission: string | null
           updated_at: string
         }
         Insert: {
@@ -80,7 +80,7 @@ export type Database = {
           created_at?: string
           id?: string
           question_id: string
-          required_permission?: string
+          required_permission?: string | null
           updated_at?: string
         }
         Update: {
@@ -88,7 +88,7 @@ export type Database = {
           created_at?: string
           id?: string
           question_id?: string
-          required_permission?: string
+          required_permission?: string | null
           updated_at?: string
         }
         Relationships: [

@@ -482,7 +482,11 @@ function QuestionCard({
           <Spinner className="h-4 w-4" />
         </div>
       ) : (
-        <TopicSolutionBox questionId={questionId} groupId={solutionGroupId} />
+        <TopicSolutionBox
+          questionId={questionId}
+          groupId={solutionGroupId}
+          choiceCount={choices.length}
+        />
       )}
     </section>
   )
@@ -552,7 +556,11 @@ function QuestionPeek({
             </ol>
           </section>
           <section className="border-t border-slate-200 pt-3 dark:border-slate-700">
-            <TopicSolutionBox questionId={row.id} groupId={groupId} />
+            <TopicSolutionBox
+              questionId={row.id}
+              groupId={groupId}
+              choiceCount={row.choices.length}
+            />
           </section>
         </div>
       </div>

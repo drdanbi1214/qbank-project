@@ -159,8 +159,8 @@ export async function renameTheoryDocument(id: string, title: string): Promise<v
  * 목차에 새 문서를 만든다.
  *
  * is_published 기본값이 false 인데 조회 정책이 is_published 를 요구하므로,
- * 명시하지 않으면 만들자마자 안 보인다. 기존 이론이 전부 study_hapbon3 ·
- * 공개 상태라 같은 조건으로 맞춘다.
+ * 알렌은 승인된 회원 전체에게 공개한다. 문서별 별도 권한은 두지 않고
+ * 공개 여부(is_published)만 사용한다.
  *
  * hasContent 는 이 문서가 글을 담는 항목인지, 목차만 나누는 묶음인지다.
  */
@@ -192,7 +192,6 @@ export async function createTheoryDocument(params: {
       sort_order: ((data ?? [])[0]?.sort_order ?? 0) + 1,
       has_content: params.hasContent,
       is_published: true,
-      required_permission: 'study_hapbon3',
       created_by: params.userId,
     })
     .select('id')
