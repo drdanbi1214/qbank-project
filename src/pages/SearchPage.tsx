@@ -68,9 +68,15 @@ export function SearchPage() {
     key: string
     rows: LectureDocument[]
   } | null>(null)
+  const [lectureFailed, setLectureFailed] = useState<{
+    key: string
+    message: string
+  } | null>(null)
 
   const requestKey = `${query}|${includeQuestionSearch}|${includeSolutions}|${includeTheory}|${includeLectures}|${includeNotes}|${subjectId ?? ''}|${cohort ?? ''}`
   const error = failed?.key === requestKey ? failed.message : null
+  const lectureError = lectureFailed?.key === requestKey ? lectureFailed.message : null
+  const searchError = [error, lectureError].filter(Boolean).join(' · ') || null
 
   useEffect(() => {
     if (query.trim() === '') {
@@ -108,10 +114,19 @@ export function SearchPage() {
       // 강의록 분류는 임상 과목과 다른 축이라 과목 거르개를 넘기지 않는다.
       void fetchLectureDocuments({ keyword: query })
         .then((rows) => {
-          if (active) setLectureLoaded({ key: requestKey, rows })
+          if (active) {
+            setLectureLoaded({ key: requestKey, rows })
+            setLectureFailed(null)
+          }
         })
-        .catch(() => {
-          if (active) setLectureLoaded({ key: requestKey, rows: [] })
+        .catch((caught: unknown) => {
+          if (active) {
+            setLectureLoaded({ key: requestKey, rows: [] })
+            setLectureFailed({
+              key: requestKey,
+              message: `강의록 검색 실패: ${caughtMessage(caught, '잠시 후 다시 검색해 주세요.')}`,
+            })
+          }
         })
     }
 
@@ -342,14 +357,14 @@ export function SearchPage() {
       ) : !hasSearchResults ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {error ?? '검색 결과가 없습니다.'}
+            {searchError ?? '검색 결과가 없습니다.'}
           </p>
         </div>
       ) : (
         <>
-          {error && (
+          {searchError && (
             <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-              일부 범위를 검색하지 못했습니다: {error}
+              일부 범위를 검색하지 못했습니다: {searchError}
             </p>
           )}
           {theoryHits.length > 0 && (
@@ -511,6 +526,15 @@ export function SearchPage() {
       )}
     </section>
   )
+}
+
+function caughtMessage(caught: unknown, fallback: string): string {
+  if (caught instanceof Error && caught.message.trim() !== '') return caught.message
+  if (caught && typeof caught === 'object' && 'message' in caught) {
+    const message = String((caught as { message?: unknown }).message ?? '').trim()
+    if (message !== '') return message
+  }
+  return fallback
 }
 
 /** PDF 본문 일치 쪽으로 바로 열고 뷰어가 검색어를 칠하게 한다. */

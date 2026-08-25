@@ -32,6 +32,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
   const [lectureLoaded, setLectureLoaded] = useState<{
     key: string
     rows: LectureDocument[]
+    error: string | null
   } | null>(null)
   const [lecturePage, setLecturePage] = useState<Record<string, string>>({})
 
@@ -51,9 +52,19 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
       // 제목·교수·본문 검색만으로 찾는다.
       void fetchLectureDocuments({ keyword })
         .then((next) =>
-          active && setLectureLoaded({ key: keyword, rows: mixLectureHits(next, keyword, 20) }),
+          active && setLectureLoaded({
+            key: keyword,
+            rows: mixLectureHits(next, keyword, 20),
+            error: null,
+          }),
         )
-        .catch(() => active && setLectureLoaded({ key: keyword, rows: [] }))
+        .catch((caught: unknown) =>
+          active && setLectureLoaded({
+            key: keyword,
+            rows: [],
+            error: lectureSearchErrorMessage(caught),
+          }),
+        )
     }, 250)
     return () => {
       active = false
@@ -65,6 +76,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
   const loading = allenOpen && loaded === null
   const lectureKeyword = lectureQuery.trim()
   const lectures = lectureLoaded?.key === lectureKeyword ? lectureLoaded.rows : null
+  const lectureError = lectureLoaded?.key === lectureKeyword ? lectureLoaded.error : null
 
   const results = useMemo<Result[]>(() => {
     const keyword = query.trim().toLowerCase()
@@ -119,7 +131,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
     </div>}
     {lectureOpen && <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
       <input autoFocus value={lectureQuery} onChange={(event) => setLectureQuery(event.target.value)} placeholder="강의록 제목·교수·본문 검색" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />
-      {lectures === null ? <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400"><Spinner className="h-4 w-4" />강의록 검색 중…</p> : lectures.length === 0 ? <p className="mt-2 text-xs text-slate-400">{lectureQuery.trim() ? '검색 결과가 없습니다.' : '등록된 강의록이 없습니다.'}</p> : <ul className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      {lectureError ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">{lectureError}</p> : lectures === null ? <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400"><Spinner className="h-4 w-4" />강의록 검색 중…</p> : lectures.length === 0 ? <p className="mt-2 text-xs text-slate-400">{lectureQuery.trim() ? '검색 결과가 없습니다.' : '등록된 강의록이 없습니다.'}</p> : <ul className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
         {lectures.map((lecture) => <li key={lecture.id} className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-0 dark:border-slate-800">
           <button type="button" onClick={() => addLecture(lecture)} className="min-w-0 flex-1 text-left text-sm hover:text-brand-700 dark:hover:text-brand-200">
             <span className="block truncate">{lecture.title}</span>
@@ -133,4 +145,13 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
     </div>}
     {preview && <div role="dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setPreview(null)}><article className="max-h-[85dvh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-5 dark:bg-slate-900" onClick={(event) => event.stopPropagation()}><div className="mb-3 flex items-center gap-3"><h2 className="flex-1 text-lg font-bold">{pathOf(preview, documents)}</h2><Button size="sm" variant="ghost" onClick={() => setPreview(null)}>닫기</Button></div><RichTextViewer doc={preview.content} /></article></div>}
   </div>
+}
+
+function lectureSearchErrorMessage(caught: unknown): string {
+  if (caught instanceof Error && caught.message.trim() !== '') return caught.message
+  if (caught && typeof caught === 'object' && 'message' in caught) {
+    const message = String((caught as { message?: unknown }).message ?? '').trim()
+    if (message !== '') return `강의록 검색 실패: ${message}`
+  }
+  return '강의록 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'
 }
