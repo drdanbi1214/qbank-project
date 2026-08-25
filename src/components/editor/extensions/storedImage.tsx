@@ -22,7 +22,7 @@ import { cn } from '@/utils/cn'
  *
  * width 는 사람이 조절한 폭(px)이다. 값이 없으면 예전 문서와 같게 그린다.
  */
-function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewProps) {
+function StoredImageView({ node, selected, updateAttributes, editor, getPos }: NodeViewProps) {
   const src = typeof node.attrs.src === 'string' ? node.attrs.src : null
   const caption = typeof node.attrs.alt === 'string' ? node.attrs.alt : null
   const url = useSignedUrl(src)
@@ -35,6 +35,17 @@ function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewP
   const savedWidth = imageWidthOf(node.attrs.width)
   const width = draggedWidth ?? savedWidth
   const canResize = editor.isEditable && Boolean(src)
+
+  function selectThisImage(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!editor.isEditable || event.button !== 0) return
+    const position = getPos()
+    if (typeof position !== 'number') return
+
+    // 이미지 자체는 편집 불가능한 원자 노드다. 클릭이 주변 문단의 텍스트 커서로
+    // 넘어가지 않게 대상을 명시적으로 선택한다.
+    if (!selected) editor.commands.setNodeSelection(position)
+    event.stopPropagation()
+  }
 
   /** 편집기 폭을 넘겨 봐야 화면에서 잘리므로 거기까지만 늘린다. */
   function maxWidth(): number {
@@ -85,7 +96,12 @@ function StoredImageView({ node, selected, updateAttributes, editor }: NodeViewP
   }
 
   return (
-    <NodeViewWrapper as="div" className="my-2">
+    <NodeViewWrapper
+      as="div"
+      className="my-2"
+      contentEditable={false}
+      onPointerDown={selectThisImage}
+    >
       <div ref={frameRef} className="relative">
         {!src ? (
           <div className="flex h-24 items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">

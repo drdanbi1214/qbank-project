@@ -1,5 +1,10 @@
 /* eslint-disable react-refresh/only-export-components -- Tiptap 확장과 그 노드뷰는 한 파일에 두는 편이 읽기 쉽다. */
-import type { ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
+import type {
+  ClipboardEvent,
+  DragEvent,
+  KeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { LecturePageCard, type LecturePageAttrs } from '@/components/lecture/LecturePageCard'
@@ -28,14 +33,34 @@ declare module '@tiptap/core' {
  * richtext.ts 의 LEAF_TYPES 에도 같은 이름이 등록되어 있어야 인라인 코멘트
  * 위치가 어긋나지 않는다.
  */
-function LecturePageEmbedView({ node, selected, editor, deleteNode, updateAttributes }: NodeViewProps) {
+function LecturePageEmbedView({
+  node,
+  selected,
+  editor,
+  deleteNode,
+  updateAttributes,
+  getPos,
+}: NodeViewProps) {
   const attrs = node.attrs as Record<string, unknown>
+
+  function selectThisPage(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!editor.isEditable || event.button !== 0) return
+    const position = getPos()
+    if (typeof position !== 'number') return
+
+    // 카드 안의 이미지처럼 contentEditable=false 인 자손을 누르면 ProseMirror가
+    // 클릭을 카드 선택이 아니라 앞뒤 문단의 커서로 해석하는 경우가 있다.
+    // 먼저 원자 노드를 직접 선택하고, 바깥 편집기가 다시 커서를 옮기지 못하게 한다.
+    if (!selected) editor.commands.setNodeSelection(position)
+    event.stopPropagation()
+  }
 
   return (
     <NodeViewWrapper
       as="div"
       className="my-3"
       contentEditable={false}
+      onPointerDown={selectThisPage}
       onKeyDown={(event: KeyboardEvent) => event.stopPropagation()}
       onKeyUp={(event: KeyboardEvent) => event.stopPropagation()}
       onPaste={(event: ClipboardEvent) => event.stopPropagation()}
