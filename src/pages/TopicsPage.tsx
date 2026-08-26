@@ -26,6 +26,7 @@ import { TopicSidebar } from '@/components/question/TopicSidebar'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatDateTime, formatShortDate } from '@/utils/date'
 import { emptyDoc, type RichDoc } from '@/types/richtext'
+import { cn } from '@/utils/cn'
 
 /**
  * 테마 — 주제별 이론 정리.
@@ -45,6 +46,25 @@ export function TopicsPage() {
   const [error, setError] = useState<string | null>(null)
   // 새 글은 오른쪽 편집창에서 제목까지 함께 쓴다. 값이 있으면 초안을 쓰는 중이고,
   // unitId 는 목차에서 ＋ 를 누른 줄이다.
+  // 글을 쓰는 동안에는 목차를 접어 본문을 넓게 쓰고 싶어 한다. 접은 채로
+  // 새로고침해도 그대로이도록 브라우저에 남긴다.
+  const [outlineOpen, setOutlineOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem('topics.outline') !== 'closed'
+    } catch {
+      return true
+    }
+  })
+
+  const toggleOutline = useCallback((open: boolean) => {
+    setOutlineOpen(open)
+    try {
+      window.localStorage.setItem('topics.outline', open ? 'open' : 'closed')
+    } catch {
+      // 사생활 보호 모드처럼 저장이 막힌 곳에서도 접고 펴는 것 자체는 되어야 한다.
+    }
+  }, [])
+
   const [draft, setDraft] = useState<{ unitId: string | null } | null>(null)
   const [draftTitle, setDraftTitle] = useState('')
   const [editorSeed, setEditorSeed] = useState(() => ({ doc: emptyDoc(), version: 0 }))
@@ -354,14 +374,39 @@ export function TopicsPage() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
-        <TopicSidebar
-          topics={topics}
-          subjectId={subjectId}
-          topicId={topicId}
-          units={subjectUnits}
-          onNewTopic={startDraft}
-        />
+      <div
+        className={cn(
+          'grid gap-4',
+          outlineOpen ? 'md:grid-cols-[16rem_1fr]' : 'md:grid-cols-[2rem_1fr]',
+        )}
+      >
+        {outlineOpen ? (
+          <TopicSidebar
+            topics={topics}
+            subjectId={subjectId}
+            topicId={topicId}
+            units={subjectUnits}
+            onNewTopic={startDraft}
+            onCollapse={() => toggleOutline(false)}
+          />
+        ) : (
+          // 접은 자리에는 책갈피만 남긴다. 목차가 사라진 게 아니라 접혀 있다는
+          // 것이 보여야 다시 펼 생각을 한다.
+          <button
+            type="button"
+            onClick={() => toggleOutline(true)}
+            aria-label="목차 펴기"
+            title="목차 펴기"
+            className="h-fit w-fit rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-500 shadow-sm hover:border-brand-400 hover:text-brand-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400 md:sticky md:top-20 md:px-1 md:py-3"
+          >
+            {/* 좁은 화면에서는 목차가 본문 위에 놓이므로 가로로, 넓은 화면에서는
+                옆에 붙는 책갈피라 세로로 세운다. */}
+            <span className="flex items-center gap-1.5 md:flex-col">
+              <span aria-hidden>⟩</span>
+              <span className="tracking-widest md:[writing-mode:vertical-rl]">목차</span>
+            </span>
+          </button>
+        )}
 
         <article className="min-w-0">
           {draft ? (

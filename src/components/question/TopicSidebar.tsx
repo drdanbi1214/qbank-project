@@ -16,6 +16,8 @@ type Props = {
   units: Unit[]
   /** 그 단원에 새 주제를 만든다. 없으면 만들기 버튼을 내지 않는다. */
   onNewTopic?: (unitId: string | null) => void
+  /** 목차를 접는다. 없으면 접기 버튼을 내지 않는다. */
+  onCollapse?: () => void
 }
 
 /** 대표 단원이 없는 테마를 모으는 자리. 단원 id 와 겹치지 않는 값이면 된다. */
@@ -28,7 +30,14 @@ const NO_UNIT = ''
  * 검색 중에는 묶음을 풀고 결과만 늘어놓는다 — 어느 단원에 있었는지보다
  * 찾았는지가 먼저다.
  */
-export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: Props) {
+export function TopicSidebar({
+  topics,
+  subjectId,
+  topicId,
+  units,
+  onNewTopic,
+  onCollapse,
+}: Props) {
   const [keyword, setKeyword] = useState('')
   // 사람이 직접 접거나 편 것만 담는다. 손대지 않은 단원은 아래 규칙대로 열린다.
   const [toggled, setToggled] = useState<Record<string, boolean>>({})
@@ -92,11 +101,22 @@ export function TopicSidebar({ topics, subjectId, topicId, units, onNewTopic }: 
 
   return (
     <nav className="h-fit space-y-1 rounded-xl border border-slate-300 bg-white p-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900 md:sticky md:top-20">
-      <div className="flex items-center justify-between px-1 pb-1">
+      <div className="flex items-center gap-1.5 px-1 pb-1">
         <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">목차</h2>
-        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        <span className="ml-auto text-[11px] font-medium text-slate-500 dark:text-slate-400">
           {(topics ?? []).length}개 글
         </span>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="목차 접기"
+            title="목차 접기"
+            className="shrink-0 rounded px-1 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            ⟨
+          </button>
+        )}
       </div>
       <input
         value={keyword}
