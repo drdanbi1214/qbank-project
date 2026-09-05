@@ -87,6 +87,46 @@
   outline: 1px solid rgb(234 88 12 / 0.8);
 }
 
+/* 필기 도구가 켜져 있을 때 OCR 텍스트 층은 화면 표시만 담당한다. iPadOS의
+ * 선택 손잡이·문맥 메뉴·드래그가 Pencil 획과 경쟁하지 못하게 완전히 비활성화한다. */
+[data-annotation-active] {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+[data-annotation-active] canvas,
+[data-annotation-active] .lecture-pdf-text-layer {
+  -webkit-user-drag: none;
+}
+
+/* 필기 중에는 SVG가 페이지 안의 유일한 입력 대상이다. 페이지 복사 버튼처럼
+ * z-index가 높은 요소나 캔버스가 Pencil 탭을 대신 받지 못하게 한다. */
+[data-annotation-active] > :not(.lecture-page-annotation-layer) {
+  pointer-events: none;
+}
+
+[data-annotation-active] > .lecture-page-annotation-layer {
+  pointer-events: auto;
+}
+
+[data-annotation-active] .lecture-pdf-text-layer,
+[data-annotation-active] .lecture-pdf-text-layer :is(span, br, mark) {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: default;
+}
+
+.lecture-page-annotation-layer {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -272,6 +312,38 @@
   .rich-text table:has(col[style*='width']) {
     @apply table-fixed;
   }
+
+  /* 사진/강의록의 저장된 width는 원본을 복원하기 위한 픽셀 값이다. table-auto가
+     그 값을 열의 최소 너비로 사용하면 첫 번째 셀이 본문 폭 전체를 차지하고 다음
+     셀은 오른쪽 스크롤 밖으로 밀려난다. 미디어가 든 표는 표의 열 구조를 우선해
+     두 열 모두 제출 후에도 같은 화면 안에 남도록 한다. */
+  .rich-text table:has(
+    .node-image,
+    .stored-image-view,
+    .node-lecturePageEmbed,
+    .lecture-page-embed
+  ) {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .rich-text :is(th, td):has(
+    .node-image,
+    .stored-image-view,
+    .node-lecturePageEmbed,
+    .lecture-page-embed
+  ) {
+    min-width: 0;
+  }
+
+  .rich-text :is(th, td) :is(
+    .node-image,
+    .stored-image-view,
+    .node-lecturePageEmbed,
+    .lecture-page-embed
+  ) {
+    max-width: 100%;
+  }
   .rich-text th,
   .rich-text td {
     @apply relative border border-slate-300 px-2 py-1 align-top dark:border-slate-600;
@@ -330,6 +402,61 @@
 
   .rich-text .ProseMirror-selectednode {
     @apply outline-2 outline-brand-500;
+  }
+
+  /* 나란히 놓은 사진과 강의록 쪽은 같은 두 칸짜리 흐름을 쓴다. 편집기의
+     React node-view 바깥 div와 읽기 전용 뷰어 양쪽에 같은 규칙을 적용해야
+     사진+강의록처럼 종류가 다른 조합도 한 줄에 맞는다. */
+  .rich-text .node-image[data-image-layout='half'],
+  .rich-text .stored-image-view[data-image-layout='half'],
+  .rich-text .node-lecturePageEmbed[data-page-layout='half'],
+  .rich-text .lecture-page-embed[data-page-layout='half'] {
+    box-sizing: border-box;
+    display: inline-block;
+    width: 50%;
+    padding-inline: 0.375rem;
+    vertical-align: top;
+  }
+
+  /* 최상위 미디어는 inline-block 두 개에 우연히 기대지 않고 같은 grid 행에
+     넣는다. 서로 다른 React node-view 사이의 공백, 내부 margin, 좁은 iPad
+     분할 화면에서도 두 번째 항목이 다음 줄로 밀리지 않는다. */
+  .rich-text:has(
+    > .node-image[data-image-layout='half'],
+    > .stored-image-view[data-image-layout='half'],
+    > .node-lecturePageEmbed[data-page-layout='half'],
+    > .lecture-page-embed[data-page-layout='half']
+  ) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rich-text:has(
+    > .node-image[data-image-layout='half'],
+    > .stored-image-view[data-image-layout='half'],
+    > .node-lecturePageEmbed[data-page-layout='half'],
+    > .lecture-page-embed[data-page-layout='half']
+  ) > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .rich-text:has(
+    > .node-image[data-image-layout='half'],
+    > .stored-image-view[data-image-layout='half'],
+    > .node-lecturePageEmbed[data-page-layout='half'],
+    > .lecture-page-embed[data-page-layout='half']
+  ) > :is(
+    .node-image[data-image-layout='half'],
+    .stored-image-view[data-image-layout='half'],
+    .node-lecturePageEmbed[data-page-layout='half'],
+    .lecture-page-embed[data-page-layout='half']
+  ) {
+    grid-column: span 1;
+    display: block;
+    width: 100%;
+    /* 첫 번째 항목이어도 두 칸의 시작 높이를 항상 같게 한다. */
+    margin-top: 0.75rem;
   }
 
   /* 빈 문서 안내 문구 */

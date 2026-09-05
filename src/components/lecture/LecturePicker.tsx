@@ -3,7 +3,13 @@ import { LecturePdfViewer } from '@/components/lecture/LecturePdfViewer'
 import { renderLecturePageToBlob } from '@/components/lecture/renderLecturePage'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { fetchLectureDocuments, splitLectureHits, type LectureDocument } from '@/lib/queries/lectures'
+import {
+  fetchLectureCategories,
+  fetchLectureDocuments,
+  splitLectureHits,
+  type LectureCategory,
+  type LectureDocument,
+} from '@/lib/queries/lectures'
 import { uploadImage } from '@/lib/uploads'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
@@ -44,6 +50,10 @@ function lectureSearchErrorMessage(caught: unknown): string {
 export function LecturePicker({ userId, onPick, onCancel }: Props) {
   const [keyword, setKeyword] = useState('')
   const [debounced, setDebounced] = useState('')
+  // 문제 과목과 무관하게 전체 강의록을 기본 검색 범위로 둔다. 필요할 때만
+  // 강의록 전용 과 분류를 골라 결과를 좁힌다.
+  const [categoryId, setCategoryId] = useState('')
+  const [categories, setCategories] = useState<LectureCategory[]>([])
   const [retryKey, setRetryKey] = useState(0)
   const [loaded, setLoaded] = useState<{
     key: string
@@ -62,10 +72,26 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
   }, [keyword])
 
   useEffect(() => {
-    if (chosen) return
-    const searchKey = debounced.trim()
     let active = true
-    void fetchLectureDocuments({ keyword: searchKey })
+    void fetchLectureCategories()
+      .then((rows) => {
+        if (active) setCategories(rows)
+      })
+      // 과 목록을 못 받아도 기본값인 전체 검색은 계속 쓸 수 있다.
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (chosen) return
+    const searchKey = `${categoryId || 'all'}:${debounced.trim()}`
+    let active = true
+    void fetchLectureDocuments({
+      categoryId: categoryId || null,
+      keyword: debounced.trim(),
+    })
       .then((rows) => active && setLoaded({ key: searchKey, rows, error: null }))
       .catch((caught: unknown) =>
         active &&
@@ -78,11 +104,11 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
     return () => {
       active = false
     }
-  }, [debounced, chosen, retryKey])
+  }, [categoryId, debounced, chosen, retryKey])
 
   // 입력 대기(디바운스)부터 서버 응답까지 이전 결과를 감추고 로딩을 보여 준다.
-  const currentKey = keyword.trim()
-  const debouncedKey = debounced.trim()
+  const currentKey = `${categoryId || 'all'}:${keyword.trim()}`
+  const debouncedKey = `${categoryId || 'all'}:${debounced.trim()}`
   const currentLoaded = currentKey === debouncedKey && loaded?.key === debouncedKey ? loaded : null
   const results = currentLoaded?.rows ?? null
   const searchError = currentLoaded?.error ?? null
@@ -101,6 +127,10 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
   const hits = useMemo(
     () => splitLectureHits(results ?? [], debounced),
     [results, debounced],
+  )
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
   )
 
   async function insert() {
@@ -175,13 +205,31 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {!chosen ? (
             <>
-              <input
-                autoFocus
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
-                placeholder="강의록 제목 · 교수 · 내용으로 검색"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950"
-              />
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_15rem]">
+                <input
+                  autoFocus
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  placeholder="전체 과 강의록 제목 · 교수 · 내용으로 검색"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950"
+                />
+                <select
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  aria-label="강의록 검색 과 범위"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="">전체 과 강의록</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name} ({category.documentCount})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-1.5 px-1 text-xs text-slate-500 dark:text-slate-400">
+                문제의 과목과 관계없이 전체 과 강의록에서 검색합니다.
+              </p>
 
               {results === null ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-xs text-slate-500 dark:text-slate-400">
@@ -212,12 +260,14 @@ export function LecturePicker({ userId, onPick, onCancel }: Props) {
                     label={debounced.trim() ? '제목 · 교수' : null}
                     rows={hits.byTitle.slice(0, debounced.trim() ? 20 : 30)}
                     total={hits.byTitle.length}
+                    categoryNameById={categoryNameById}
                     onPick={setChosen}
                   />
                   <HitList
                     label="본문"
                     rows={hits.byText.slice(0, 30)}
                     total={hits.byText.length}
+                    categoryNameById={categoryNameById}
                     onPick={setChosen}
                   />
                 </>
@@ -260,11 +310,13 @@ function HitList({
   label,
   rows,
   total,
+  categoryNameById,
   onPick,
 }: {
   label: string | null
   rows: LectureDocument[]
   total: number
+  categoryNameById: Map<string, string>
   onPick: (lecture: LectureDocument) => void
 }) {
   if (rows.length === 0) return null
@@ -289,6 +341,7 @@ function HitList({
               <span className="block truncate text-sm font-medium">{lecture.title}</span>
               <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
                 {[
+                  categoryNameById.get(lecture.categoryId),
                   lecture.professor,
                   lecture.lectureYear ? `${lecture.lectureYear}년` : null,
                   lecture.pageCount ? `${lecture.pageCount}쪽` : null,

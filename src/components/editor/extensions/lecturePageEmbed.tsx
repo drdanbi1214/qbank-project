@@ -1,7 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- Tiptap 확장과 그 노드뷰는 한 파일에 두는 편이 읽기 쉽다. */
 import type {
   ClipboardEvent,
-  DragEvent,
   KeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
@@ -10,6 +9,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tip
 import { LecturePageCard, type LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { parsePageMarks } from '@/components/lecture/pageMarks'
 import { pageCropOf } from '@/components/lecture/pageCrop'
+import { imageWidthOf } from '@/types/richtext'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -43,6 +43,18 @@ function LecturePageEmbedView({
 }: NodeViewProps) {
   const attrs = node.attrs as Record<string, unknown>
 
+  function resizePage(width: number | null) {
+    const savedWidth = imageWidthOf(width)
+    const editorWidth = editor.view.dom.getBoundingClientRect().width
+    // 반쪽보다 작게 줄이면 바깥 노드도 반 칸만 차지한다. 연달아 놓인 두 쪽은
+    // 같은 줄에 들어가고, 다시 크게 늘리면 자동으로 한 줄 전체로 돌아온다.
+    const nextLayout =
+      savedWidth !== null && editorWidth > 0 && savedWidth <= (editorWidth - 12) / 2
+        ? 'half'
+        : null
+    updateAttributes({ width: savedWidth, layout: nextLayout })
+  }
+
   function selectThisPage(event: ReactPointerEvent<HTMLDivElement>) {
     if (!editor.isEditable || event.button !== 0) return
     const position = getPos()
@@ -58,14 +70,24 @@ function LecturePageEmbedView({
   return (
     <NodeViewWrapper
       as="div"
-      className="my-3"
+      data-side-by-side-item=""
+      className="relative"
       contentEditable={false}
       onPointerDown={selectThisPage}
       onKeyDown={(event: KeyboardEvent) => event.stopPropagation()}
       onKeyUp={(event: KeyboardEvent) => event.stopPropagation()}
       onPaste={(event: ClipboardEvent) => event.stopPropagation()}
-      onDrop={(event: DragEvent) => event.stopPropagation()}
     >
+      {editor.isEditable && (
+        <span
+          data-drag-handle=""
+          contentEditable={false}
+          title="끌어서 강의록 쪽 이동"
+          className="absolute left-1/2 top-1 z-30 -translate-x-1/2 touch-none select-none cursor-grab rounded-md bg-slate-900/75 px-2 py-0.5 text-xs font-bold tracking-widest text-white shadow active:cursor-grabbing"
+        >
+          ⠿
+        </span>
+      )}
       <LecturePageCard
         src={typeof attrs.src === 'string' ? attrs.src : null}
         lectureId={typeof attrs.lectureId === 'string' ? attrs.lectureId : null}
@@ -76,10 +98,11 @@ function LecturePageEmbedView({
         crop={pageCropOf(attrs.crop)}
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
-        onResize={editor.isEditable ? (width) => updateAttributes({ width }) : undefined}
+        onResize={editor.isEditable ? resizePage : undefined}
         onCropChange={editor.isEditable ? (crop) => updateAttributes({ crop }) : undefined}
         marks={parsePageMarks(attrs.strokes)}
         onMarksChange={editor.isEditable ? (strokes) => updateAttributes({ strokes }) : undefined}
+        canMove={editor.isEditable}
       />
     </NodeViewWrapper>
   )
@@ -153,6 +176,15 @@ export const LecturePageEmbed = Node.create({
         renderHTML: (attributes) =>
           attributes.width ? { 'data-width': String(attributes.width) } : {},
       },
+      // 반쪽 폭 노드 두 개는 한 줄에 나란히 놓는다. px 폭만으로 판단하면 읽는
+      // 화면의 폭에 따라 배치가 달라지므로 작성 시 정한 상태를 따로 저장한다.
+      layout: {
+        default: null,
+        parseHTML: (element) =>
+          element.getAttribute('data-layout') === 'half' ? 'half' : null,
+        renderHTML: (attributes) =>
+          attributes.layout === 'half' ? { 'data-layout': 'half' } : {},
+      },
       crop: {
         default: null,
         parseHTML: (element) => {
@@ -181,7 +213,12 @@ export const LecturePageEmbed = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(LecturePageEmbedView)
+    return ReactNodeViewRenderer(LecturePageEmbedView, {
+      attrs: ({ node }) => ({
+        'data-side-by-side-item': '',
+        'data-page-layout': node.attrs.layout === 'half' ? 'half' : 'full',
+      }),
+    })
   },
 
   addCommands() {

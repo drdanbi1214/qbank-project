@@ -100,7 +100,10 @@ export function QuestionForm({ draft: initial, userId, onSaved, onCancel, compac
     'w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950'
 
   return (
-    <div className={cn('space-y-5', compact && 'space-y-4 text-sm')}>
+    <div
+      data-auto-update-blocker
+      className={cn('space-y-5', compact && 'space-y-4 text-sm')}
+    >
       {/* 소속 */}
       <section className="grid gap-2 sm:grid-cols-2">
         <Field label="시험">

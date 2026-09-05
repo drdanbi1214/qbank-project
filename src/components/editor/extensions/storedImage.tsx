@@ -6,9 +6,16 @@ import {
   ReactNodeViewRenderer,
   type NodeViewProps,
 } from '@tiptap/react'
+import { LecturePageCropDialog } from '@/components/lecture/LecturePageCropDialog'
+import { pageCropOf } from '@/components/lecture/pageCrop'
 import { Spinner } from '@/components/ui/Spinner'
 import { useSignedUrl } from '@/lib/storage'
-import { imageWidthOf, MAX_IMAGE_WIDTH, MIN_IMAGE_WIDTH } from '@/types/richtext'
+import {
+  imageLayoutOf,
+  imageWidthOf,
+  MAX_IMAGE_WIDTH,
+  MIN_IMAGE_WIDTH,
+} from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 /**
@@ -28,12 +35,24 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
   const url = useSignedUrl(src)
 
   const frameRef = useRef<HTMLDivElement>(null)
+  const displayRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   // 끄는 동안에는 문서를 건드리지 않고 화면만 따라오게 한다.
   const [draggedWidth, setDraggedWidth] = useState<number | null>(null)
+  const [cropping, setCropping] = useState(false)
+  const [naturalSize, setNaturalSize] = useState<{ width: number; aspect: number } | null>(null)
 
   const savedWidth = imageWidthOf(node.attrs.width)
   const width = draggedWidth ?? savedWidth
+  const layout = imageLayoutOf(node.attrs.layout)
+  const activeCrop = pageCropOf(node.attrs.crop)
+  const cropAspectRatio =
+    activeCrop && naturalSize
+      ? activeCrop.width / (activeCrop.height * naturalSize.aspect)
+      : null
+  const cropReady = cropAspectRatio !== null ? activeCrop : null
+  // 폭이 따로 없는 예전 이미지도 자른 뒤 0px로 접히지 않도록 원본 폭을 쓴다.
+  const displayWidth = width ?? (activeCrop ? imageWidthOf(naturalSize?.width) : null)
   const canResize = editor.isEditable && Boolean(src)
 
   function selectThisImage(event: ReactPointerEvent<HTMLDivElement>) {
@@ -49,8 +68,12 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
 
   /** 편집기 폭을 넘겨 봐야 화면에서 잘리므로 거기까지만 늘린다. */
   function maxWidth(): number {
-    const frame = frameRef.current?.getBoundingClientRect().width ?? MAX_IMAGE_WIDTH
-    return Math.max(MIN_IMAGE_WIDTH, Math.min(Math.round(frame), MAX_IMAGE_WIDTH))
+    // 나란히 놓인 반쪽 프레임 자체를 기준으로 삼으면 다시 전체 폭으로 키울 수 없다.
+    const editorWidth = frameRef.current?.closest<HTMLElement>('.rich-text')
+      ?.getBoundingClientRect().width
+    const frameWidth = frameRef.current?.getBoundingClientRect().width
+    const limit = editorWidth ?? frameWidth ?? MAX_IMAGE_WIDTH
+    return Math.max(MIN_IMAGE_WIDTH, Math.min(Math.round(limit), MAX_IMAGE_WIDTH))
   }
 
   function startResize(event: ReactPointerEvent<HTMLElement>) {
@@ -59,7 +82,8 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
     event.stopPropagation()
 
     const startX = event.clientX
-    const startWidth = imageRef.current?.getBoundingClientRect().width ?? MIN_IMAGE_WIDTH
+    // 자른 이미지는 원본 img가 프레임보다 크게 확대되어 있으므로 보이는 프레임을 잰다.
+    const startWidth = displayRef.current?.getBoundingClientRect().width ?? MIN_IMAGE_WIDTH
     const limit = maxWidth()
     let next = Math.round(startWidth)
 
@@ -98,7 +122,10 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
   return (
     <NodeViewWrapper
       as="div"
-      className="my-2"
+      data-stored-image=""
+      data-side-by-side-item=""
+      data-image-layout={layout ?? 'full'}
+      className="block w-full align-top"
       contentEditable={false}
       onPointerDown={selectThisImage}
     >
@@ -111,49 +138,122 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
         ) : !url ? (
           <div className="h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
         ) : (
-          <div className="relative inline-block max-w-full align-top">
-            <img
-              ref={imageRef}
-              src={url}
-              alt={caption ?? ''}
-              draggable={false}
-              style={width ? { width } : undefined}
-              className={cn(
-                // 폭을 정하지 않았으면 원본 크기로 두고, 편집기보다 넓을 때만 줄인다.
-                'h-auto max-w-full rounded-lg',
-                selected
-                  ? 'ring-2 ring-brand-500'
-                  : 'border border-slate-200 dark:border-slate-700',
-              )}
-            />
-
-            {canResize && (
-              <span
-                role="presentation"
-                contentEditable={false}
-                onPointerDown={startResize}
-                title="끌어서 크기 조절"
+          <>
+            <div
+              ref={displayRef}
+              // Tiptap의 React NodeView는 이 표시가 있는 영역에서 mousedown이
+              // 시작되어야 노드 이동으로 전환한다. 바깥 노드가 draggable이어도
+              // 이 표시가 없으면 dragstart를 막아 이미지가 전혀 움직이지 않는다.
+              data-drag-handle
+              draggable={canResize ? true : undefined}
+              title="이미지를 끌어서 이동"
+              style={displayWidth ? { width: displayWidth } : undefined}
+              className="relative inline-block max-w-full touch-none select-none cursor-grab align-top active:cursor-grabbing"
+            >
+              <div
+                style={
+                  cropAspectRatio !== null
+                    ? { aspectRatio: cropAspectRatio }
+                    : undefined
+                }
                 className={cn(
-                  'absolute -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-white bg-brand-500 shadow transition-opacity dark:border-slate-900',
-                  // 예전에는 완전히 투명해서 크기를 조절할 수 있다는 걸 몰랐다.
-                  selected ? 'opacity-100' : 'opacity-40 hover:opacity-100',
+                  'relative overflow-hidden rounded-lg',
+                  selected
+                    ? 'ring-2 ring-brand-500'
+                    : 'border border-slate-200 dark:border-slate-700',
                 )}
+              >
+                <img
+                  ref={imageRef}
+                  src={url}
+                  alt={caption ?? ''}
+                  draggable={false}
+                  onLoad={(event) => {
+                    const image = event.currentTarget
+                    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+                    setNaturalSize({
+                      width: image.naturalWidth,
+                      aspect: image.naturalHeight / image.naturalWidth,
+                    })
+                  }}
+                  style={
+                    cropReady
+                      ? {
+                          position: 'absolute',
+                          left: `${-(cropReady.x / cropReady.width) * 100}%`,
+                          top: `${-(cropReady.y / cropReady.height) * 100}%`,
+                          width: `${100 / cropReady.width}%`,
+                          maxWidth: 'none',
+                        }
+                      : displayWidth
+                        ? { width: '100%' }
+                        : undefined
+                  }
+                  className="block h-auto max-w-full"
+                />
+              </div>
+
+              {canResize && (
+                <span
+                  role="presentation"
+                  contentEditable={false}
+                  onPointerDown={startResize}
+                  title="끌어서 크기 조절"
+                  className={cn(
+                    'absolute -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize rounded-sm border-2 border-white bg-brand-500 shadow transition-opacity dark:border-slate-900',
+                    // 예전에는 완전히 투명해서 크기를 조절할 수 있다는 걸 몰랐다.
+                    selected ? 'opacity-100' : 'opacity-40 hover:opacity-100',
+                  )}
+                />
+              )}
+
+              {canResize && (selected || draggedWidth !== null) && (
+                <div
+                  contentEditable={false}
+                  className="absolute left-1 top-1 flex max-w-[calc(100%-0.5rem)] flex-wrap items-center gap-1 rounded-md bg-slate-900/80 px-1 py-0.5 text-[11px] text-white"
+                >
+                  <SizeButton onClick={() => setFraction(0.35)}>작게</SizeButton>
+                  <SizeButton onClick={() => setFraction(0.6)}>중간</SizeButton>
+                  <SizeButton onClick={() => setFraction(1)}>꽉 차게</SizeButton>
+                  <SizeButton onClick={resetToNatural}>원본</SizeButton>
+                  <SizeButton onClick={() => setCropping(true)}>자르기</SizeButton>
+                  {activeCrop && (
+                    <SizeButton onClick={() => updateAttributes({ crop: null })}>
+                      자르기 해제
+                    </SizeButton>
+                  )}
+                  {layout === 'half' && (
+                    <SizeButton onClick={() => updateAttributes({ layout: null })}>한 줄</SizeButton>
+                  )}
+                  {width && <span className="pl-1 tabular-nums opacity-70">{width}px</span>}
+                </div>
+              )}
+
+              {canResize && selected && draggedWidth === null && (
+                <span
+                  contentEditable={false}
+                  className="pointer-events-none absolute bottom-1 left-1 rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium text-white"
+                >
+                  끌어서 이동
+                </span>
+              )}
+            </div>
+
+            {cropping && (
+              <LecturePageCropDialog
+                src={url}
+                initialCrop={activeCrop}
+                title="사진 자르기"
+                resetLabel="전체 사진 선택"
+                imageAlt="자를 사진"
+                onClose={() => setCropping(false)}
+                onApply={(crop) => {
+                  updateAttributes({ crop })
+                  setCropping(false)
+                }}
               />
             )}
-
-            {canResize && (selected || draggedWidth !== null) && (
-              <div
-                contentEditable={false}
-                className="absolute left-1 top-1 flex items-center gap-1 rounded-md bg-slate-900/80 px-1 py-0.5 text-[11px] text-white"
-              >
-                <SizeButton onClick={() => setFraction(0.35)}>작게</SizeButton>
-                <SizeButton onClick={() => setFraction(0.6)}>중간</SizeButton>
-                <SizeButton onClick={() => setFraction(1)}>꽉 차게</SizeButton>
-                <SizeButton onClick={resetToNatural}>원본</SizeButton>
-                {width && <span className="pl-1 tabular-nums opacity-70">{width}px</span>}
-              </div>
-            )}
-          </div>
+          </>
         )}
       </div>
     </NodeViewWrapper>
@@ -202,10 +302,41 @@ export const StoredImage = Image.extend({
         // 업로드 진행 추적용이라 저장할 필요가 없다.
         rendered: false,
       },
+      layout: {
+        default: null,
+        parseHTML: (element) => imageLayoutOf(element.getAttribute('data-image-layout')),
+        renderHTML: (attributes) => {
+          const layout = imageLayoutOf(attributes.layout)
+          return layout ? { 'data-image-layout': layout } : {}
+        },
+      },
+      crop: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute('data-image-crop')
+          if (!raw) return null
+          try {
+            return pageCropOf(JSON.parse(raw))
+          } catch {
+            return null
+          }
+        },
+        renderHTML: (attributes) => {
+          const crop = pageCropOf(attributes.crop)
+          return crop ? { 'data-image-crop': JSON.stringify(crop) } : {}
+        },
+      },
     }
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(StoredImageView)
+    return ReactNodeViewRenderer(StoredImageView, {
+      // 실제 ProseMirror 노드는 React 컴포넌트보다 바깥 래퍼다. 반폭 CSS와
+      // 다른 미디어의 드롭 대상 판별에 쓸 속성을 그 바깥에도 붙인다.
+      attrs: ({ node }) => ({
+        'data-side-by-side-item': '',
+        'data-image-layout': node.attrs.layout === 'half' ? 'half' : 'full',
+      }),
+    })
   },
 })

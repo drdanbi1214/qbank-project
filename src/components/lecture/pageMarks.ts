@@ -23,6 +23,8 @@ export type Stroke = {
   /** 이미지 가로폭 대비 굵기. 0.004 면 폭의 0.4%. */
   width: number
   points: number[]
+  /** 점 한 쌍마다 대응하는 0~1 압력. 예전 필기에는 없을 수 있다. */
+  pressures?: number[]
 }
 
 export type PageShape = {
@@ -99,6 +101,8 @@ export const TOOL_OPACITY: Record<StrokeTool | ShapeTool, number> = {
 /** 고를 수 있는 글자 크기(pt). */
 export const TEXT_SIZES = [10, 12, 14, 18, 24, 32, 44] as const
 export const DEFAULT_TEXT_SIZE = 18
+const MAX_MARKS_PER_PAGE = 2_000
+const MAX_POINT_VALUES_PER_MARK = 40_000
 
 /**
  * pt 를 좌표계 단위로 옮길 때 기준 삼는 쪽 폭.
@@ -128,7 +132,32 @@ export function simplify(points: number[], tolerance = 0.002): number[] {
   return kept
 }
 
-/** 점 목록을 부드러운 선으로. 점이 하나뿐이면 그 자리에 점을 찍는다. */
+/** 좌표를 솎을 때 Pencil 압력도 같은 점과 함께 보존한다. */
+export function simplifyStroke(stroke: Stroke, tolerance = 0.0015): Stroke {
+  if (stroke.points.length <= 4) return stroke
+  const hasPressure = stroke.pressures?.length === stroke.points.length / 2
+  const keptPoints = [stroke.points[0], stroke.points[1]]
+  const keptPressures = hasPressure ? [stroke.pressures![0]] : undefined
+
+  for (let i = 2; i < stroke.points.length - 2; i += 2) {
+    const dx = stroke.points[i] - keptPoints[keptPoints.length - 2]
+    const dy = stroke.points[i + 1] - keptPoints[keptPoints.length - 1]
+    const pressureIndex = i / 2
+    const pressureChanged =
+      hasPressure &&
+      Math.abs(stroke.pressures![pressureIndex] - keptPressures![keptPressures!.length - 1]) >= 0.06
+    if (Math.hypot(dx, dy) >= tolerance || pressureChanged) {
+      keptPoints.push(stroke.points[i], stroke.points[i + 1])
+      keptPressures?.push(stroke.pressures![pressureIndex])
+    }
+  }
+
+  keptPoints.push(stroke.points[stroke.points.length - 2], stroke.points[stroke.points.length - 1])
+  keptPressures?.push(stroke.pressures![stroke.pressures!.length - 1])
+  return { ...stroke, points: keptPoints, ...(keptPressures ? { pressures: keptPressures } : {}) }
+}
+
+/** 점 목록을 중간점 곡선으로 이어, 저장된 점 사이의 각이 보이지 않게 한다. */
 export function toPath(points: number[], scaleX: number, scaleY: number): string {
   if (points.length < 2) return ''
   if (points.length === 2) {
@@ -137,28 +166,85 @@ export function toPath(points: number[], scaleX: number, scaleY: number): string
     return `M ${x} ${y} L ${x + 0.01} ${y}`
   }
   let d = `M ${points[0] * scaleX} ${points[1] * scaleY}`
-  for (let i = 2; i < points.length; i += 2) {
-    d += ` L ${points[i] * scaleX} ${points[i + 1] * scaleY}`
+  for (let i = 2; i < points.length - 2; i += 2) {
+    const x = points[i] * scaleX
+    const y = points[i + 1] * scaleY
+    const nextX = points[i + 2] * scaleX
+    const nextY = points[i + 3] * scaleY
+    d += ` Q ${x} ${y} ${(x + nextX) / 2} ${(y + nextY) / 2}`
   }
-  return d
+  const last = points.length - 2
+  const lastX = points[last] * scaleX
+  const lastY = points[last + 1] * scaleY
+  return `${d} Q ${lastX} ${lastY} ${lastX} ${lastY}`
+}
+
+/**
+ * 압력과 곡선 보정을 적용한 펜 획.
+ *
+ * Pencil 압력이 있으면 그 값을 쓰고, 마우스·손가락·예전 필기처럼
+ * 압력이 없으면 이동 속도로 굵기를 자연스럽게 보완한다.
+ */
+export function toPressurePenPath(mark: Stroke, scaleX: number, scaleY: number): string {
+  if (mark.tool !== 'pen') return ''
+  const hasPressure = mark.pressures?.length === mark.points.length / 2
+  const input = Array.from({ length: mark.points.length / 2 }, (_, index) => {
+    const point = [mark.points[index * 2] * scaleX, mark.points[index * 2 + 1] * scaleY]
+    return hasPressure ? [...point, mark.pressures![index]] : point
+  })
+  const outline = getStroke(input, {
+    size: mark.width * scaleX,
+    thinning: hasPressure ? 0.45 : 0.32,
+    smoothing: 0.72,
+    // 값이 높을수록 손을 더 늦게 따라와 필기감이 둥해진다.
+    // 지연은 줄이면서 미세한 떨림만 곡선 보정에 맡긴다.
+    streamline: 0.18,
+    simulatePressure: !hasPressure,
+    easing: (pressure) => pressure ** 0.7,
+    last: true,
+  })
+  if (outline.length === 0) return ''
+  if (outline.length === 1) return `M ${outline[0][0]} ${outline[0][1]} Z`
+
+  let path = `M ${outline[0][0]} ${outline[0][1]} Q`
+  for (let index = 1; index < outline.length; index += 1) {
+    const point = outline[index]
+    const next = outline[(index + 1) % outline.length]
+    path += ` ${point[0]} ${point[1]} ${(point[0] + next[0]) / 2} ${(point[1] + next[1]) / 2}`
+  }
+  return `${path} Z`
 }
 
 export function parsePageMarks(value: unknown): PageMark[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((item): PageMark[] => {
+  return value.slice(0, MAX_MARKS_PER_PAGE).flatMap((item): PageMark[] => {
     if (!item || typeof item !== 'object') return []
     const record = item as Record<string, unknown>
-    const points = Array.isArray(record.points)
-      ? record.points.filter((n): n is number => typeof n === 'number')
-      : []
-    if (points.length < 2) return []
-    const color = typeof record.color === 'string' ? record.color : STROKE_COLORS[0]
+    if (
+      !Array.isArray(record.points) ||
+      record.points.length < 2 ||
+      record.points.length % 2 !== 0 ||
+      record.points.length > MAX_POINT_VALUES_PER_MARK ||
+      record.points.some((number) => typeof number !== 'number' || !Number.isFinite(number))
+    ) {
+      return []
+    }
+    const points = (record.points as number[]).map((number) =>
+      Math.min(Math.max(number, -0.25), 1.25),
+    )
+    const color =
+      typeof record.color === 'string' && record.color.length <= 64
+        ? record.color
+        : STROKE_COLORS[0]
 
     if (record.tool === 'text') {
       const text = typeof record.text === 'string' ? record.text.trim() : ''
       // 빈 글자는 화면에 아무것도 남기지 않으면서 자리만 차지한다.
       if (text === '') return []
-      const size = typeof record.size === 'number' && record.size > 0 ? record.size : DEFAULT_TEXT_SIZE
+      const size =
+        typeof record.size === 'number' && Number.isFinite(record.size) && record.size > 0
+          ? Math.min(record.size, 200)
+          : DEFAULT_TEXT_SIZE
       const background = TEXT_BOX_BACKGROUNDS.some((item) => item.value === record.background)
         ? String(record.background)
         : DEFAULT_TEXT_BACKGROUND
@@ -185,20 +271,35 @@ export function parsePageMarks(value: unknown): PageMark[] {
         {
           tool,
           color,
-          width: typeof record.width === 'number' ? record.width : TOOL_WIDTH[tool],
+          width: validMarkWidth(record.width, TOOL_WIDTH[tool]),
           points: points.slice(0, 4),
         },
       ]
     }
 
-    const tool: StrokeTool = record.tool === 'highlight' ? 'highlight' : 'pen'
+    if (record.tool !== 'pen' && record.tool !== 'highlight') return []
+    const tool: StrokeTool = record.tool
+    const pressures = Array.isArray(record.pressures)
+      ? record.pressures.filter(
+          (pressure): pressure is number =>
+            typeof pressure === 'number' && Number.isFinite(pressure) && pressure >= 0 && pressure <= 1,
+        )
+      : []
     return [
       {
         tool,
         color,
-        width: typeof record.width === 'number' ? record.width : TOOL_WIDTH[tool],
+        width: validMarkWidth(record.width, TOOL_WIDTH[tool]),
         points,
+        ...(tool === 'pen' && pressures.length === points.length / 2 ? { pressures } : {}),
       },
     ]
   })
 }
+
+function validMarkWidth(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0.0005 && value <= 0.2
+    ? value
+    : fallback
+}
+import { getStroke } from 'perfect-freehand'

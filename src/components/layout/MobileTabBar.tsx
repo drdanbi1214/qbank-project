@@ -2,13 +2,11 @@ import { NavLink } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { MOBILE_NAV } from '@/lib/navigation'
 import { useUnreadCount } from '@/lib/notifications'
-import { useData } from '@/lib/data'
 import { useAuth } from '@/lib/auth'
 import { cn } from '@/utils/cn'
 
 export function MobileTabBar() {
   const unread = useUnreadCount()
-  const { openAssignments } = useData()
   const { hasPermission } = useAuth()
   const items = MOBILE_NAV.filter((item) => !item.permission || hasPermission(item.permission))
 
@@ -36,11 +34,6 @@ export function MobileTabBar() {
                 {item.icon === 'bell' && unread > 0 && (
                   <span className="absolute -right-1.5 -top-1 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] leading-4 text-white">
                     {unread > 99 ? '99+' : unread}
-                  </span>
-                )}
-                {item.icon === 'clipboard' && openAssignments > 0 && (
-                  <span className="absolute -right-1.5 -top-1 min-w-4 rounded-full bg-brand-600 px-1 text-[10px] leading-4 text-white">
-                    {openAssignments > 99 ? '99+' : openAssignments}
                   </span>
                 )}
               </span>

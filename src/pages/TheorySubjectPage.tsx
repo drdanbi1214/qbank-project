@@ -22,6 +22,7 @@ import {
 } from '@/lib/queries/theory'
 import { MoveDialog } from '@/components/theory/TheoryOutlineTools'
 import { uploadTheoryImage } from '@/lib/uploads'
+import { exportTheoryDocumentsToDocx } from '@/lib/exportTheoryDocx'
 import type { RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
@@ -36,6 +37,9 @@ export function TheorySubjectPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editBusy, setEditBusy] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
   const editedContent = useRef<RichDoc | null>(null)
 
   // 목차를 옮기고 나면 다시 읽어야 하므로 따로 뺀다.
@@ -136,6 +140,14 @@ export function TheorySubjectPage() {
   const activeSection = usesSectionLanding && current
     ? findSectionRoot(current, documents, new Set(sectionRoots.map((document) => document.id)))
     : null
+  // 소화기처럼 한 섹션 안에서 다시 큰 분야로 나뉘는 경우에는 섹션을 누른
+  // 직후 20여 개 목차를 한꺼번에 펼치지 않고, 위장관/간담췌 같은 중간 카드를
+  // 먼저 보여 준다. source_key로 표시해 일반 목차 묶음과 구별한다.
+  const nestedSectionRoots = activeSection && current?.id === activeSection.id
+    ? childrenOf(activeSection.id).filter((document) =>
+        document.sourceKey?.startsWith(`${activeSection.sourceKey}/group:`),
+      )
+    : []
   const navigationRoots = activeSection ? childrenOf(activeSection.id) : topLevel
   // 아래쪽 이전/다음은 목차에 보이는 차례 그대로 따라간다. 글이 없는 묶음은
   // 읽을 것이 없으므로 건너뛴다.
@@ -182,6 +194,30 @@ export function TheorySubjectPage() {
     }
   }
 
+  async function exportWord(subjectName: string, exportDocuments: TheoryDocument[]) {
+    setExportBusy(true)
+    setExportError(null)
+    setExportStatus('문서를 준비하는 중…')
+    try {
+      await exportTheoryDocumentsToDocx({
+        subjectName,
+        documents: exportDocuments,
+        onProgress: ({ stage, completed, total }) => {
+          if (stage === 'images') {
+            setExportStatus(total > 0 ? `이미지 포함 중 ${completed}/${total}` : '본문을 정리하는 중…')
+          } else {
+            setExportStatus('Word 문서를 만드는 중…')
+          }
+        },
+      })
+    } catch (caught) {
+      setExportError(caught instanceof Error ? caught.message : 'Word 문서를 만들지 못했습니다.')
+    } finally {
+      setExportBusy(false)
+      setExportStatus(null)
+    }
+  }
+
   return (
     <section>
       <header className="mb-4">
@@ -191,7 +227,17 @@ export function TheorySubjectPage() {
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-3">
           <h1 className="text-xl font-bold">{activeSection?.title ?? `${subject.name} 이론`}</h1>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void exportWord(subject.name, documents)}
+              disabled={exportBusy || documents.every((document) => !document.hasContent)}
+              title={`${subject.name} 알렌 전체를 표와 이미지가 포함된 Word 문서로 내보냅니다`}
+            >
+              {exportBusy && <Spinner className="h-4 w-4" />}
+              {exportBusy ? '내보내는 중' : '↓ Word 내보내기'}
+            </Button>
             {isAdmin && (
               <button
                 type="button"
@@ -209,6 +255,14 @@ export function TheorySubjectPage() {
             <Link to={`/study/${subject.id}`} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">문제 학습</Link>
           </div>
         </div>
+        {exportStatus && (
+          <p className="mt-2 text-right text-xs text-slate-500 dark:text-slate-400">{exportStatus}</p>
+        )}
+        {exportError && (
+          <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+            {exportError}
+          </p>
+        )}
       </header>
 
       {error ? (
@@ -219,6 +273,8 @@ export function TheorySubjectPage() {
         </div>
       ) : usesSectionLanding && !activeSection && !outlineEditing ? (
         <TheorySectionLanding subjectId={subject.id} subjectName={subject.name} sections={sectionRoots} documents={documents} />
+      ) : nestedSectionRoots.length > 0 && !outlineEditing ? (
+        <TheorySectionLanding subjectId={subject.id} subjectName={activeSection?.title ?? subject.name} sections={nestedSectionRoots} documents={documents} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">

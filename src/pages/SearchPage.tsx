@@ -398,10 +398,8 @@ export function SearchPage() {
               <ul className="space-y-2">
                 {lectureHits.map((lecture) => (
                   <li key={lecture.id}>
-                    <a
-                      href={lecturePdfLink(lecture, query)}
-                      target="_blank"
-                      rel="noreferrer"
+                    <Link
+                      to={lecturePdfLink(lecture, query)}
                       className="block rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 transition-colors hover:border-indigo-400 dark:border-indigo-900 dark:bg-indigo-950/20"
                     >
                       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -426,7 +424,7 @@ export function SearchPage() {
                           />
                         </p>
                       )}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -441,10 +439,8 @@ export function SearchPage() {
               <ul className="space-y-2">
                 {noteHits.map((lecture) => (
                   <li key={lecture.id}>
-                    <a
-                      href={lectureNoteLink(lecture, query)}
-                      target="_blank"
-                      rel="noreferrer"
+                    <Link
+                      to={lectureNoteLink(lecture, query)}
                       className="block rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 transition-colors hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/20"
                     >
                       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -464,7 +460,7 @@ export function SearchPage() {
                           <LectureHighlighted text={lecture.noteMatchSnippet} query={query} />
                         </p>
                       )}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>

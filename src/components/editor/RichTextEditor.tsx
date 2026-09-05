@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
-import type { EditorView } from '@tiptap/pm/view'
+import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { NodeSelection, Selection } from '@tiptap/pm/state'
+import { CellSelection } from '@tiptap/pm/tables'
+import type { EditorProps, EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
 import { Color, TextStyle } from '@tiptap/extension-text-style'
@@ -99,21 +102,74 @@ export function RichTextEditor({
   const errorRef = useRef(onUploadError)
   const uploadImageRef = useRef(uploadImageFile)
   const uploadVideoRef = useRef(uploadVideoFile)
+  const onChangeRef = useRef(onChange)
+  const composingRef = useRef(false)
+  // 드롭 시점의 selection은 드롭 커서나 React 노드뷰 갱신으로 달라질 수 있다.
+  // 실제로 잡은 미디어 위치를 dragstart 때 따로 기억해야 풀이 작성 중에도
+  // 사진/강의록 좌우 이동이 안정적으로 동작한다.
+  const draggedMediaPosRef = useRef<number | null>(null)
+  const pointerMediaDragRef = useRef<{
+    sourcePos: number
+    pointerId: number
+    startX: number
+    startY: number
+  } | null>(null)
+  const lastEmittedDocRef = useRef<ProseMirrorNode | null>(null)
+  // initialValue 는 이름 그대로 마운트할 때 한 번만 읽는다. 부모가 렌더될 때마다
+  // 새 JSON 객체를 만들어 넘겨도 Tiptap 옵션 변경으로 오인하지 않게 한다.
+  const [initialContent] = useState(initialValue)
   useEffect(() => {
     userIdRef.current = userId
     errorRef.current = onUploadError
     uploadImageRef.current = uploadImageFile
     uploadVideoRef.current = uploadVideoFile
-  }, [userId, onUploadError, uploadImageFile, uploadVideoFile])
+    onChangeRef.current = onChange
+  }, [userId, onUploadError, uploadImageFile, uploadVideoFile, onChange])
+
+  const emitDocumentChange = useCallback((doc: ProseMirrorNode) => {
+    // compositionend 뒤 DOM observer와 아래 microtask가 모두 같은 문서를 알릴 수
+    // 있으므로 문서 객체 기준으로 한 번만 부모에 보낸다.
+    if (lastEmittedDocRef.current === doc) return
+    lastEmittedDocRef.current = doc
+    onChangeRef.current(doc.toJSON() as RichDoc)
+  }, [])
 
   const insertImages = useCallback((view: EditorView, files: File[], at?: number) => {
-    for (const file of files) {
+    if (files.length === 0) return
+    const { state } = view
+    const uploads = files.map((file) => {
       const uploadId = crypto.randomUUID()
-      const { state } = view
-      const node = state.schema.nodes.image.create({ uploadId })
-      const pos = at ?? state.selection.from
-      view.dispatch(state.tr.insert(pos, node).scrollIntoView())
+      return {
+        file,
+        uploadId,
+        node: state.schema.nodes.image.create({ uploadId }),
+      }
+    })
+    const content = Fragment.fromArray(uploads.map(({ node }) => node))
+    const tr = state.tr
 
+    if (at !== undefined) {
+      // 끌어다 놓기는 선택 영역을 지우지 않고 놓은 자리에 그대로 넣는다. 여러
+      // 장도 Fragment 하나로 넣어 클립보드/파일 순서가 뒤집히지 않게 한다.
+      const pos = Math.min(Math.max(Math.round(at), 0), tr.doc.content.size)
+      tr.insert(pos, content)
+    } else {
+      if (state.selection instanceof CellSelection) {
+        // 셀 전체 선택 상태에서 블록을 바로 replace하면 tableCell 자체를 바꾸려 해
+        // 스키마에 맞지 않는다. 활성 셀 안의 첫 편집 위치로 선택을 접은 뒤 넣는다.
+        const insideCell = Selection.near(
+          tr.doc.resolve(state.selection.$headCell.pos + 1),
+          1,
+        )
+        tr.setSelection(insideCell)
+      }
+      // 일반 커서뿐 아니라 셀 안에서 고른 글자도 보통 붙여넣기처럼 교체한다.
+      // Slice 하나로 넣어 여러 이미지가 같은 위치를 차지하거나 역순이 되지 않는다.
+      tr.replaceSelection(new Slice(content, 0, 0))
+    }
+    view.dispatch(tr.scrollIntoView())
+
+    for (const { file, uploadId } of uploads) {
       // 폭을 안 정해 두면 max-h-96 으로 눌려서 원본보다 작게 들어간다.
       // 원본 픽셀 폭을 같이 실어 보내고, 편집기보다 넓으면 CSS(max-w-full)가 줄인다.
       void Promise.all([
@@ -151,8 +207,11 @@ export function RichTextEditor({
       })
   }, [])
 
-  const editor = useEditor({
-    extensions: [
+  // configure()는 호출할 때마다 새 Extension 객체를 만든다. 이를 렌더마다 만들면
+  // useEditor가 옵션이 바뀌었다고 보고 view.updateState()를 호출한다. 한글 IME가
+  // 아직 조합 중일 때 그 갱신이 끼면 DOM에만 있던 마지막 글자가 사라질 수 있다.
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         heading: { levels: [2, 3, 4] },
         link: { openOnClick: false, autolink: true },
@@ -182,11 +241,77 @@ export function RichTextEditor({
       MathBlock,
       Placeholder.configure({ placeholder }),
     ],
-    content: initialValue,
-    editorProps: {
+    [placeholder],
+  )
+
+  const editorProps = useMemo<EditorProps>(
+    () => ({
       attributes: {
         class: cn('rich-text focus:outline-none', contentClassName, compact ? 'min-h-24' : ''),
         style: compact ? '' : `min-height:${minHeight}`,
+      },
+      handleDOMEvents: {
+        pointerdown(view: EditorView, event: PointerEvent) {
+          if (!event.isPrimary || event.button !== 0) return false
+          const target = event.target
+          if (!(target instanceof Element)) return false
+          if (!target.closest('[data-drag-handle]')) return false
+          if (target.closest('button, input, select, textarea, a')) return false
+
+          const sourcePos = mediaPosFromEventTarget(view, target)
+          pointerMediaDragRef.current =
+            sourcePos === null
+              ? null
+              : {
+                  sourcePos,
+                  pointerId: event.pointerId,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                }
+          return false
+        },
+        pointerup(view: EditorView, event: PointerEvent) {
+          const pointerDrag = pointerMediaDragRef.current
+          pointerMediaDragRef.current = null
+          if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return false
+
+          const distance = Math.hypot(
+            event.clientX - pointerDrag.startX,
+            event.clientY - pointerDrag.startY,
+          )
+          if (distance < 8) return false
+
+          // iPad의 손가락/Apple Pencil과 일부 Safari는 HTML drag/drop을 만들지
+          // 않는다. 이 경우 pointerup 좌표로 같은 좌우 배치를 수행한다.
+          return moveMediaBesideTarget(view, event, pointerDrag.sourcePos)
+        },
+        pointercancel() {
+          pointerMediaDragRef.current = null
+          return false
+        },
+        dragstart(view: EditorView, event: DragEvent) {
+          draggedMediaPosRef.current = mediaPosFromEventTarget(view, event.target)
+          return false
+        },
+        dragend() {
+          draggedMediaPosRef.current = null
+          return false
+        },
+        compositionstart() {
+          composingRef.current = true
+          return false
+        },
+        compositionend(view: EditorView) {
+          composingRef.current = false
+          // ProseMirror도 compositionend 직후 microtask에서 DOM 변경을 state로
+          // 반영한다. 그 뒤의 완성된 문서를 보내야 마지막 한글이 빠지지 않는다.
+          queueMicrotask(() => {
+            if (!composingRef.current && view.dom.isConnected) {
+              emitDocumentChange(view.state.doc)
+            }
+          })
+          return false
+        },
       },
       handlePaste(view, event) {
         const lecturePage = readLecturePageClipboard(event.clipboardData)
@@ -293,6 +418,19 @@ export function RichTextEditor({
         return parsed.body.innerHTML
       },
       handleDrop(view, event, _slice, moved) {
+        const draggedMediaPos = draggedMediaPosRef.current
+        draggedMediaPosRef.current = null
+        pointerMediaDragRef.current = null
+
+        // ProseMirror의 moved 값은 내부 dragging 상태가 유지된 경우에만 true다.
+        // React 노드뷰에서 시작한 드래그는 그 상태가 없어질 수 있으므로, 직접
+        // 기록한 시작 위치가 있으면 selection/moved와 무관하게 좌우 이동을 시도한다.
+        if (
+          draggedMediaPos !== null &&
+          moveMediaBesideTarget(view, event, draggedMediaPos)
+        ) {
+          return true
+        }
         if (moved) return false
         const files = imageFilesFrom(event.dataTransfer)
         const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
@@ -308,9 +446,20 @@ export function RichTextEditor({
         insertVideos(view, videos, coords?.pos)
         return true
       },
-    },
+    }),
+    [compact, contentClassName, emitDocumentChange, insertImages, insertVideos, minHeight],
+  )
+
+  const editor = useEditor({
+    extensions,
+    content: initialContent,
+    editorProps,
+    // 메뉴는 transaction 이벤트를 직접 구독한다. 편집기 전체를 매 입력마다
+    // React로 다시 그릴 필요가 없고, 조합 입력 중 재렌더 위험만 커진다.
+    shouldRerenderOnTransaction: false,
     onUpdate({ editor: instance }) {
-      onChange(instance.getJSON() as RichDoc)
+      if (composingRef.current || instance.view.composing) return
+      emitDocumentChange(instance.state.doc)
     },
   })
 
@@ -318,6 +467,7 @@ export function RichTextEditor({
 
   return (
     <div
+      data-auto-update-blocker
       className={cn(
         'rounded-xl border border-slate-300 bg-white focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900',
         className,
@@ -371,6 +521,120 @@ function setCellShade(editor: Editor, shade: string | null) {
   }
   editor.view.dispatch(tr)
   editor.commands.focus()
+}
+
+/**
+ * 기존 사진/강의록 쪽을 다른 사진/강의록의 왼쪽·오른쪽에 놓으면 둘을
+ * 반폭으로 나란히 둔다. 가운데가 아니라 포인터의 좌우 위치를 그대로 삽입
+ * 순서로 사용한다.
+ */
+function moveMediaBesideTarget(
+  view: EditorView,
+  event: MouseEvent,
+  sourcePos: number,
+): boolean {
+  const { state } = view
+  const sourceNode = state.doc.nodeAt(sourcePos)
+  if (!sourceNode || !isSideBySideMedia(sourceNode)) return false
+
+  // ProseMirror의 drop 이벤트 target은 실제 NodeView가 아니라 편집기 루트가
+  // 되는 경우가 있다. 포인터 좌표와 각 미디어의 화면 영역을 직접 비교해야
+  // 사진과 강의록 어느 조합에서도 좌우 드롭 대상을 놓치지 않는다.
+  const target = mediaDropTargetAtCoords(view, sourcePos, event.clientX, event.clientY)
+  if (!target) return false
+
+  const { pos: targetPos, bounds } = target
+  const targetNode = state.doc.nodeAt(targetPos)
+  if (!targetNode || !isSideBySideMedia(targetNode)) return false
+
+  const placeBefore = event.clientX < bounds.left + bounds.width / 2
+  const movedNode = sourceNode.type.create(
+    { ...sourceNode.attrs, layout: 'half' },
+    sourceNode.content,
+    sourceNode.marks,
+  )
+
+  event.preventDefault()
+  const tr = state.tr.delete(sourcePos, sourcePos + sourceNode.nodeSize)
+  const mappedTargetPos = tr.mapping.map(targetPos)
+  const mappedTarget = tr.doc.nodeAt(mappedTargetPos)
+  if (!mappedTarget || !isSideBySideMedia(mappedTarget)) return false
+
+  tr.setNodeMarkup(mappedTargetPos, undefined, { ...mappedTarget.attrs, layout: 'half' })
+  const insertPos = placeBefore ? mappedTargetPos : mappedTargetPos + mappedTarget.nodeSize
+  tr.insert(insertPos, movedNode)
+  tr.setSelection(NodeSelection.create(tr.doc, insertPos))
+  view.dispatch(tr.scrollIntoView())
+  view.focus()
+  return true
+}
+
+/** dragstart가 시작된 React 노드뷰를 문서 위치로 바꾼다. */
+function mediaPosFromEventTarget(view: EditorView, eventTarget: EventTarget | null): number | null {
+  if (!(eventTarget instanceof Element)) return null
+  const mediaElement = eventTarget.closest<HTMLElement>('[data-side-by-side-item]')
+  if (!mediaElement || !view.dom.contains(mediaElement)) return null
+
+  let result: number | null = null
+  view.state.doc.descendants((node, pos) => {
+    if (result !== null || !isSideBySideMedia(node)) return result === null
+
+    const nodeDom = view.nodeDOM(pos)
+    if (
+      nodeDom === mediaElement ||
+      (nodeDom instanceof Element && nodeDom.contains(mediaElement))
+    ) {
+      result = pos
+      return false
+    }
+    return true
+  })
+  return result
+}
+
+/** 드롭 좌표 아래에 있는 사진 또는 강의록 노드를 찾는다. */
+function mediaDropTargetAtCoords(
+  view: EditorView,
+  sourcePos: number,
+  clientX: number,
+  clientY: number,
+): { pos: number; bounds: DOMRect } | null {
+  let result: { pos: number; bounds: DOMRect } | null = null
+  let smallestArea = Number.POSITIVE_INFINITY
+
+  view.state.doc.descendants((node, pos) => {
+    if (pos === sourcePos || !isSideBySideMedia(node)) return true
+
+    const nodeDom = view.nodeDOM(pos)
+    if (!(nodeDom instanceof HTMLElement)) return true
+
+    const mediaElement =
+      nodeDom.matches('[data-side-by-side-item]')
+        ? nodeDom
+        : nodeDom.querySelector<HTMLElement>('[data-side-by-side-item]') ?? nodeDom
+    const bounds = mediaElement.getBoundingClientRect()
+    const containsPointer =
+      clientX >= bounds.left &&
+      clientX <= bounds.right &&
+      clientY >= bounds.top &&
+      clientY <= bounds.bottom
+
+    if (!containsPointer) return true
+
+    // 혹시 NodeView 영역이 겹쳐도 실제 보이는 미디어에 가까운 작은 영역을 쓴다.
+    const area = bounds.width * bounds.height
+    if (area < smallestArea) {
+      result = { pos, bounds }
+      smallestArea = area
+    }
+    return true
+  })
+
+  return result
+}
+
+function isSideBySideMedia(node: ProseMirrorNode): boolean {
+  return node.type.name === 'image' || node.type.name === 'lecturePageEmbed'
 }
 
 /** 업로드가 끝난 자리표시자를 실제 경로로 교체한다. */

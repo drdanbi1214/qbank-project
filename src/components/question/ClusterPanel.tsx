@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { circled } from '@/types/question'
 import { useCluster } from '@/components/question/useCluster'
@@ -63,15 +64,12 @@ export function ClusterPanel({ questionId, initialGroupId, examLabelOf }: Props)
               ))}
             </ol>
 
-            <a
-              href={`/solve?question=${row.id}`}
-              target="_blank"
-              rel="noreferrer"
-              // 지금 풀던 문제를 잃지 않도록 새 탭에서 연다.
+            <Link
+              to={`/solve?question=${row.id}`}
               className="mt-3 inline-block rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-brand-700 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:text-brand-300 dark:ring-slate-600 dark:hover:bg-slate-800"
             >
-              이 문제 보러가기 ↗
-            </a>
+              이 문제 보러가기
+            </Link>
           </div>
         </details>
       ))}

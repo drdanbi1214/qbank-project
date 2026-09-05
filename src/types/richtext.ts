@@ -173,6 +173,13 @@ export function colWidthsOf(value: unknown): number[] | null {
 export const MIN_IMAGE_WIDTH = 80
 export const MAX_IMAGE_WIDTH = 2000
 
+/** 이미지 배치. null은 기존처럼 한 줄 전체, half는 이웃 이미지와 반폭으로 놓는다. */
+export type ImageLayout = 'half'
+
+export function imageLayoutOf(value: unknown): ImageLayout | null {
+  return value === 'half' ? value : null
+}
+
 /**
  * 작성자가 정한 이미지 폭(px).
  * 저장된 문서 JSON 은 남이 만든 것도 오므로 숫자와 범위를 확인하고 쓴다.

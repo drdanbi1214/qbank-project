@@ -210,11 +210,9 @@ function YamaBody({
             // 카드에 묶인 문제를 대표부터 순서대로 이어 푼다. 하나만 열면
             // "유사 문제 3개" 라고 해 놓고 한 문제만 나와 앞뒤가 맞지 않는다.
             to={`/solve?questions=${[question.id, ...cards.map((row) => row.id)].join(',')}`}
-            target="_blank"
-            rel="noreferrer"
             className="text-brand-600 hover:underline dark:text-brand-300"
           >
-            풀어보기 ↗
+            풀어보기
           </Link>
           {onRemove && (
             <button

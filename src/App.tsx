@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LearningActivityTracker } from '@/components/analytics/LearningActivityTracker'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { AutoUpdate } from '@/components/layout/AutoUpdate'
 import { RequireAvatar } from '@/components/layout/RequireAvatar'
 import { StudyLayout } from '@/components/layout/StudyLayout'
 import { FullPageSpinner } from '@/components/ui/Spinner'
@@ -58,6 +59,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
+        <AutoUpdate />
         <AuthProvider>
           <LearningActivityTracker />
           <ThemeProvider>

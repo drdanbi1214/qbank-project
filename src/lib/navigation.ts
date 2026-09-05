@@ -31,7 +31,7 @@ export const MAIN_NAV: NavItem[] = [
 export const MOBILE_NAV: NavItem[] = [
   { to: '/study', label: '학습', icon: 'study' },
   { to: '/theory', label: '이론', icon: 'theory' },
-  { to: '/assignments', label: '풀이 배정', icon: 'clipboard' },
+  { to: '/lectures', label: '강의록', icon: 'lecture' },
   { to: '/discussions', label: '게시판', icon: 'board' },
   { to: '/notifications', label: '알림', icon: 'bell' },
   { to: '/me', label: '내정보', icon: 'user' },

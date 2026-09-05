@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BuildFooter } from '@/components/layout/BuildFooter'
 import { Header } from '@/components/layout/Header'
@@ -11,18 +12,45 @@ import { cn } from '@/utils/cn'
 export function AppLayout() {
   const location = useLocation()
   const wideContent = location.pathname.startsWith('/topics')
+  const lectureReader = /^\/lectures\/(?!c\/)[^/]+\/?$/.test(location.pathname)
+
+  useEffect(() => {
+    if (!lectureReader) return
+    const previousBodyOverflow = document.body.style.overflow
+    const previousRootOverflow = document.documentElement.style.overflow
+    const previousBodyOverscroll = document.body.style.overscrollBehavior
+    const previousRootOverscroll = document.documentElement.style.overscrollBehavior
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'none'
+    document.documentElement.style.overscrollBehavior = 'none'
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousRootOverflow
+      document.body.style.overscrollBehavior = previousBodyOverscroll
+      document.documentElement.style.overscrollBehavior = previousRootOverscroll
+    }
+  }, [lectureReader])
 
   return (
-    <div className="min-h-dvh bg-slate-50 dark:bg-slate-950">
+    <div
+      className={cn(
+        'bg-slate-50 dark:bg-slate-950',
+        lectureReader ? 'h-dvh overflow-hidden overscroll-none' : 'min-h-dvh',
+      )}
+    >
       <Header />
       <main
         className={cn(
-          'mx-auto px-3 pb-24 pt-4 sm:px-4 lg:pb-10',
+          'mx-auto px-3 pt-4 sm:px-4',
+          lectureReader
+            ? 'h-[calc(100dvh-3.5rem)] overflow-hidden pb-16 lg:pb-4'
+            : 'pb-24 lg:pb-10',
           wideContent ? 'max-w-[100rem]' : 'max-w-7xl',
         )}
       >
         <Outlet />
-        <BuildFooter />
+        {!lectureReader && <BuildFooter />}
       </main>
       <MobileTabBar />
     </div>

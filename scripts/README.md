@@ -115,6 +115,8 @@ python3 scripts/import_lecture_notes.py \
 고정한다. 실제 등록은
 manifest와 운영 DB 강의록 분류를 모두 명시해야만 실행된다. 같은 명령을 다시
 실행하면 `(lecture_id, source_key)` 기준으로 갱신되어 중복 행이 생기지 않는다.
+새 연도 묶음을 기존 정리본 위에 표시하려면 `--sort-offset`에 충분히 작은 음수를
+주고, 검색 결과 제목에도 연도를 보이려면 `--title-suffix "(2026)"`를 함께 쓴다.
 
 ```bash
 python3 scripts/import_lecture_notes.py \
@@ -122,11 +124,47 @@ python3 scripts/import_lecture_notes.py \
   --course "내분비 1차" \
   --manifest scripts/lecture_note_manifests/2026_endocrine_1.json \
   --category "내분비계(2026)" \
+  --sort-offset -1000 \
+  --title-suffix "(2026)" \
   --apply
 ```
 
 등록된 본문과 검색 결과는 `요약정리노트 권한`이 있는 사용자와 관리자에게만 보인다.
 일반 회원의 권한은 웹의 `관리자 → 사용자 관리 → 콘텐츠 권한`에서 부여한다.
+
+## 강의록 후배 필기본 올리기 (`import_lecture_variants.py`)
+
+이미 등록된 강의록에 "필기가 되어 있는 다른 PDF"(대체본)를 한 건 더 붙인다.
+원본은 그대로 두고, 강의록 화면 맨 위에 `오리지널 파일 / 후배 필기본` 토글이
+생긴다. 토글과 대체본 파일은 권한(기본 `study_legendob` = 레옵스)이 있는
+사람에게만 보인다. 압축하지 않고 원본 바이트를 그대로 올린다.
+
+```bash
+# 파일 하나를 특정 강의록에 붙이기 (제목 일부로 찾음 · dry-run)
+python3 scripts/import_lecture_variants.py ~/필기본/심부전_후배필기.pdf \
+  --lecture "심부전의 진단" --label "후배 필기본"
+
+# 확인 후 실제 등록
+python3 scripts/import_lecture_variants.py ~/필기본/심부전_후배필기.pdf \
+  --lecture "심부전의 진단" --label "후배 필기본" --apply
+```
+
+제목으로 강의록이 여러 건 잡히면 후보 id 를 출력하고 멈춘다. `--lecture` 에 그
+id(uuid)를 그대로 주면 정확히 지정된다. 폴더를 통째로 올릴 때는 `--manifest` 로
+파일마다 대상 강의록과 이름을 준다 (`scripts/lecture_document_manifests/`).
+
+```json
+{
+  "심부전_후배필기.pdf": {"lecture": "심부전의 진단", "label": "후배 필기본"},
+  "부정맥_후배필기.pdf": {"lecture": "5a2d...-uuid"},
+  "안올릴파일.pdf": {"skip": true}
+}
+```
+
+같은 파일(내용 해시 동일)은 다시 돌려도 건너뛴다. 한 강의록에 대체본을 여러 개
+붙이면 토글에 버튼이 그만큼 늘고, 순서는 등록 순서를 따른다. R2 객체 경로에는
+내용 해시가 포함되므로 같은 강의록에 파일명이 같은 다른 필기본을 올려도 기존
+파일을 덮어쓰지 않는다.
 
 ## AI 풀이 일괄 입력 (`import_ai_solutions.py`)
 

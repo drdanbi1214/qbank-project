@@ -118,7 +118,7 @@ export function TheoryReferencePicker({ subjectId, value, onChange }: Props) {
     {value.length > 0 && <ul className="mt-2 space-y-1.5">
       {value.map((reference) => <li key={reference.url} className="flex items-center gap-2 rounded-lg bg-brand-50 px-2 py-1.5 text-sm text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
         <span className="shrink-0 text-xs font-semibold">{reference.kind === 'lecture' ? '강의록' : '알렌'}</span>
-        {reference.kind === 'theory' ? <Link to={reference.url ?? '#'} target="_blank" className="min-w-0 flex-1 truncate hover:underline">{reference.label}</Link> : <span className="min-w-0 flex-1 truncate">{reference.label}</span>}
+        {reference.kind === 'theory' ? <Link to={reference.url ?? '#'} className="min-w-0 flex-1 truncate hover:underline">{reference.label}</Link> : <span className="min-w-0 flex-1 truncate">{reference.label}</span>}
         <button type="button" aria-label={`${reference.label} 삭제`} onClick={() => remove(reference)}>×</button>
       </li>)}</ul>}
     {allenOpen && <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">

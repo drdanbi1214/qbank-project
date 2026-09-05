@@ -20,6 +20,8 @@ export type LecturePageAttrs = {
   page: number
   title: string
   professor: string | null
+  width?: number | null
+  layout?: 'half' | null
   crop?: PageCrop | null
 }
 
@@ -42,6 +44,8 @@ type Props = {
   /** 쪽 위에 남긴 자국과 글자. 이미지에 굽지 않고 좌표로 담는다. */
   marks?: PageMark[]
   onMarksChange?: (marks: PageMark[]) => void
+  /** 편집기 안에서는 필기 도구가 꺼진 페이지 본체도 이동 손잡이로 쓴다. */
+  canMove?: boolean
 }
 
 /**
@@ -64,6 +68,7 @@ export function LecturePageCard({
   onCropChange,
   marks = [],
   onMarksChange,
+  canMove = false,
 }: Props) {
   const imageUrl = useSignedUrl(src)
   const frame = useRef<HTMLDivElement | null>(null)
@@ -78,7 +83,13 @@ export function LecturePageCard({
   const activeCrop = pageCropOf(crop)
 
   function maxWidth() {
-    const outer = frame.current?.getBoundingClientRect().width ?? MAX_IMAGE_WIDTH
+    // 폭을 줄인 카드 자신의 너비를 한계로 쓰면 다시 크게 늘릴 수 없다.
+    // 편집기/본문 전체 폭을 기준으로 삼아 반쪽에서 전체 폭으로도 끌 수 있게 한다.
+    const richText = frame.current?.closest<HTMLElement>('.rich-text')
+    const outer =
+      richText?.getBoundingClientRect().width ??
+      frame.current?.parentElement?.getBoundingClientRect().width ??
+      MAX_IMAGE_WIDTH
     return Math.max(MIN_IMAGE_WIDTH, Math.min(Math.round(outer), MAX_IMAGE_WIDTH))
   }
 
@@ -126,7 +137,15 @@ export function LecturePageCard({
         style={shownWidth ? { width: shownWidth, maxWidth: '100%' } : undefined}
       >
         <div
-          className="relative overflow-hidden"
+          // 브라우저 기본 이미지 끌기가 아니라 Tiptap 원자 노드 이동으로 시작한다.
+          // 필기 도구가 켜졌을 때는 SVG가 포인터를 받아야 하므로 본체 이동을 끈다.
+          data-drag-handle={canMove && !tool ? '' : undefined}
+          draggable={canMove && !tool ? true : undefined}
+          title={canMove && !tool ? '끌어서 강의록 쪽 이동' : undefined}
+          className={cn(
+            'relative overflow-hidden',
+            canMove && !tool && 'touch-none select-none cursor-grab active:cursor-grabbing',
+          )}
           style={
             imageUrl && activeCrop
               ? { aspectRatio: activeCrop.width / (activeCrop.height * aspect) }
@@ -150,6 +169,7 @@ export function LecturePageCard({
               <img
                 src={imageUrl}
                 alt={caption}
+                draggable={false}
                 className="block w-full"
                 onLoad={(event) => {
                   const image = event.currentTarget
@@ -191,6 +211,7 @@ export function LecturePageCard({
                 {onResize && (
                   <>
                     <SizeButton onClick={() => onResize(Math.round(maxWidth() * 0.35))}>작게</SizeButton>
+                    <SizeButton onClick={() => onResize(Math.round(maxWidth() * 0.48))}>두 장</SizeButton>
                     <SizeButton onClick={() => onResize(Math.round(maxWidth() * 0.6))}>중간</SizeButton>
                     {/* 폭을 지우면 글 폭에 맞춘다. 그게 기본 모습이다. */}
                     <SizeButton onClick={() => onResize(null)}>꽉 차게</SizeButton>
@@ -300,7 +321,6 @@ export function LecturePageCard({
           {lectureId && (
             <Link
               to={`/lectures/${lectureId}${page ? `?page=${page}` : ''}`}
-              // 읽거나 쓰던 글을 잃지 않도록 새 탭에서 연다.
               target="_blank"
               rel="noreferrer"
               className="shrink-0 rounded-md bg-brand-50 px-2 py-1 font-medium text-brand-700 hover:underline dark:bg-brand-900/40 dark:text-brand-200"

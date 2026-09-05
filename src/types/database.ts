@@ -977,6 +977,79 @@ export type Database = {
           },
         ]
       }
+      lecture_document_variants: {
+        Row: {
+          byte_size: number | null
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          file_path: string
+          id: string
+          is_published: boolean
+          kind: string
+          label: string
+          lecture_id: string
+          page_count: number | null
+          required_permission: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          byte_size?: number | null
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          file_path: string
+          id?: string
+          is_published?: boolean
+          kind?: string
+          label: string
+          lecture_id: string
+          page_count?: number | null
+          required_permission: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          byte_size?: number | null
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          file_path?: string
+          id?: string
+          is_published?: boolean
+          kind?: string
+          label?: string
+          lecture_id?: string
+          page_count?: number | null
+          required_permission?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_document_variants_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_document_variants_lecture_id_fkey"
+            columns: ["lecture_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_document_variants_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "access_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       lecture_documents: {
         Row: {
           byte_size: number | null
@@ -1056,6 +1129,51 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "access_permissions"
             referencedColumns: ["key"]
+          },
+        ]
+      }
+      lecture_pdf_annotations: {
+        Row: {
+          created_at: string
+          lecture_id: string
+          marks: Json
+          page_number: number
+          revision: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          lecture_id: string
+          marks?: Json
+          page_number: number
+          revision?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          lecture_id?: string
+          marks?: Json
+          page_number?: number
+          revision?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_pdf_annotations_lecture_id_fkey"
+            columns: ["lecture_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_pdf_annotations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3157,6 +3275,20 @@ export type Database = {
         Returns: undefined
       }
       richtext_plain: { Args: { doc: Json }; Returns: string }
+      save_lecture_pdf_annotations: {
+        Args: {
+          p_expected_revision?: number | null
+          p_lecture_id: string
+          p_marks: Json
+          p_page_number: number
+        }
+        Returns: {
+          save_status: string
+          server_marks: Json
+          server_revision: number | null
+          server_updated_at: string | null
+        }[]
+      }
       search_lecture_documents: {
         Args: {
           p_category_id?: string

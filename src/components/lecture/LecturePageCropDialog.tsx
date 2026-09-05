@@ -13,12 +13,23 @@ type Props = {
   initialCrop: PageCrop | null
   onApply: (crop: PageCrop | null) => void
   onClose: () => void
+  title?: string
+  resetLabel?: string
+  imageAlt?: string
 }
 
 type DragMode = 'move' | 'nw' | 'ne' | 'sw' | 'se'
 
 /** 원본 페이지 위에서 보존할 영역을 고르는 비파괴 자르기 창. */
-export function LecturePageCropDialog({ src, initialCrop, onApply, onClose }: Props) {
+export function LecturePageCropDialog({
+  src,
+  initialCrop,
+  onApply,
+  onClose,
+  title = '강의록 이미지 자르기',
+  resetLabel = '전체 페이지 선택',
+  imageAlt = '자를 강의록 페이지',
+}: Props) {
   const image = useRef<HTMLImageElement | null>(null)
   const [crop, setCrop] = useState<PageCrop>(initialCrop ?? FULL_PAGE_CROP)
 
@@ -70,7 +81,7 @@ export function LecturePageCropDialog({ src, initialCrop, onApply, onClose }: Pr
 
   return (
     <Modal
-      title="강의록 이미지 자르기"
+      title={title}
       wide
       onClose={onClose}
       footer={(
@@ -80,7 +91,7 @@ export function LecturePageCropDialog({ src, initialCrop, onApply, onClose }: Pr
             onClick={() => setCrop(FULL_PAGE_CROP)}
             className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            전체 페이지 선택
+            {resetLabel}
           </button>
           <span className="ml-auto flex gap-2">
             <button
@@ -109,7 +120,7 @@ export function LecturePageCropDialog({ src, initialCrop, onApply, onClose }: Pr
           <img
             ref={image}
             src={src}
-            alt="자를 강의록 페이지"
+            alt={imageAlt}
             draggable={false}
             className="block max-h-[58dvh] max-w-full"
           />

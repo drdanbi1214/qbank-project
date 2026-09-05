@@ -43,6 +43,24 @@ export type LectureDocument = {
   noteMatchCount: number
 }
 
+/**
+ * 원본 강의록과 짝을 이루는 대체 PDF(후배 필기본 등).
+ *
+ * RLS 가 required_permission 을 검사하므로 권한이 없으면 이 목록은 빈 배열로
+ * 돌아온다. 화면은 목록이 비면 토글 자체를 그리지 않는다.
+ */
+export type LectureDocumentVariant = {
+  id: string
+  lectureId: string
+  kind: string
+  label: string
+  filePath: string
+  byteSize: number | null
+  pageCount: number | null
+  requiredPermission: string
+  sortOrder: number
+}
+
 export type LectureStudentNote = {
   id: string
   lectureId: string
@@ -196,6 +214,37 @@ export async function fetchLectureDocument(id: string): Promise<LectureDocument 
     .maybeSingle()
   if (error) throw error
   return data ? toLecture(data as LectureRow) : null
+}
+
+/**
+ * 한 강의록에 걸린 대체본 목록. 후배 필기본처럼 권한 있는 사람만 보는 다른 판이다.
+ * RLS 가 걸러 주므로 권한 없는 사람에게는 빈 배열이 온다.
+ */
+export async function fetchLectureDocumentVariants(
+  lectureId: string,
+): Promise<LectureDocumentVariant[]> {
+  const { data, error } = await supabase
+    .from('lecture_document_variants')
+    .select(
+      'id, lecture_id, kind, label, file_path, byte_size, page_count, required_permission, sort_order',
+    )
+    .eq('lecture_id', lectureId)
+    .eq('is_published', true)
+    .order('sort_order')
+    .order('created_at')
+  if (error) throw error
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    lectureId: row.lecture_id,
+    kind: row.kind,
+    label: row.label,
+    filePath: row.file_path,
+    byteSize: row.byte_size,
+    pageCount: row.page_count,
+    requiredPermission: row.required_permission,
+    sortOrder: row.sort_order,
+  }))
 }
 
 /**

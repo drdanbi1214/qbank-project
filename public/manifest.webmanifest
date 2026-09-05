@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "달렌의 서재",
+  "short_name": "달렌의 서재",
+  "description": "문제 풀이와 강의록을 한곳에서 보는 학습 공간",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand-logo.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

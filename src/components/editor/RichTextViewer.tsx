@@ -1,4 +1,5 @@
 import { Fragment, useId, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
@@ -16,6 +17,7 @@ import { useSignedUrl } from '@/lib/storage'
 import {
   cellShadeOf,
   colWidthsOf,
+  imageLayoutOf,
   imageWidthOf,
   isLeafNode,
   tableBorderOf,
@@ -309,7 +311,16 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       const src = typeof node.attrs?.src === 'string' ? node.attrs.src : null
       const alt = typeof node.attrs?.alt === 'string' ? node.attrs.alt : null
       const width = imageWidthOf(node.attrs?.width)
-      return src ? <ViewerImage path={src} alt={alt} width={width} onZoom={context.onZoom} /> : null
+      const layout = imageLayoutOf(node.attrs?.layout)
+      const crop = pageCropOf(node.attrs?.crop)
+      return src ? (
+        <div
+          className="stored-image-view"
+          data-image-layout={layout ?? 'full'}
+        >
+          <ViewerImage path={src} alt={alt} width={width} crop={crop} onZoom={context.onZoom} />
+        </div>
+      ) : null
     }
     case 'video': {
       const src = typeof node.attrs?.src === 'string' ? node.attrs.src : null
@@ -343,7 +354,10 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
     case 'lecturePageEmbed': {
       const attrs = (node.attrs ?? {}) as Record<string, unknown>
       return (
-        <div className="my-3">
+        <div
+          className="lecture-page-embed"
+          data-page-layout={attrs.layout === 'half' ? 'half' : 'full'}
+        >
           <LecturePageCard
             src={typeof attrs.src === 'string' ? attrs.src : null}
             lectureId={typeof attrs.lectureId === 'string' ? attrs.lectureId : null}
@@ -379,32 +393,73 @@ function ViewerImage({
   path,
   alt,
   width,
+  crop,
   onZoom,
 }: {
   path: string
   alt: string | null
   /** 작성자가 편집기에서 정한 폭(px). 없으면 예전처럼 높이로 가둔다. */
   width: number | null
+  crop: ReturnType<typeof pageCropOf>
   onZoom: (src: string) => void
 }) {
   const external = /^https?:\/\//i.test(path)
   const signedUrl = useSignedUrl(external ? null : path)
   const src = external ? path : signedUrl
+  const [naturalSize, setNaturalSize] = useState<{ width: number; aspect: number } | null>(null)
+  const cropAspectRatio =
+    crop && naturalSize ? crop.width / (crop.height * naturalSize.aspect) : null
+  const cropReady = cropAspectRatio !== null ? crop : null
+  const displayWidth = width ?? (crop ? imageWidthOf(naturalSize?.width) : null)
 
   if (!src) {
     return <div className="h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
   }
 
   return (
-    <button type="button" onClick={() => onZoom(src)} className="block cursor-zoom-in">
-      <img
-        src={src}
-        alt={alt ?? '본문 이미지'}
-        loading="lazy"
-        style={width ? { width } : undefined}
-        // 폭 미지정이면 원본 크기로 둔다. 넘치면 max-w-full 이 줄인다.
-        className="h-auto max-w-full rounded-lg border border-slate-200 dark:border-slate-700"
-      />
+    <button
+      type="button"
+      onClick={() => onZoom(src)}
+      style={displayWidth ? { width: displayWidth } : undefined}
+      className="block max-w-full cursor-zoom-in"
+    >
+      <span
+        style={
+          cropAspectRatio !== null
+            ? { aspectRatio: cropAspectRatio }
+            : undefined
+        }
+        className="relative block overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+      >
+        <img
+          src={src}
+          alt={alt ?? '본문 이미지'}
+          loading="lazy"
+          onLoad={(event) => {
+            const image = event.currentTarget
+            if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+            setNaturalSize({
+              width: image.naturalWidth,
+              aspect: image.naturalHeight / image.naturalWidth,
+            })
+          }}
+          style={
+            cropReady
+              ? {
+                  position: 'absolute',
+                  left: `${-(cropReady.x / cropReady.width) * 100}%`,
+                  top: `${-(cropReady.y / cropReady.height) * 100}%`,
+                  width: `${100 / cropReady.width}%`,
+                  maxWidth: 'none',
+                }
+              : displayWidth
+                ? { width: '100%' }
+                : undefined
+          }
+          // 폭 미지정이면 원본 크기로 둔다. 넘치면 max-w-full 이 줄인다.
+          className="block h-auto max-w-full"
+        />
+      </span>
     </button>
   )
 }
@@ -486,12 +541,13 @@ function applyMarks(children: ReactNode, marks: RichMark[]): ReactNode {
       }
       case 'link': {
         const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : null
-        return href ? (
+        if (!href) return acc
+        return href.startsWith('/') ? (
+          <Link to={href}>{acc}</Link>
+        ) : (
           <a href={href} target="_blank" rel="noreferrer noopener">
             {acc}
           </a>
-        ) : (
-          acc
         )
       }
       default:

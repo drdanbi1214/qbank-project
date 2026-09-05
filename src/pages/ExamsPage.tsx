@@ -126,10 +126,8 @@ export function ExamsPage() {
 
                                   <Link
                                     to={`/print?source=exam&exam=${exam.id}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    title="문제집 인쇄/PDF 저장 화면 열기"
-                                    aria-label="문제집 인쇄/PDF 저장 화면 열기"
+                                    title="문제집 인쇄/PDF 저장 화면으로 이동"
+                                    aria-label="문제집 인쇄/PDF 저장 화면으로 이동"
                                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
                                   >
                                     📄

@@ -258,6 +258,11 @@ function dateLabel(value: string | null): string | null {
   return year && month && day ? `${year}.${month}.${day}` : value
 }
 
+function yearLabel(value: string | null): string | null {
+  const year = value?.match(/^(\d{4})-/)?.[1]
+  return year ? `(${year})` : null
+}
+
 function MarkedLectureNote({
   note,
   query,
@@ -275,6 +280,7 @@ function MarkedLectureNote({
   const components = markdownComponents(query, textMarks.marks, hideTimelines)
   const markdown = useMemo(() => displayMarkdown(note.contentMd), [note.contentMd])
   const meta = [note.sourceCourse, dateLabel(note.lectureDate)].filter(Boolean)
+  const year = yearLabel(note.lectureDate)
 
   return (
     <article
@@ -288,7 +294,7 @@ function MarkedLectureNote({
       <header className="mb-4 border-b border-slate-100 pb-3 dark:border-slate-800">
         <p className="text-xs text-slate-400">{meta.join(' · ') || note.sourceKey}</p>
         <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          {note.sourceKey}
+          {note.sourceKey} {year}
         </p>
       </header>
       <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
@@ -333,7 +339,7 @@ export function LectureNotesPanel({ notes, initialQuery = '', activeNoteId }: Pr
       <div className="sticky top-[6.75rem] z-10 mb-3 rounded-xl border border-emerald-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-emerald-900 dark:bg-slate-900/95 lg:top-0">
         <div className="mb-2 flex items-center gap-2 px-1">
           <h2 className="text-sm font-bold text-emerald-800 dark:text-emerald-200">
-            2026 학생 정리본
+            학생 정리본
           </h2>
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
             요약정리본

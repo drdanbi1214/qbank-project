@@ -9,13 +9,14 @@ import { UnitPicker } from '@/components/question/UnitPicker'
 import { useDraft } from '@/components/editor/useDraft'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { createSolution, type SolutionReference } from '@/lib/queries/solutions'
 import { setEditorAnswer } from '@/lib/queries/questions'
 import { assignUnit } from '@/lib/queries/admin'
 import { useData } from '@/lib/data'
-import { circled, type Choice } from '@/types/question'
+import { circled, type Choice, type QuestionType } from '@/types/question'
 import { isEmptyDoc, solutionTemplateDoc, type RichDoc } from '@/types/richtext'
 import { formatDateTime } from '@/utils/date'
 import { cn } from '@/utils/cn'
@@ -24,6 +25,7 @@ type Props = {
   questionId: string
   examId: string
   groupId: string | null
+  questionType: QuestionType
   choices: Choice[]
   /** 이미 편집자답이 있으면 그 값으로 시작한다 (재검토하는 경우) */
   currentEditorAnswer: number[]
@@ -51,6 +53,7 @@ export function AssignmentEditor({
   questionId,
   examId,
   groupId,
+  questionType,
   choices,
   currentEditorAnswer,
   yamaAnswer,
@@ -64,9 +67,16 @@ export function AssignmentEditor({
   // 편집자답이 아직 없으면 야마답으로 미리 채워, 편집자가 다시 고를 필요 없이
   // 다르다고 판단할 때만 바꾸도록 한다.
   const initialSelection = currentEditorAnswer.length > 0 ? currentEditorAnswer : (yamaAnswer ?? [])
+  const answerIsStructurallyOptional = questionType === 'essay' || choices.length === 0
 
-  const [pickerOpen, setPickerOpen] = useState(initialSelection.length > 0)
+  // 보기가 복기되지 않은 문항도 답안 선택 영역에서 바로 예외 처리를 할 수 있게
+  // 선택지가 하나도 없으면 처음부터 선택 영역을 펼쳐 둔다.
+  const [pickerOpen, setPickerOpen] = useState(
+    initialSelection.length > 0 || answerIsStructurallyOptional,
+  )
   const [selection, setSelection] = useState<number[]>(initialSelection)
+  const [answerNotApplicable, setAnswerNotApplicable] = useState(false)
+  const [answerPromptOpen, setAnswerPromptOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [references, setReferences] = useState<SolutionReference[]>([])
@@ -141,17 +151,34 @@ export function AssignmentEditor({
   }, [bodyTheoryIds, references])
 
   function toggleChoice(no: number) {
+    setAnswerNotApplicable(false)
+    setError(null)
     setSelection((prev) =>
       prev.includes(no) ? prev.filter((value) => value !== no) : [...prev, no].sort((a, b) => a - b),
     )
   }
 
-  async function register() {
-    const missing: string[] = []
-    if (selection.length === 0) missing.push('답을 체크해주세요')
-    if (isEmptyDoc(doc.current)) missing.push('풀이를 입력해주세요')
-    if (missing.length > 0) {
-      setError(missing.join(' / '))
+  function toggleAnswerNotApplicable() {
+    if (answerIsStructurallyOptional) return
+    const next = !answerNotApplicable
+    setAnswerNotApplicable(next)
+    setError(null)
+    if (next) setSelection([])
+  }
+
+  async function register(allowEmptyAnswer = false) {
+    if (isEmptyDoc(doc.current)) {
+      setError('풀이를 입력해주세요')
+      return
+    }
+    if (
+      selection.length === 0 &&
+      !answerIsStructurallyOptional &&
+      !answerNotApplicable &&
+      !allowEmptyAnswer
+    ) {
+      setError(null)
+      setAnswerPromptOpen(true)
       return
     }
 
@@ -200,17 +227,17 @@ export function AssignmentEditor({
         <SolutionScopePicker value={scope} onChange={setScope} disabled={busy} />
       </div>
 
-      {choices.length > 0 && (
-        <div className="mb-4">
-          {!pickerOpen ? (
-            <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-              편집자 답을 체크해주세요
-            </Button>
-          ) : (
-            <div>
-              <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                정답으로 인정할 보기를 선택하세요
-              </p>
+      <div className="mb-4">
+        {!pickerOpen ? (
+          <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
+            편집자 답을 체크해주세요
+          </Button>
+        ) : (
+          <div>
+            <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+              정답으로 인정할 보기를 선택하세요
+            </p>
+            {choices.length > 0 && questionType !== 'essay' ? (
               <ul className="space-y-0.5">
                 {choices.map((choice) => {
                   const isSelected = selection.includes(choice.no)
@@ -247,10 +274,45 @@ export function AssignmentEditor({
                   )
                 })}
               </ul>
-            </div>
-          )}
-        </div>
-      )}
+            ) : (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+                {questionType === 'essay' ? '서술형 문항입니다.' : '복기된 보기가 없습니다.'}
+              </p>
+            )}
+
+            <button
+              type="button"
+              aria-pressed={answerIsStructurallyOptional || answerNotApplicable}
+              onClick={toggleAnswerNotApplicable}
+              className={cn(
+                'mt-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors',
+                answerIsStructurallyOptional || answerNotApplicable
+                  ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200'
+                  : 'border-dashed border-slate-300 text-slate-600 hover:border-brand-400 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/50',
+              )}
+            >
+              <span
+                className={cn(
+                  'grid h-4 w-4 shrink-0 place-items-center rounded border-2 transition-colors',
+                  answerIsStructurallyOptional || answerNotApplicable
+                    ? 'border-brand-600 bg-brand-600'
+                    : 'border-slate-300 dark:border-slate-600',
+                )}
+              >
+                {(answerIsStructurallyOptional || answerNotApplicable) && (
+                  <span className="block h-1.5 w-2.5 rounded-[1px] bg-white" />
+                )}
+              </span>
+              답이 없거나 서술형입니다
+            </button>
+            {(answerIsStructurallyOptional || answerNotApplicable) && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                편집자 답 없이 풀이만 등록합니다.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {showDraftNotice && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
@@ -311,6 +373,89 @@ export function AssignmentEditor({
           등록
         </Button>
       </div>
+
+      {answerPromptOpen && (
+        <Modal
+          title="답 고르기"
+          onClose={() => setAnswerPromptOpen(false)}
+          footer={
+            <div className="space-y-2">
+              <Button
+                block
+                variant="secondary"
+                onClick={() => {
+                  setAnswerPromptOpen(false)
+                  setAnswerNotApplicable(true)
+                  setSelection([])
+                  void register(true)
+                }}
+              >
+                답이 없거나 서술형입니다
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  block
+                  variant="ghost"
+                  onClick={() => setAnswerPromptOpen(false)}
+                >
+                  취소
+                </Button>
+                <Button
+                  block
+                  disabled={selection.length === 0}
+                  onClick={() => {
+                    setAnswerPromptOpen(false)
+                    void register()
+                  }}
+                >
+                  선택한 답으로 등록
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+            답을 선택하지 않았습니다. 정답으로 인정할 보기를 고르거나, 답이 없는
+            문항으로 등록해주세요.
+          </p>
+          <ul className="space-y-1">
+            {choices.map((choice) => {
+              const isSelected = selection.includes(choice.no)
+              return (
+                <li key={choice.no}>
+                  <button
+                    type="button"
+                    onClick={() => toggleChoice(choice.no)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                      isSelected
+                        ? 'bg-brand-50 dark:bg-brand-900/30'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'grid h-4 w-4 shrink-0 place-items-center rounded border-2 transition-colors',
+                        isSelected
+                          ? 'border-brand-600 bg-brand-600'
+                          : 'border-slate-300 dark:border-slate-600',
+                      )}
+                    >
+                      {isSelected && (
+                        <span className="block h-1.5 w-2.5 rounded-[1px] bg-white" />
+                      )}
+                    </span>
+                    <span className="font-semibold text-slate-500 dark:text-slate-400">
+                      {circled(choice.no)}
+                    </span>
+                    <span className="min-w-0 flex-1">{choice.text ?? '(이미지 보기)'}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </Modal>
+      )}
     </section>
   )
 }

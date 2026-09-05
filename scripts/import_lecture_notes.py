@@ -594,6 +594,9 @@ def apply_notes(
     resolved: list[ResolvedNote],
     category_name: str,
     permission: str,
+    *,
+    sort_offset: int = 0,
+    title_suffix: str = "",
 ) -> int:
     # 직접 실행과 unittest 모듈 import 양쪽에서 같은 자격 증명 로더를 쓴다.
     script_folder = str(pathlib.Path(__file__).resolve().parent)
@@ -650,18 +653,23 @@ def apply_notes(
             continue
 
         markdown = unicodedata.normalize("NFC", item.section.markdown).strip()
+        title = markdown_title(item.section)
+        normalized_suffix = nfc(title_suffix).strip()
+        if normalized_suffix and not title.endswith(normalized_suffix):
+            title = f"{title} {normalized_suffix}"
+
         rows.append(
             {
                 "lecture_id": targets[0]["id"],
                 "source_key": stored_source_key,
                 "source_course": item.section.course,
                 "lecture_date": item.section.lecture_date,
-                "title": markdown_title(item.section),
+                "title": title,
                 "content_md": markdown,
                 "content_text": markdown_to_text(markdown),
                 "source_hash": hashlib.sha256(markdown.encode()).hexdigest(),
                 "required_permission": permission,
-                "sort_order": item.section.order,
+                "sort_order": item.section.order + sort_offset,
                 "created_by": created_by,
             }
         )
@@ -860,6 +868,17 @@ def main() -> int:
         default=DEFAULT_PERMISSION,
         help=f"정리본 열람 권한 키 (기본: {DEFAULT_PERMISSION})",
     )
+    parser.add_argument(
+        "--sort-offset",
+        type=int,
+        default=0,
+        help="정리본 표시 순서에 더할 값. 새 묶음을 위에 둘 때 음수를 사용합니다.",
+    )
+    parser.add_argument(
+        "--title-suffix",
+        default="",
+        help='저장 제목 뒤에 붙일 표기. 예: "(2026)"',
+    )
     parser.add_argument("--apply", action="store_true", help="승인된 연결을 운영 DB에 등록")
     parser.add_argument("--json", action="store_true", help="사람용 보고서 대신 JSON 출력")
     args = parser.parse_args()
@@ -943,7 +962,13 @@ def main() -> int:
             print("\n미해결 항목이 있어 DB 등록을 중단했습니다.", file=sys.stderr)
             return 2
         try:
-            applied = apply_notes(resolved, nfc(args.category), nfc(args.permission))
+            applied = apply_notes(
+                resolved,
+                nfc(args.category),
+                nfc(args.permission),
+                sort_offset=args.sort_offset,
+                title_suffix=args.title_suffix,
+            )
         except Exception as caught:
             print(f"\nDB 등록 실패: {caught}", file=sys.stderr)
             return 1

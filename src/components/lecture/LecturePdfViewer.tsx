@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
+import { PageMarkLayer } from '@/components/lecture/PageMarkLayer'
+import type { PageMark, StrokeTool } from '@/components/lecture/pageMarks'
 import { Spinner } from '@/components/ui/Spinner'
 import { renderLecturePageToBlob } from '@/components/lecture/renderLecturePage'
+import { useLecturePdfAnnotations } from '@/components/lecture/useLecturePdfAnnotations'
 import {
   countLectureSearchMatches,
   splitLectureSearchText,
@@ -17,6 +20,11 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString()
 
+// 한국어 CID 글꼴, PDF 기본 글꼴, ICC/JPEG 디코더는 worker 번들에 들어 있지
+// 않다. 이 경로를 주지 않으면 원본 PDF가 멀쩡해도 일부 글자가 조용히 빠진다.
+// vite.config.ts가 설치된 pdfjs-dist와 같은 버전의 파일을 이 위치에 내보낸다.
+const PDFJS_ASSET_ROOT = `${import.meta.env.BASE_URL}pdfjs`
+
 type Props = {
   storagePath: string
   title: string
@@ -27,6 +35,8 @@ type Props = {
   initialQuery?: string
   /** 독립 스크롤 분할 화면에서는 데스크톱 sticky 기준을 패널 맨 위로 둔다. */
   paneMode?: boolean
+  /** 바깥 문서가 아니라 부모 패널 자체가 스크롤되는 화면이다. */
+  containedScroll?: boolean
   /**
    * 글에 넣을 쪽을 고르는 모드. 쪽마다 체크칸이 생기고, 고른 쪽은 바깥에서
    * 알 수 있게 알려 준다. 읽기만 하는 화면에서는 끈다.
@@ -39,6 +49,64 @@ type Props = {
 }
 
 type SearchHit = { pageNumber: number; occurrenceIndex: number }
+type AnnotationTool = StrokeTool | 'erase' | null
+type ExportState =
+  | { status: 'idle' }
+  | { status: 'working'; completed: number; total: number }
+  | { status: 'error'; message: string }
+
+const TOUCH_DRAWING_STORAGE_KEY = 'lecture-pdf-touch-drawing'
+const ANNOTATION_SETTINGS_STORAGE_KEY = 'lecture-pdf-annotation-settings'
+const PEN_COLORS = [
+  { value: '#2563eb', label: '파랑' },
+  { value: '#e11d48', label: '빨강' },
+  { value: '#111827', label: '검정' },
+  { value: '#16a34a', label: '초록' },
+  { value: '#9333ea', label: '보라' },
+  { value: '#ea580c', label: '주황' },
+] as const
+const HIGHLIGHT_COLORS = [
+  { value: '#facc15', label: '노랑' },
+  { value: '#22c55e', label: '연두' },
+  { value: '#38bdf8', label: '하늘' },
+  { value: '#f472b6', label: '분홍' },
+  { value: '#fb923c', label: '주황' },
+  { value: '#a78bfa', label: '보라' },
+] as const
+const PEN_WIDTHS = [0.0025, 0.004, 0.007] as const
+const HIGHLIGHT_WIDTHS = [0.018, 0.03, 0.05] as const
+
+type AnnotationSettings = {
+  penColor: string
+  highlightColor: string
+  size: number
+}
+
+function isAnnotationColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+}
+
+function initialAnnotationSettings(): AnnotationSettings {
+  const fallback = { penColor: '#2563eb', highlightColor: '#facc15', size: 1 }
+  if (typeof window === 'undefined') return fallback
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ANNOTATION_SETTINGS_STORAGE_KEY) ?? '') as Partial<AnnotationSettings>
+    return {
+      penColor: isAnnotationColor(parsed.penColor) ? parsed.penColor : fallback.penColor,
+      highlightColor:
+        isAnnotationColor(parsed.highlightColor) ? parsed.highlightColor : fallback.highlightColor,
+      size: Number.isInteger(parsed.size) && parsed.size! >= 0 && parsed.size! <= 2
+        ? parsed.size!
+        : fallback.size,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function initialTouchDrawing(): boolean {
+  return typeof window !== 'undefined' && window.localStorage.getItem(TOUCH_DRAWING_STORAGE_KEY) === 'true'
+}
 
 
 function markTextLayer(container: HTMLDivElement, query: string, activeOccurrence: number | null) {
@@ -110,6 +178,13 @@ function PdfPage({
   checked = false,
   onToggle,
   onCopy,
+  marks = [],
+  annotationTool = null,
+  annotationColor,
+  annotationWidth,
+  allowTouchDrawing = false,
+  onMarksChange,
+  onAnnotationInteract,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
@@ -121,6 +196,13 @@ function PdfPage({
   checked?: boolean
   onToggle?: () => void
   onCopy?: (pageNumber: number) => Promise<void>
+  marks?: PageMark[]
+  annotationTool?: AnnotationTool
+  annotationColor?: string
+  annotationWidth?: number
+  allowTouchDrawing?: boolean
+  onMarksChange?: (marks: PageMark[]) => void
+  onAnnotationInteract?: () => void
 }) {
   const holder = useRef<HTMLDivElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
@@ -151,18 +233,29 @@ function PdfPage({
 
   useEffect(() => {
     const node = holder.current
-    if (!node || visible) return
-    // 한 화면 앞뒤로 미리 그려 두면 스크롤이 빈 칸을 지나가지 않는다.
+    if (!node) return
+    // 한 화면 앞뒤로 미리 그리고, 멀어진 쪽은 다시 비운다. 긴 강의록을 훑은 뒤에도
+    // 지난 모든 고해상도 캔버스와 OCR 노드가 메모리에 쌓여 필기를 늦추지 않게 한다.
     const observer = new IntersectionObserver(
-      (entries) => entries.some((entry) => entry.isIntersecting) && setVisible(true),
-      { rootMargin: '1200px 0px' },
+      ([entry]) => setVisible(entry.isIntersecting),
+      { rootMargin: '1600px 0px' },
     )
     observer.observe(node)
     return () => observer.disconnect()
-  }, [visible])
+  }, [])
 
   useEffect(() => {
-    if (!visible || width <= 0) return
+    if (!visible) {
+      // display:none만으로는 캔버스의 큰 backing store가 해제되지 않는다.
+      const target = canvas.current
+      if (target) {
+        target.width = 1
+        target.height = 1
+      }
+      textLayer.current?.replaceChildren()
+      return
+    }
+    if (width <= 0) return
     let cancelled = false
     let task: { cancel: () => void } | null = null
     let textTask: pdfjs.TextLayer | null = null
@@ -256,10 +349,40 @@ function PdfPage({
     }
   }, [activeSearchOccurrence, activeSearchPage, searchQuery])
 
+  const annotationActive = Boolean(annotationTool && onMarksChange)
+
   return (
     <div
       ref={holder}
       data-page={pageNumber}
+      data-annotation-active={annotationActive ? '' : undefined}
+      onPointerDownCapture={
+        annotationActive
+          ? (event) => {
+              event.preventDefault()
+              window.getSelection()?.removeAllRanges()
+            }
+          : undefined
+      }
+      onClickCapture={
+        annotationActive
+          ? (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+          : undefined
+      }
+      onDoubleClickCapture={
+        annotationActive
+          ? (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+          : undefined
+      }
+      onContextMenu={annotationActive ? (event) => event.preventDefault() : undefined}
+      onCopy={annotationActive ? (event) => event.preventDefault() : undefined}
+      onDragStart={annotationActive ? (event) => event.preventDefault() : undefined}
       className={`relative w-full scroll-mt-32 overflow-hidden rounded-lg border bg-white shadow-sm ${
         checked
           ? 'border-brand-500 ring-2 ring-brand-400/70'
@@ -269,8 +392,32 @@ function PdfPage({
       }`}
       style={{ aspectRatio: visible ? undefined : `1 / ${ratio}` }}
     >
-      <canvas ref={canvas} className="block w-full bg-white" />
+      <canvas
+        ref={canvas}
+        draggable={false}
+        className={
+          visible
+            ? 'block w-full bg-white'
+            : 'invisible absolute inset-0 h-full w-full bg-white'
+        }
+      />
       <div ref={textLayer} className="lecture-pdf-text-layer" />
+      {(marks.length > 0 || onMarksChange) && (
+        <PageMarkLayer
+          marks={marks}
+          aspect={ratio}
+          onChange={onMarksChange}
+          tool={annotationTool}
+          color={annotationColor}
+          strokeWidth={annotationWidth}
+          allowTouchDrawing={allowTouchDrawing}
+          onInteract={onAnnotationInteract}
+          // 페이지 안의 다른 요소는 필기 중 pointer-events가 꺼지므로 z-2면 충분하다.
+          // 상단 sticky 도구막대(z-10)와 같게 올리면 스크롤된 페이지가 도구막대를
+          // 덮어 버튼 터치를 필기로 가로채게 된다.
+          className="z-[2]"
+        />
+      )}
 
       {selectable && (
         // 쪽 위에 얹되 글자 층을 가리지 않도록 왼쪽 위 모서리만 차지한다.
@@ -285,7 +432,7 @@ function PdfPage({
         </label>
       )}
 
-      {onCopy && (
+      {onCopy && !annotationActive && (
         <button
           type="button"
           onClick={() => void copyPage()}
@@ -318,6 +465,7 @@ export function LecturePdfViewer({
   initialPage,
   initialQuery = '',
   paneMode = false,
+  containedScroll = false,
   selectable = false,
   selectedPages,
   onTogglePage,
@@ -333,10 +481,42 @@ export function LecturePdfViewer({
   const [searchQuery, setSearchQuery] = useState(initialQuery.trim())
   const [activeResult, setActiveResult] = useState(0)
   const [viewMode, setViewMode] = useState<'pdf' | 'compatible'>('compatible')
+  const [annotationTool, setAnnotationTool] = useState<AnnotationTool>(null)
+  const [annotationSettings, setAnnotationSettings] = useState(initialAnnotationSettings)
+  const [allowTouchDrawing, setAllowTouchDrawing] = useState(initialTouchDrawing)
+  const [lastAnnotationPage, setLastAnnotationPage] = useState<number | null>(null)
+  const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
   const column = useRef<HTMLDivElement | null>(null)
   const searchBox = useRef<HTMLInputElement | null>(null)
 
   const selectedSet = useMemo(() => new Set(selectedPages ?? []), [selectedPages])
+  const annotationEnabled = Boolean(lectureId && !selectable)
+  const annotations = useLecturePdfAnnotations(lectureId, annotationEnabled)
+  const { penColor, highlightColor, size: annotationSize } = annotationSettings
+  const annotationColor = annotationTool === 'highlight' ? highlightColor : penColor
+  const annotationPalette = annotationTool === 'highlight' ? HIGHLIGHT_COLORS : PEN_COLORS
+  const annotationColorLabel =
+    annotationPalette.find((item) => item.value === annotationColor)?.label ?? '직접 선택'
+  const usesCustomAnnotationColor = !annotationPalette.some(
+    (item) => item.value === annotationColor,
+  )
+  const annotationWidth =
+    annotationTool === 'highlight'
+      ? HIGHLIGHT_WIDTHS[annotationSize]
+      : PEN_WIDTHS[annotationSize]
+  const lastAnnotationMarks = lastAnnotationPage
+    ? (annotations.pages[lastAnnotationPage] ?? [])
+    : []
+  const canUndoLastPage = lastAnnotationPage
+    ? annotations.canUndoPage(lastAnnotationPage)
+    : false
+  const canRedoLastPage = lastAnnotationPage
+    ? annotations.canRedoPage(lastAnnotationPage)
+    : false
+  const annotatedPageCount = useMemo(
+    () => Object.values(annotations.pages).filter((marks) => marks.length > 0).length,
+    [annotations.pages],
+  )
 
   const copyPage = useCallback(
     async (pageNumber: number) => {
@@ -352,9 +532,13 @@ export function LecturePdfViewer({
   useEffect(() => {
     onDocumentReady?.(document)
   }, [document, onDocumentReady])
-  // 브라우저 기본 PDF 뷰어(iframe)에는 체크칸을 얹을 수 없다. 고르는 중에는
-  // 우리가 그리는 쪽 화면으로 고정한다.
-  const effectiveMode = selectable ? 'compatible' : viewMode
+
+  useEffect(() => {
+    window.localStorage.setItem(ANNOTATION_SETTINGS_STORAGE_KEY, JSON.stringify(annotationSettings))
+  }, [annotationSettings])
+  // 브라우저 기본 PDF 뷰어(iframe) 위에는 필기층이나 체크칸을 얹을 수 없다.
+  // 쪽 선택 또는 필기 중에는 우리가 그리는 페이지 화면으로 고정한다.
+  const effectiveMode = selectable || annotationTool ? 'compatible' : viewMode
 
   useEffect(() => {
     const node = column.current
@@ -415,7 +599,16 @@ export function LecturePdfViewer({
 
         // getDocument 는 넘긴 바이트 배열을 소유해 비워 버린다. 사본을 넘기지
         // 않으면 위에서 만든 Blob 이 함께 비어 내려받기가 0바이트가 된다.
-        const loading = pdfjs.getDocument({ data: new Uint8Array(buffer.slice(0)) })
+        const loading = pdfjs.getDocument({
+          data: new Uint8Array(buffer.slice(0)),
+          cMapUrl: `${PDFJS_ASSET_ROOT}/cmaps/`,
+          cMapPacked: true,
+          standardFontDataUrl: `${PDFJS_ASSET_ROOT}/standard_fonts/`,
+          wasmUrl: `${PDFJS_ASSET_ROOT}/wasm/`,
+          // 글꼴 파일을 포함하지 않은 오래된 PDF는 기기에 설치된 글꼴 또는
+          // PDF.js 대체 글꼴을 사용해야 내용이 사라지지 않는다.
+          useSystemFonts: true,
+        })
         task = loading
         const loaded = await loading.promise
         if (cancelled) {
@@ -545,11 +738,135 @@ export function LecturePdfViewer({
     return () => clearTimeout(timer)
   }, [document, initialPage])
 
+  function selectAnnotationTool(tool: AnnotationTool) {
+    if (!annotations.available || annotations.status === 'loading' || annotations.loadFailed) return
+    if (tool) {
+      window.getSelection()?.removeAllRanges()
+      setViewMode('compatible')
+    }
+    setAnnotationTool(tool)
+  }
+
+  function changeAnnotationColor(color: string) {
+    setAnnotationSettings((current) =>
+      annotationTool === 'highlight'
+        ? { ...current, highlightColor: color }
+        : { ...current, penColor: color },
+    )
+  }
+
+  function toggleTouchDrawing() {
+    const next = !allowTouchDrawing
+    setAllowTouchDrawing(next)
+    window.localStorage.setItem(TOUCH_DRAWING_STORAGE_KEY, String(next))
+  }
+
+  function updatePageMarks(pageNumber: number, marks: PageMark[]) {
+    setLastAnnotationPage(pageNumber)
+    annotations.updatePage(pageNumber, marks)
+  }
+
+  function clearLastAnnotationPage() {
+    if (!lastAnnotationPage || lastAnnotationMarks.length === 0) return
+    if (!window.confirm(`${lastAnnotationPage}쪽의 필기를 모두 지울까요?`)) return
+    updatePageMarks(lastAnnotationPage, [])
+  }
+
+  function resolveAnnotationConflict(choice: 'server' | 'mine' | 'combine') {
+    const conflict = annotations.conflict
+    if (!conflict) return
+    if (
+      choice === 'server' &&
+      !window.confirm(`${conflict.pageNumber}쪽의 이 기기 필기를 버리고 서버 필기를 사용할까요?`)
+    ) {
+      return
+    }
+    if (
+      choice === 'mine' &&
+      !window.confirm(`${conflict.pageNumber}쪽의 다른 기기 필기를 이 기기 필기로 덮어쓸까요?`)
+    ) {
+      return
+    }
+    annotations.resolveConflict(conflict.pageNumber, choice)
+    setLastAnnotationPage(conflict.pageNumber)
+  }
+
+  async function downloadAnnotatedPdf() {
+    if (!blobUrl || exportState.status === 'working' || annotatedPageCount === 0) return
+    setExportState({ status: 'working', completed: 0, total: annotatedPageCount })
+    try {
+      const response = await fetch(blobUrl)
+      if (!response.ok) throw new Error('원본 PDF를 다시 읽지 못했습니다.')
+      const [{ exportAnnotatedLecturePdf }, bytes] = await Promise.all([
+        import('@/components/lecture/exportAnnotatedLecturePdf'),
+        response.arrayBuffer(),
+      ])
+      const output = await exportAnnotatedLecturePdf({
+        bytes,
+        annotations: annotations.pages,
+        onProgress: ({ completed, total }) =>
+          setExportState({ status: 'working', completed, total }),
+      })
+      const url = URL.createObjectURL(output)
+      const anchor = window.document.createElement('a')
+      anchor.href = url
+      anchor.download = `${title.replace(/[\\/:*?"<>|]/g, '_')} (필기 포함).pdf`
+      window.document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+      setExportState({ status: 'idle' })
+    } catch (caught) {
+      setExportState({
+        status: 'error',
+        message: caught instanceof Error ? caught.message : '필기 포함 PDF를 만들지 못했습니다.',
+      })
+    }
+  }
+
+  const sourceActions = blobUrl ? (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <a
+        href={blobUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+      >
+        원본 열기
+      </a>
+      <a
+        href={blobUrl}
+        download={`${title}.pdf`}
+        className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-brand-700"
+      >
+        원본 내려받기
+      </a>
+      {annotationEnabled && annotatedPageCount > 0 && (
+        <button
+          type="button"
+          onClick={() => void downloadAnnotatedPdf()}
+          disabled={exportState.status === 'working'}
+          title={exportState.status === 'error' ? exportState.message : '현재 필기를 PDF에 포함해 저장'}
+          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+        >
+          {exportState.status === 'working'
+            ? `PDF 만드는 중 ${exportState.completed}/${exportState.total}`
+            : exportState.status === 'error'
+              ? '내보내기 재시도'
+              : '필기 포함 저장'}
+        </button>
+      )}
+    </span>
+  ) : null
+
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className="flex flex-col gap-3"
+      data-auto-update-blocker={annotationTool || annotations.hasUnsavedChanges ? '' : undefined}
+    >
       <div
         className={`sticky z-10 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 ${
-          paneMode ? 'top-[6.75rem] lg:top-0' : 'top-16'
+          containedScroll ? 'top-0' : paneMode ? 'top-[6.75rem] lg:top-0' : 'top-16'
         }`}
       >
         {paneMode && (
@@ -563,7 +880,10 @@ export function LecturePdfViewer({
         <span className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
           <button
             type="button"
-            onClick={() => setViewMode('pdf')}
+            onClick={() => {
+              setAnnotationTool(null)
+              setViewMode('pdf')
+            }}
             className={`rounded-md px-2.5 py-1 text-xs font-medium ${
               viewMode === 'pdf'
                 ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200'
@@ -626,26 +946,249 @@ export function LecturePdfViewer({
             </button>
           </>
         )}
-        {blobUrl && (
-          <span className="ml-auto flex items-center gap-2">
-            <a
-              href={blobUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+        {!annotationEnabled && sourceActions && <span className="ml-auto">{sourceActions}</span>}
+        {annotationEnabled && (
+          <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-slate-200 pt-2 dark:border-slate-700">
+            <span className="mr-1 text-xs font-bold text-slate-600 dark:text-slate-300">필기</span>
+            <AnnotationToolButton
+              active={annotationTool === null}
+              disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
+              onClick={() => selectAnnotationTool(null)}
             >
-              원본 열기
-            </a>
-            <a
-              href={blobUrl}
-              download={`${title}.pdf`}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+              보기
+            </AnnotationToolButton>
+            <AnnotationToolButton
+              active={annotationTool === 'pen'}
+              disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
+              onClick={() => selectAnnotationTool('pen')}
             >
-              내려받기
-            </a>
-          </span>
+              펜
+            </AnnotationToolButton>
+            <AnnotationToolButton
+              active={annotationTool === 'highlight'}
+              disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
+              onClick={() => selectAnnotationTool('highlight')}
+            >
+              형광펜
+            </AnnotationToolButton>
+            <AnnotationToolButton
+              active={annotationTool === 'erase'}
+              disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
+              onClick={() => selectAnnotationTool('erase')}
+            >
+              지우개
+            </AnnotationToolButton>
+
+            {(annotationTool === 'pen' || annotationTool === 'highlight') && (
+              <>
+                <span
+                  className="ml-1 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/70"
+                  role="group"
+                  aria-label={`${annotationTool === 'highlight' ? '형광펜' : '펜'} 색상: ${annotationColorLabel}`}
+                >
+                  {annotationPalette.map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => changeAnnotationColor(item.value)}
+                      aria-label={`${item.label}색`}
+                      aria-pressed={annotationColor === item.value}
+                      title={`${item.label}색`}
+                      className="group/color grid h-8 w-8 touch-manipulation place-items-center rounded-md outline-none hover:bg-white focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:bg-slate-700"
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{ backgroundColor: item.value }}
+                        className={`relative grid h-5 w-5 place-items-center rounded-full border border-black/10 shadow-sm transition-transform group-hover/color:scale-110 ${
+                          annotationColor === item.value
+                            ? 'ring-2 ring-brand-500 ring-offset-2 dark:ring-offset-slate-800'
+                            : ''
+                        }`}
+                      >
+                        {annotationColor === item.value && (
+                          <span className="absolute -bottom-1 -right-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-brand-600 text-[9px] font-black leading-none text-white ring-1 ring-white">
+                            ✓
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                  <label
+                    title="다른 색 직접 선택"
+                    className="relative grid h-8 w-8 cursor-pointer touch-manipulation place-items-center rounded-md outline-none hover:bg-white focus-within:ring-2 focus-within:ring-brand-500 dark:hover:bg-slate-700"
+                  >
+                    <input
+                      type="color"
+                      value={annotationColor}
+                      onChange={(event) => changeAnnotationColor(event.target.value)}
+                      aria-label="다른 색 직접 선택"
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={`grid h-5 w-5 place-items-center rounded-full border border-white text-sm font-bold text-white shadow-sm ${
+                        usesCustomAnnotationColor
+                          ? 'ring-2 ring-brand-500 ring-offset-2 dark:ring-offset-slate-800'
+                          : 'ring-1 ring-slate-300'
+                      }`}
+                      style={{
+                        background: usesCustomAnnotationColor
+                          ? annotationColor
+                          : 'conic-gradient(#ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444)',
+                      }}
+                    >
+                      {usesCustomAnnotationColor ? '✓' : '+'}
+                    </span>
+                  </label>
+                </span>
+                <span className="ml-1 inline-flex rounded-md bg-slate-100 p-0.5 dark:bg-slate-800">
+                  {['얇게', '보통', '굵게'].map((label, index) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setAnnotationSettings((current) => ({ ...current, size: index }))}
+                      aria-pressed={annotationSize === index}
+                      className={`min-h-8 rounded px-2 py-1 text-[11px] ${
+                        annotationSize === index
+                          ? 'bg-white font-semibold text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </span>
+              </>
+            )}
+
+            {annotationTool && (
+              <button
+                type="button"
+                onClick={toggleTouchDrawing}
+                aria-pressed={allowTouchDrawing}
+                title="꺼짐: Apple Pencil·마우스만 필기하고 손가락은 스크롤합니다."
+                className={`rounded-md border px-2 py-1 text-[11px] font-medium ${
+                  allowTouchDrawing
+                    ? 'border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200'
+                    : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400'
+                }`}
+              >
+                손가락 필기 {allowTouchDrawing ? '켬' : '끔'}
+              </button>
+            )}
+
+            {lastAnnotationPage &&
+              (lastAnnotationMarks.length > 0 || canUndoLastPage || canRedoLastPage) && (
+              <span className="ml-1 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {lastAnnotationPage}쪽
+                <button
+                  type="button"
+                  onClick={() => annotations.undoPage(lastAnnotationPage)}
+                  disabled={!canUndoLastPage}
+                  className="rounded-md border border-slate-300 px-2 py-1 font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35 dark:border-slate-600 dark:hover:bg-slate-800"
+                >
+                  되돌리기
+                </button>
+                {canRedoLastPage && (
+                  <button
+                    type="button"
+                    onClick={() => annotations.redoPage(lastAnnotationPage)}
+                    className="rounded-md border border-slate-300 px-2 py-1 font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+                  >
+                    다시실행
+                  </button>
+                )}
+                {lastAnnotationMarks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearLastAnnotationPage}
+                    className="rounded-md border border-rose-300 px-2 py-1 font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                  >
+                    모두 지우기
+                  </button>
+                )}
+              </span>
+            )}
+
+            <span
+              aria-live="polite"
+              className="ml-auto text-[11px] text-slate-500 dark:text-slate-400"
+            >
+              {annotations.status === 'loading'
+                ? '필기 불러오는 중…'
+                : annotations.status === 'conflict'
+                  ? `다른 기기 수정 감지${annotations.conflictCount > 1 ? ` ${annotations.conflictCount}건` : ''}`
+                : annotations.remoteUpdate
+                  ? `${annotations.remoteUpdate.pageNumber}쪽 실시간 반영 ✓`
+                : annotations.status === 'saving'
+                  ? '저장 중…'
+                  : annotations.status === 'saved'
+                    ? '저장됨 ✓'
+                    : annotations.status === 'error'
+                      ? '저장 실패'
+                      : '계정에 자동 저장'}
+            </span>
+            {annotations.status === 'error' && (
+              <button
+                type="button"
+                onClick={annotations.retrySave}
+                title={annotations.error ?? undefined}
+                className="rounded-md bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-rose-700"
+              >
+                다시 시도
+              </button>
+            )}
+            {sourceActions}
+          </div>
         )}
       </div>
+
+      {annotations.conflict && (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950 shadow-sm dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100"
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="font-bold">
+              {annotations.conflict.pageNumber}쪽이 다른 기기나 탭에서도 수정되었습니다.
+            </span>
+            <span className="text-xs text-amber-800 dark:text-amber-200">
+              어느 필기도 자동으로 덮어쓰지 않고 임시 보관 중입니다.
+            </span>
+            <span className="ml-auto flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => resolveAnnotationConflict('combine')}
+                className="rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
+              >
+                둘 다 합치기
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveAnnotationConflict('mine')}
+                className="rounded-md border border-amber-500 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:bg-amber-950"
+              >
+                이 기기 필기 사용
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveAnnotationConflict('server')}
+                className="rounded-md border border-amber-400 px-2.5 py-1.5 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/60"
+              >
+                서버 필기 사용
+              </button>
+            </span>
+          </div>
+        </div>
+      )}
+      {!annotations.conflict && annotations.remoteUpdate && (
+        <div
+          role="status"
+          className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+        >
+          다른 기기나 탭에서 저장한 {annotations.remoteUpdate.pageNumber}쪽 필기를 실시간으로 반영했습니다.
+        </div>
+      )}
 
       <div ref={column} className="flex flex-col gap-3">
         {error ? (
@@ -676,6 +1219,17 @@ export function LecturePdfViewer({
               checked={selectedSet.has(pageNumber)}
               onToggle={() => onTogglePage?.(pageNumber)}
               onCopy={lectureId ? copyPage : undefined}
+              marks={annotations.pages[pageNumber] ?? []}
+              annotationTool={annotationTool}
+              annotationColor={annotationColor}
+              annotationWidth={annotationWidth}
+              allowTouchDrawing={allowTouchDrawing}
+              onMarksChange={
+                annotations.available && !annotations.loadFailed
+                  ? (marks) => updatePageMarks(pageNumber, marks)
+                  : undefined
+              }
+              onAnnotationInteract={() => setLastAnnotationPage(pageNumber)}
               // 여러 낱말 중 일부만 있는 쪽은 결과가 아니므로 부분 강조도 하지 않는다.
               searchQuery={searchPageNumbers.has(pageNumber) ? searchQuery : ''}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
@@ -689,5 +1243,33 @@ export function LecturePdfViewer({
         )}
       </div>
     </div>
+  )
+}
+
+function AnnotationToolButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean
+  disabled: boolean
+  onClick: () => void
+  children: string
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      aria-pressed={active}
+      className={`min-h-8 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-40 ${
+        active
+          ? 'bg-brand-600 text-white shadow-sm'
+          : 'border border-slate-300 text-slate-600 hover:border-brand-400 hover:text-brand-700 dark:border-slate-600 dark:text-slate-300 dark:hover:border-brand-500 dark:hover:text-brand-200'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
