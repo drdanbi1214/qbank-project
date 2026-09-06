@@ -42,6 +42,7 @@ type SaveQueueEntry = {
   contextKey: string
   userId: string
   lectureId: string
+  variantId: string | null
   pageNumber: number
   generation: number
   latest: SaveSnapshot | null
@@ -79,11 +80,16 @@ function combineMarks(serverMarks: PageMark[], localMarks: PageMark[]): PageMark
  * 보낸다. 저장 중 여러 번 고쳐도 이미 지난 중간본을 줄줄이 보내지 않고 현재
  * 최신본 하나만 이어서 보내므로 긴 필기에서도 저장 대기열이 불어나지 않는다.
  */
-export function useLecturePdfAnnotations(lectureId: string | undefined, enabled = true) {
+export function useLecturePdfAnnotations(
+  lectureId: string | undefined,
+  variantId: string | null = null,
+  enabled = true,
+) {
   const { session } = useAuth()
   const userId = session?.user.id ?? ''
   const available = Boolean(enabled && lectureId && userId)
-  const contextKey = available ? `${userId}:${lectureId}` : ''
+  const documentId = variantId ?? lectureId ?? ''
+  const contextKey = available ? `${userId}:${documentId}` : ''
 
   const [loaded, setLoaded] = useState<{
     key: string
@@ -164,6 +170,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
           entry.latest = null
           const result = await saveLecturePdfAnnotations({
             lectureId: entry.lectureId,
+            variantId: entry.variantId,
             pageNumber: entry.pageNumber,
             marks: saving.marks,
             expectedRevision: entry.expectedRevision,
@@ -265,6 +272,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
           contextKey,
           userId,
           lectureId,
+          variantId,
           pageNumber,
           generation: 0,
           latest: null,
@@ -310,7 +318,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
       }
       entry.timer = window.setTimeout(() => void runQueueRef.current(entry), SAVE_DEBOUNCE_MS)
     },
-    [available, contextKey, lectureId, queueLocalOperation, syncPending, userId],
+    [available, contextKey, lectureId, queueLocalOperation, syncPending, userId, variantId],
   )
 
   useEffect(() => {
@@ -328,7 +336,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
         Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${contextKey}:`))),
       )
       try {
-        const serverSnapshot = await fetchLecturePdfAnnotations({ userId, lectureId })
+        const serverSnapshot = await fetchLecturePdfAnnotations({ userId, lectureId, variantId })
         if (!active) return
         const merged = { ...serverSnapshot.pages }
         for (const draft of drafts) {
@@ -405,7 +413,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
     return () => {
       active = false
     }
-  }, [available, contextKey, enqueueSave, lectureId, reloadToken, userId])
+  }, [available, contextKey, enqueueSave, lectureId, reloadToken, userId, variantId])
 
   useEffect(() => {
     if (!available || !lectureId || loaded?.key !== contextKey) return
@@ -481,14 +489,14 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
 
     realtimeChannelSequence += 1
     const channel = supabase
-      .channel(`lecture-annotations:${userId}:${lectureId}:${realtimeChannelSequence}`)
+      .channel(`lecture-annotations:${userId}:${documentId}:${realtimeChannelSequence}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'lecture_pdf_annotations',
-          filter: `lecture_id=eq.${lectureId}`,
+          filter: `document_id=eq.${documentId}`,
         },
         (payload) => {
           const source = (payload.eventType === 'DELETE' ? payload.old : payload.new) as Record<
@@ -496,6 +504,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
             unknown
           >
           if (source.user_id !== userId) return
+          if ((source.variant_id ?? null) !== variantId) return
           const pageNumber = source.page_number
           if (!Number.isInteger(pageNumber) || Number(pageNumber) <= 0) return
           if (payload.eventType === 'DELETE') {
@@ -520,7 +529,7 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
       .subscribe((status) => {
         if (status !== 'SUBSCRIBED') return
         // 최초 불러오기와 구독 완료 사이의 짧은 틈에 생긴 변경도 다시 비교한다.
-        void fetchLecturePdfAnnotations({ userId, lectureId }).then(
+        void fetchLecturePdfAnnotations({ userId, lectureId, variantId }).then(
           (snapshot) => {
             if (!active) return
             const pageNumbers = new Set([
@@ -548,10 +557,12 @@ export function useLecturePdfAnnotations(lectureId: string | undefined, enabled 
     announceRemoteUpdate,
     available,
     contextKey,
+    documentId,
     lectureId,
     loaded?.key,
     syncPending,
     userId,
+    variantId,
   ])
 
   const updatePage = useCallback(

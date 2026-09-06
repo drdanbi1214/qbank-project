@@ -30,6 +30,10 @@ type Props = {
   title: string
   /** 읽기 화면에서 쪽 복사를 허용할 때 함께 담을 원본 정보. */
   lectureId?: string
+  /** 대체본이면 원본 필기와 분리해서 저장할 대체본 id. */
+  annotationVariantId?: string | null
+  /** 대체본처럼 원본 쪽 번호와 다를 수 있는 PDF에서는 풀이용 쪽 복사를 숨긴다. */
+  allowPageCopy?: boolean
   professor?: string | null
   initialPage?: number | null
   initialQuery?: string
@@ -49,7 +53,7 @@ type Props = {
 }
 
 type SearchHit = { pageNumber: number; occurrenceIndex: number }
-type AnnotationTool = StrokeTool | 'erase' | null
+type AnnotationTool = StrokeTool | 'erase' | 'lasso' | null
 type ExportState =
   | { status: 'idle' }
   | { status: 'working'; completed: number; total: number }
@@ -404,6 +408,7 @@ function PdfPage({
       <div ref={textLayer} className="lecture-pdf-text-layer" />
       {(marks.length > 0 || onMarksChange) && (
         <PageMarkLayer
+          key={annotationTool ?? 'view'}
           marks={marks}
           aspect={ratio}
           onChange={onMarksChange}
@@ -461,6 +466,8 @@ export function LecturePdfViewer({
   storagePath,
   title,
   lectureId,
+  annotationVariantId = null,
+  allowPageCopy = true,
   professor = null,
   initialPage,
   initialQuery = '',
@@ -491,7 +498,7 @@ export function LecturePdfViewer({
 
   const selectedSet = useMemo(() => new Set(selectedPages ?? []), [selectedPages])
   const annotationEnabled = Boolean(lectureId && !selectable)
-  const annotations = useLecturePdfAnnotations(lectureId, annotationEnabled)
+  const annotations = useLecturePdfAnnotations(lectureId, annotationVariantId, annotationEnabled)
   const { penColor, highlightColor, size: annotationSize } = annotationSettings
   const annotationColor = annotationTool === 'highlight' ? highlightColor : penColor
   const annotationPalette = annotationTool === 'highlight' ? HIGHLIGHT_COLORS : PEN_COLORS
@@ -976,8 +983,20 @@ export function LecturePdfViewer({
               disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
               onClick={() => selectAnnotationTool('erase')}
             >
-              지우개
+              부분 지우개
             </AnnotationToolButton>
+            <AnnotationToolButton
+              active={annotationTool === 'lasso'}
+              disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
+              onClick={() => selectAnnotationTool('lasso')}
+            >
+              올가미·이동
+            </AnnotationToolButton>
+            {annotationTool === 'lasso' && (
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                둘러서 선택한 뒤 선택 상자를 끌어 이동
+              </span>
+            )}
 
             {(annotationTool === 'pen' || annotationTool === 'highlight') && (
               <>
@@ -1218,7 +1237,7 @@ export function LecturePdfViewer({
               selectable={selectable}
               checked={selectedSet.has(pageNumber)}
               onToggle={() => onTogglePage?.(pageNumber)}
-              onCopy={lectureId ? copyPage : undefined}
+              onCopy={lectureId && allowPageCopy ? copyPage : undefined}
               marks={annotations.pages[pageNumber] ?? []}
               annotationTool={annotationTool}
               annotationColor={annotationColor}

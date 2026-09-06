@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   graphql_public: {
     Tables: {
@@ -72,7 +72,7 @@ export type Database = {
           created_at: string
           id: string
           question_id: string
-          required_permission: string | null
+          required_permission: string
           updated_at: string
         }
         Insert: {
@@ -80,7 +80,7 @@ export type Database = {
           created_at?: string
           id?: string
           question_id: string
-          required_permission?: string | null
+          required_permission?: string
           updated_at?: string
         }
         Update: {
@@ -88,7 +88,7 @@ export type Database = {
           created_at?: string
           id?: string
           question_id?: string
-          required_permission?: string | null
+          required_permission?: string
           updated_at?: string
         }
         Relationships: [
@@ -942,6 +942,38 @@ export type Database = {
           },
         ]
       }
+      learning_activity_daily: {
+        Row: {
+          activity_date: string
+          category: string
+          seconds: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_date: string
+          category: string
+          seconds?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_date?: string
+          category?: string
+          seconds?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_activity_daily_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecture_categories: {
         Row: {
           created_at: string
@@ -1132,51 +1164,6 @@ export type Database = {
           },
         ]
       }
-      lecture_pdf_annotations: {
-        Row: {
-          created_at: string
-          lecture_id: string
-          marks: Json
-          page_number: number
-          revision: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          lecture_id: string
-          marks?: Json
-          page_number: number
-          revision?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          lecture_id?: string
-          marks?: Json
-          page_number?: number
-          revision?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lecture_pdf_annotations_lecture_id_fkey"
-            columns: ["lecture_id"]
-            isOneToOne: false
-            referencedRelation: "lecture_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lecture_pdf_annotations_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       lecture_page_texts: {
         Row: {
           created_at: string
@@ -1205,6 +1192,128 @@ export type Database = {
             columns: ["lecture_id"]
             isOneToOne: false
             referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lecture_pdf_annotations: {
+        Row: {
+          created_at: string
+          document_id: string
+          lecture_id: string
+          marks: Json
+          page_number: number
+          revision: number
+          updated_at: string
+          user_id: string
+          variant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_id?: string
+          lecture_id: string
+          marks?: Json
+          page_number: number
+          revision?: number
+          updated_at?: string
+          user_id: string
+          variant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          lecture_id?: string
+          marks?: Json
+          page_number?: number
+          revision?: number
+          updated_at?: string
+          user_id?: string
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_pdf_annotations_lecture_id_fkey"
+            columns: ["lecture_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_pdf_annotations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_pdf_annotations_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_document_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lecture_sources: {
+        Row: {
+          created_at: string
+          curriculum: string | null
+          id: string
+          lecture_document_id: string | null
+          professor: string | null
+          sort_order: number
+          source_key: string | null
+          subject_id: string
+          theory_document_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          curriculum?: string | null
+          id?: string
+          lecture_document_id?: string | null
+          professor?: string | null
+          sort_order?: number
+          source_key?: string | null
+          subject_id: string
+          theory_document_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          curriculum?: string | null
+          id?: string
+          lecture_document_id?: string | null
+          professor?: string | null
+          sort_order?: number
+          source_key?: string | null
+          subject_id?: string
+          theory_document_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_sources_lecture_document_id_fkey"
+            columns: ["lecture_document_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_sources_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lecture_sources_theory_document_id_fkey"
+            columns: ["theory_document_id"]
+            isOneToOne: false
+            referencedRelation: "theory_documents"
             referencedColumns: ["id"]
           },
         ]
@@ -1282,70 +1391,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "access_permissions"
             referencedColumns: ["key"]
-          },
-        ]
-      }
-      lecture_sources: {
-        Row: {
-          created_at: string
-          curriculum: string | null
-          id: string
-          lecture_document_id: string | null
-          professor: string | null
-          sort_order: number
-          source_key: string | null
-          subject_id: string
-          theory_document_id: string | null
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          curriculum?: string | null
-          id?: string
-          lecture_document_id?: string | null
-          professor?: string | null
-          sort_order?: number
-          source_key?: string | null
-          subject_id: string
-          theory_document_id?: string | null
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          curriculum?: string | null
-          id?: string
-          lecture_document_id?: string | null
-          professor?: string | null
-          sort_order?: number
-          source_key?: string | null
-          subject_id?: string
-          theory_document_id?: string | null
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lecture_sources_lecture_document_id_fkey"
-            columns: ["lecture_document_id"]
-            isOneToOne: false
-            referencedRelation: "lecture_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lecture_sources_subject_id_fkey"
-            columns: ["subject_id"]
-            isOneToOne: false
-            referencedRelation: "subjects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lecture_sources_theory_document_id_fkey"
-            columns: ["theory_document_id"]
-            isOneToOne: false
-            referencedRelation: "theory_documents"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -2426,7 +2471,8 @@ export type Database = {
           id: string
           is_published: boolean
           parent_id: string | null
-          required_permission: string
+          required_permission: string | null
+          search_text: string | null
           sort_order: number
           source_key: string | null
           subject_id: string
@@ -2442,7 +2488,8 @@ export type Database = {
           id?: string
           is_published?: boolean
           parent_id?: string | null
-          required_permission?: string
+          required_permission?: string | null
+          search_text?: string | null
           sort_order?: number
           source_key?: string | null
           subject_id: string
@@ -2458,7 +2505,8 @@ export type Database = {
           id?: string
           is_published?: boolean
           parent_id?: string | null
-          required_permission?: string
+          required_permission?: string | null
+          search_text?: string | null
           sort_order?: number
           source_key?: string | null
           subject_id?: string
@@ -2649,32 +2697,6 @@ export type Database = {
           },
         ]
       }
-      update_notice_dismissals: {
-        Row: {
-          dismissed_at: string
-          notice_key: string
-          user_id: string
-        }
-        Insert: {
-          dismissed_at?: string
-          notice_key: string
-          user_id: string
-        }
-        Update: {
-          dismissed_at?: string
-          notice_key?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "update_notice_dismissals_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       units: {
         Row: {
           created_at: string
@@ -2712,6 +2734,32 @@ export type Database = {
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      update_notice_dismissals: {
+        Row: {
+          dismissed_at: string
+          notice_key: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          notice_key: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          notice_key?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "update_notice_dismissals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2935,6 +2983,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_learning_activity: {
+        Args: { p_category: string; p_seconds: number }
+        Returns: undefined
+      }
       admin_get_deletion_audit: { Args: { p_audit_id: string }; Returns: Json }
       admin_list_assignment_members: {
         Args: never
@@ -3053,6 +3105,7 @@ export type Database = {
         Args: { p_note: string; p_question_id: string }
         Returns: undefined
       }
+      compact_search_text: { Args: { input_text: string }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {
         Args: {
@@ -3122,6 +3175,7 @@ export type Database = {
           unit_name: string
         }[]
       }
+      get_my_learning_activity: { Args: { p_days?: number }; Returns: Json }
       get_my_profile: {
         Args: never
         Returns: {
@@ -3156,10 +3210,6 @@ export type Database = {
         }[]
       }
       get_my_summary: { Args: never; Returns: Json }
-      get_my_learning_activity: {
-        Args: { p_days?: number }
-        Returns: Json
-      }
       get_progress_by_exam: {
         Args: never
         Returns: {
@@ -3277,7 +3327,7 @@ export type Database = {
       richtext_plain: { Args: { doc: Json }; Returns: string }
       save_lecture_pdf_annotations: {
         Args: {
-          p_expected_revision?: number | null
+          p_expected_revision?: number
           p_lecture_id: string
           p_marks: Json
           p_page_number: number
@@ -3285,8 +3335,23 @@ export type Database = {
         Returns: {
           save_status: string
           server_marks: Json
-          server_revision: number | null
-          server_updated_at: string | null
+          server_revision: number
+          server_updated_at: string
+        }[]
+      }
+      save_lecture_pdf_annotations_for_document: {
+        Args: {
+          p_expected_revision?: number
+          p_lecture_id: string
+          p_marks: Json
+          p_page_number: number
+          p_variant_id: string
+        }
+        Returns: {
+          save_status: string
+          server_marks: Json
+          server_revision: number
+          server_updated_at: string
         }[]
       }
       search_lecture_documents: {
@@ -3319,21 +3384,7 @@ export type Database = {
           updated_at: string
         }[]
       }
-      search_theory_documents: {
-        Args: {
-          p_limit?: number
-          p_query: string
-          p_subject_id?: string
-        }
-        Returns: {
-          id: string
-          score: number
-          snippet: string
-          subject_id: string
-          title: string
-          unit_id: string
-        }[]
-      }
+      search_query_terms: { Args: { query_text: string }; Returns: string[] }
       search_questions: {
         Args: {
           p_cohort?: string
@@ -3353,6 +3404,26 @@ export type Database = {
           unit_id: string
         }[]
       }
+      search_result_snippet: {
+        Args: { input_text: string; query_text: string; radius?: number }
+        Returns: string
+      }
+      search_text_bigrams: { Args: { input_text: string }; Returns: string[] }
+      search_text_rank: {
+        Args: { input_text: string; query_text: string }
+        Returns: number
+      }
+      search_theory_documents: {
+        Args: { p_limit?: number; p_query: string; p_subject_id?: string }
+        Returns: {
+          id: string
+          score: number
+          snippet: string
+          subject_id: string
+          title: string
+          unit_id: string
+        }[]
+      }
       stem_plain_text: { Args: { blocks: Json }; Returns: string }
       submit_attempt: {
         Args: {
@@ -3362,10 +3433,6 @@ export type Database = {
           p_time_spent_sec?: number
         }
         Returns: Json
-      }
-      add_learning_activity: {
-        Args: { p_category: string; p_seconds: number }
-        Returns: undefined
       }
       topics_for_question: {
         Args: { p_question_id: string }
@@ -3394,12 +3461,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3423,11 +3490,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3448,11 +3515,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3473,11 +3540,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3490,11 +3557,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

@@ -19,13 +19,17 @@ export type SaveLecturePdfAnnotationsResult =
 export async function fetchLecturePdfAnnotations(params: {
   userId: string
   lectureId: string
+  variantId: string | null
 }): Promise<LecturePdfAnnotationSnapshot> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('lecture_pdf_annotations')
     .select('page_number, marks, revision, updated_at')
     .eq('user_id', params.userId)
     .eq('lecture_id', params.lectureId)
-    .order('page_number')
+  query = params.variantId === null
+    ? query.is('variant_id', null)
+    : query.eq('variant_id', params.variantId)
+  const { data, error } = await query.order('page_number')
 
   if (error) throw error
 
@@ -44,15 +48,19 @@ export async function fetchLecturePdfAnnotations(params: {
 /** 읽었던 revision과 서버 revision이 같을 때만 한 페이지 전체를 저장한다. */
 export async function saveLecturePdfAnnotations(params: {
   lectureId: string
+  variantId: string | null
   pageNumber: number
   marks: PageMark[]
   expectedRevision: number | null
 }): Promise<SaveLecturePdfAnnotationsResult> {
-  const { data, error } = await supabase.rpc('save_lecture_pdf_annotations', {
+  const { data, error } = await supabase.rpc('save_lecture_pdf_annotations_for_document', {
     p_lecture_id: params.lectureId,
+    // PostgreSQL 함수 인자는 nullable이지만 생성 타입은 입력 인자의 nullability를
+    // 보존하지 않는다. 런타임에는 원본을 뜻하는 null을 그대로 보낸다.
+    p_variant_id: params.variantId as string,
     p_page_number: params.pageNumber,
     p_marks: params.marks as unknown as Json,
-    p_expected_revision: params.expectedRevision,
+    p_expected_revision: params.expectedRevision ?? undefined,
   })
 
   if (error) throw error

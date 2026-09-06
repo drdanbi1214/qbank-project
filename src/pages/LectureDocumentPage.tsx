@@ -315,9 +315,11 @@ export function LectureDocumentPage() {
           key={`${detail.id}:${activeVariant?.id ?? 'original'}`}
           storagePath={activeVariant?.filePath ?? detail.filePath}
           title={activeVariant ? `${detail.title} (${activeVariant.label})` : detail.title}
-          // 필기본에는 개인 필기·풀이용 쪽 복사를 걸지 않는다. 이미 필기가 박혀
-          // 있고 쪽 번호가 원본과 어긋날 수 있어 원본 기준으로 저장하면 엉킨다.
-          lectureId={activeVariant ? undefined : detail.id}
+          // 개인 필기는 원본/각 필기본 id로 분리한다. 풀이용 쪽 복사는 쪽 번호가
+          // 원본과 어긋날 수 있는 필기본에서만 계속 숨긴다.
+          lectureId={detail.id}
+          annotationVariantId={activeVariant?.id ?? null}
+          allowPageCopy={!activeVariant}
           professor={detail.professor}
           initialPage={activeVariant ? null : initialPage}
           initialQuery={initialQuery}

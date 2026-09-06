@@ -20,6 +20,13 @@ import {
   type PageText,
   type Stroke,
 } from '@/components/lecture/pageMarks'
+import {
+  erasePageMarksAt,
+  marksInsideLasso,
+  selectedMarkBounds,
+  translateSelectedMarks,
+  type NormalizedPoint,
+} from '@/components/lecture/pageMarkEditing'
 import { cn } from '@/utils/cn'
 
 const VIEW = 1000
@@ -55,10 +62,25 @@ type TouchScroll = {
 type EraserGesture = {
   pointerId: number
   last: [number, number]
-  original: PageMark[]
-  erased: Set<number>
   next: PageMark[]
+  changed: boolean
 }
+
+type LassoGesture =
+  | {
+      pointerId: number
+      mode: 'select'
+      points: NormalizedPoint[]
+    }
+  | {
+      pointerId: number
+      mode: 'move'
+      start: NormalizedPoint
+      selected: number[]
+      original: PageMark[]
+      bounds: { left: number; top: number; right: number; bottom: number }
+      delta: NormalizedPoint
+    }
 
 type GestureBounds = {
   left: number
@@ -81,7 +103,7 @@ type Props = {
   aspect: number
   /** 편집 중일 때만 온다. 없으면 그리기 없이 보여 주기만 한다. */
   onChange?: (marks: PageMark[]) => void
-  tool?: MarkTool | 'erase' | null
+  tool?: MarkTool | 'erase' | 'lasso' | null
   color?: string
   /** 새로 그릴 선의 굵기. 없으면 도구 기본값을 쓴다. */
   strokeWidth?: number
@@ -134,10 +156,14 @@ export function PageMarkLayer({
   const drawingFrame = useRef<number | null>(null)
   const erasingRef = useRef<EraserGesture | null>(null)
   const erasingFrame = useRef<number | null>(null)
+  const lassoRef = useRef<LassoGesture | null>(null)
   // 펜/형광펜 미리보기는 React 상태를 거치지 않고 아래 SVG path에 바로 그린다.
   // 매 프레임 저장된 필기까지 다시 비교하지 않아 긴 Pencil 획도 가볍게 따라온다.
   const [drawingShape, setDrawingShape] = useState<PageShape | null>(null)
   const [erasingMarks, setErasingMarks] = useState<PageMark[] | null>(null)
+  const [selectedMarks, setSelectedMarks] = useState<number[]>([])
+  const [lassoPoints, setLassoPoints] = useState<NormalizedPoint[]>([])
+  const [movingMarks, setMovingMarks] = useState<PageMark[] | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
   // 끄는 동안에는 여기에만 담는다. 움직일 때마다 본문에 쓰면 되돌리기 기록이
   // 프레임 수만큼 쌓이고 글 저장이 계속 흔들린다.
@@ -275,27 +301,27 @@ export function PageMarkLayer({
     if (!gesture || !box || box.width === 0 || box.height === 0) return
     const distance = Math.hypot((to[0] - from[0]) * box.width, (to[1] - from[1]) * box.height)
     const steps = Math.max(1, Math.ceil(distance / ERASER_SAMPLE_GAP_PX))
-    let changed = false
-
     for (let step = 0; step <= steps; step += 1) {
       const progress = step / steps
       const at: [number, number] = [
         from[0] + (to[0] - from[0]) * progress,
         from[1] + (to[1] - from[1]) * progress,
       ]
-      gesture.original.forEach((mark, index) => {
-        if (gesture.erased.has(index)) return
-        if (markHitByEraser(mark, at, box.width, box.height)) {
-          gesture.erased.add(index)
-          changed = true
-        }
-      })
+      const result = erasePageMarksAt(
+        gesture.next,
+        at,
+        box.width,
+        box.height,
+        ERASER_RADIUS_PX,
+      )
+      if (result.changed) {
+        gesture.next = result.marks
+        gesture.changed = true
+      }
     }
 
     gesture.last = to
-    if (!changed) return
-    gesture.next = gesture.original.filter((_, index) => !gesture.erased.has(index))
-    showErasingOnNextFrame()
+    if (gesture.changed) showErasingOnNextFrame()
   }
 
   function scheduleLineSnap(clientX: number, clientY: number) {
@@ -490,14 +516,42 @@ export function PageMarkLayer({
     // 남아 Pencil 입력을 방해하지 않게 즉시 걷는다.
     window.getSelection()?.removeAllRanges()
     onInteract?.()
+    if (tool === 'lasso') {
+      event.currentTarget.setPointerCapture(event.pointerId)
+      const selectionBounds = selectedMarkBounds(marks, selectedMarks)
+      const paddingX = ERASER_RADIUS_PX / gestureBoundsRef.current!.width
+      const paddingY = ERASER_RADIUS_PX / gestureBoundsRef.current!.height
+      const insideSelection = selectionBounds &&
+        at[0] >= selectionBounds.left - paddingX &&
+        at[0] <= selectionBounds.right + paddingX &&
+        at[1] >= selectionBounds.top - paddingY &&
+        at[1] <= selectionBounds.bottom + paddingY
+
+      if (insideSelection && selectionBounds && selectedMarks.length > 0) {
+        lassoRef.current = {
+          pointerId: event.pointerId,
+          mode: 'move',
+          start: at,
+          selected: selectedMarks,
+          original: marks,
+          bounds: selectionBounds,
+          delta: [0, 0],
+        }
+      } else {
+        setSelectedMarks([])
+        setMovingMarks(null)
+        setLassoPoints([at])
+        lassoRef.current = { pointerId: event.pointerId, mode: 'select', points: [at] }
+      }
+      return
+    }
     if (tool === 'erase') {
       event.currentTarget.setPointerCapture(event.pointerId)
       erasingRef.current = {
         pointerId: event.pointerId,
         last: at,
-        original: marks,
-        erased: new Set(),
         next: marks,
+        changed: false,
       }
       eraseBetween(at, at)
       return
@@ -558,6 +612,35 @@ export function PageMarkLayer({
       event.stopPropagation()
       touchScroll.target.scrollTop += touchScroll.lastY - event.clientY
       touchScroll.lastY = event.clientY
+      return
+    }
+
+    const lasso = lassoRef.current
+    if (lasso?.pointerId === event.pointerId) {
+      event.preventDefault()
+      event.stopPropagation()
+      const at = pointAt(event)
+      if (!at) return
+      if (lasso.mode === 'select') {
+        const previous = lasso.points[lasso.points.length - 1]
+        const box = gestureBoundsRef.current
+        if (
+          !previous ||
+          !box ||
+          Math.hypot((at[0] - previous[0]) * box.width, (at[1] - previous[1]) * box.height) >= 3
+        ) {
+          lasso.points.push(at)
+          setLassoPoints([...lasso.points])
+        }
+        return
+      }
+
+      const requestedX = at[0] - lasso.start[0]
+      const requestedY = at[1] - lasso.start[1]
+      const dx = Math.min(Math.max(requestedX, -lasso.bounds.left), 1 - lasso.bounds.right)
+      const dy = Math.min(Math.max(requestedY, -lasso.bounds.top), 1 - lasso.bounds.bottom)
+      lasso.delta = [dx, dy]
+      setMovingMarks(translateSelectedMarks(lasso.original, lasso.selected, dx, dy))
       return
     }
 
@@ -664,6 +747,34 @@ export function PageMarkLayer({
       event.preventDefault()
       event.stopPropagation()
     }
+    if (lassoRef.current?.pointerId === event.pointerId) {
+      const completed = lassoRef.current
+      lassoRef.current = null
+      const releasedAt = !cancelled ? pointAt(event) : null
+      gestureBoundsRef.current = null
+      setLassoPoints([])
+      setMovingMarks(null)
+      if (cancelled) {
+        if (completed.mode === 'select') setSelectedMarks([])
+        return
+      }
+      if (completed.mode === 'select') {
+        if (releasedAt) completed.points.push(releasedAt)
+        setSelectedMarks(marksInsideLasso(marks, completed.points))
+        return
+      }
+      if (Math.abs(completed.delta[0]) > 0.0001 || Math.abs(completed.delta[1]) > 0.0001) {
+        onChange?.(
+          translateSelectedMarks(
+            completed.original,
+            completed.selected,
+            completed.delta[0],
+            completed.delta[1],
+          ),
+        )
+      }
+      return
+    }
     if (erasingRef.current?.pointerId === event.pointerId) {
       const completed = erasingRef.current
       erasingRef.current = null
@@ -671,7 +782,7 @@ export function PageMarkLayer({
       erasingFrame.current = null
       gestureBoundsRef.current = null
       setErasingMarks(null)
-      if (completed.erased.size > 0) onChange?.(completed.next)
+      if (completed.changed) onChange?.(completed.next)
       return
     }
     if (drawingPointerId.current !== event.pointerId) return
@@ -787,7 +898,10 @@ export function PageMarkLayer({
     window.addEventListener('pointercancel', onUp)
   }
 
-  const visibleMarks = erasingMarks ?? marks
+  const visibleMarks = movingMarks ?? erasingMarks ?? marks
+  const selectionBounds = tool === 'lasso'
+    ? selectedMarkBounds(visibleMarks, selectedMarks)
+    : null
   const savedStrokePaths = useMemo(
     () =>
       visibleMarks.flatMap((mark, index) => {
@@ -873,6 +987,32 @@ export function PageMarkLayer({
             erase={false}
           />
         )}
+        {lassoPoints.length > 1 && (
+          <polyline
+            points={lassoPoints.map(([x, y]) => `${x * VIEW},${y * height}`).join(' ')}
+            fill="rgb(59 130 246 / 0.08)"
+            stroke="#2563eb"
+            strokeWidth={1.5}
+            strokeDasharray="6 5"
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        )}
+        {selectionBounds && (
+          <rect
+            x={selectionBounds.left * VIEW - 5}
+            y={selectionBounds.top * height - 5}
+            width={(selectionBounds.right - selectionBounds.left) * VIEW + 10}
+            height={(selectionBounds.bottom - selectionBounds.top) * height + 10}
+            rx={5}
+            fill="rgb(59 130 246 / 0.05)"
+            stroke="#2563eb"
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        )}
         <path ref={liveStrokePath} style={{ display: 'none', pointerEvents: 'none' }} />
       </svg>
 
@@ -949,74 +1089,6 @@ export function PageMarkLayer({
       )}
     </>
   )
-}
-
-function pointToSegmentDistance(
-  px: number,
-  py: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): number {
-  const dx = x2 - x1
-  const dy = y2 - y1
-  if (dx === 0 && dy === 0) return Math.hypot(px - x1, py - y1)
-  const progress = Math.min(Math.max(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0), 1)
-  return Math.hypot(px - (x1 + progress * dx), py - (y1 + progress * dy))
-}
-
-function markHitByEraser(
-  mark: PageMark,
-  at: [number, number],
-  scaleX: number,
-  scaleY: number,
-): boolean {
-  const px = at[0] * scaleX
-  const py = at[1] * scaleY
-
-  if (isPageText(mark)) {
-    return Math.hypot(px - mark.points[0] * scaleX, py - mark.points[1] * scaleY) <= ERASER_RADIUS_PX * 1.4
-  }
-
-  if (isPageShape(mark)) {
-    const x1 = mark.points[0] * scaleX
-    const y1 = mark.points[1] * scaleY
-    const x2 = mark.points[2] * scaleX
-    const y2 = mark.points[3] * scaleY
-    const left = Math.min(x1, x2)
-    const right = Math.max(x1, x2)
-    const top = Math.min(y1, y2)
-    const bottom = Math.max(y1, y2)
-    const threshold = ERASER_RADIUS_PX + (mark.width * scaleX) / 2
-    return (
-      pointToSegmentDistance(px, py, left, top, right, top) <= threshold ||
-      pointToSegmentDistance(px, py, right, top, right, bottom) <= threshold ||
-      pointToSegmentDistance(px, py, right, bottom, left, bottom) <= threshold ||
-      pointToSegmentDistance(px, py, left, bottom, left, top) <= threshold
-    )
-  }
-
-  const pressureExpansion = mark.tool === 'pen' && mark.pressures ? 1.45 : 1
-  const threshold = ERASER_RADIUS_PX + (mark.width * scaleX * pressureExpansion) / 2
-  if (mark.points.length === 2) {
-    return Math.hypot(px - mark.points[0] * scaleX, py - mark.points[1] * scaleY) <= threshold
-  }
-  for (let index = 2; index < mark.points.length; index += 2) {
-    if (
-      pointToSegmentDistance(
-        px,
-        py,
-        mark.points[index - 2] * scaleX,
-        mark.points[index - 1] * scaleY,
-        mark.points[index] * scaleX,
-        mark.points[index + 1] * scaleY,
-      ) <= threshold
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 function isShapeTool(tool: MarkTool): tool is 'rectangle' | 'star' {

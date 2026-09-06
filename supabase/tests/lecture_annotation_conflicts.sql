@@ -42,6 +42,7 @@ begin
      set marks = '[]'::jsonb
    where user_id = test_user_id
      and lecture_id = test_lecture_id
+     and variant_id is null
      and page_number = 2147483647
   returning revision into directly_bumped_revision;
   if directly_bumped_revision <> 2 then
