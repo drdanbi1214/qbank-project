@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
+import { AnnouncementReactions } from '@/components/announcement/AnnouncementReactions'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -25,7 +26,7 @@ export function AnnouncementsPage() {
 
   useEffect(() => {
     let active = true
-    void fetchAnnouncements()
+    void fetchAnnouncements(null, userId)
       .then((items) => {
         if (active) {
           setLoaded({ key: reloadKey, items })
@@ -40,7 +41,8 @@ export function AnnouncementsPage() {
     return () => {
       active = false
     }
-  }, [reloadKey])
+  // userId 가 늦게 잡히면 내 추천 표시가 빠진 채로 남는다.
+  }, [reloadKey, userId])
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), [])
 
@@ -120,6 +122,7 @@ export function AnnouncementsPage() {
                 )}
               </div>
               <RichTextViewer doc={item.content} />
+              <AnnouncementReactions announcement={item} />
             </li>
           ))}
         </ul>

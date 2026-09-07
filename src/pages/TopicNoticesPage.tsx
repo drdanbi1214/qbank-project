@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
+import { AnnouncementReactions } from '@/components/announcement/AnnouncementReactions'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
@@ -70,13 +71,14 @@ export function TopicNoticesPage() {
 
   const load = useCallback(() => {
     if (!canUse) return
-    void fetchAnnouncements(SCOPE)
+    void fetchAnnouncements(SCOPE, userId)
       .then(setRows)
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '공지를 불러오지 못했습니다.')
         setRows([])
       })
-  }, [canUse])
+  // userId 가 늦게 잡히면 내 추천 표시가 빠진 채로 남는다.
+  }, [canUse, userId])
 
   useEffect(load, [load])
 
@@ -293,6 +295,7 @@ export function TopicNoticesPage() {
                 </span>
               </div>
               <RichTextViewer doc={row.content} />
+              <AnnouncementReactions announcement={row} />
               </li>
             )
           })}

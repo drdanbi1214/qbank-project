@@ -29,7 +29,7 @@ export type ClusterSibling = {
   id: string
   examId: string
   questionNumber: number
-  variantType: VariantType
+  variantType: ClusterRole
   /** modified 일 때만 화면에 그린다. identical 은 배너로 끝낸다. */
   stemBlocks: StemBlock[]
   choices: Choice[]
@@ -81,15 +81,12 @@ export async function fetchClusterSiblings(
 
   return ((data ?? []) as SiblingRow[]).flatMap((row) => {
     if (!row.id || !row.exam_id) return []
-    // 대표 문제(original)는 형제 목록에 넣지 않는다. 기준이 되는 문제라
-    // 배너에도 변주 카드에도 해당하지 않는다.
-    if (row.variant_type !== 'identical' && row.variant_type !== 'modified') return []
     return [
       {
         id: row.id,
         examId: row.exam_id,
         questionNumber: row.question_number ?? 0,
-        variantType: row.variant_type,
+        variantType: toClusterRole(row.variant_type),
         stemBlocks: parseStemBlocks(row.stem_blocks),
         choices: parseChoices(row.choices),
         questionCode: row.question_code,
@@ -202,7 +199,8 @@ export async function recordClusterAttachFailure(params: {
     p_target_id: params.targetId,
     p_variant: params.variant,
     p_error_message: params.errorMessage,
-    p_error_code: params.errorCode ?? null,
+    // 생성된 타입은 기본값 있는 인자를 optional 로 잡는다. 키를 빼면 DB 기본값(NULL)이 쓰인다.
+    p_error_code: params.errorCode ?? undefined,
   })
   if (error) throw error
 }

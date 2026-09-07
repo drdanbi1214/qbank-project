@@ -13,6 +13,8 @@ export type NotificationType =
   | 'discussion_reply'
   | 'answer_accepted'
   | 'announcement'
+  | 'announcement_upvote'
+  | 'announcement_comment'
 
 export type AppNotification = {
   id: string
@@ -36,6 +38,8 @@ export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   discussion_reply: '게시글 댓글',
   answer_accepted: '답변 채택',
   announcement: '공지',
+  announcement_upvote: '공지 추천',
+  announcement_comment: '공지 댓글',
 }
 
 export async function fetchNotifications(limit = 50): Promise<AppNotification[]> {
@@ -102,8 +106,17 @@ export async function resolveNotificationLink(
       return `/discussions?post=${targetId}`
     case 'question':
       return `/solve?question=${targetId}`
-    case 'announcement':
-      return '/announcements'
+    case 'announcement': {
+      const { data } = await supabase
+        .from('announcements')
+        .select('required_permission')
+        .eq('id', targetId)
+        .maybeSingle()
+
+      // 레옵스 공지는 /topics/notices 에 있다. 한쪽으로 몰면 빈 화면이 열린다.
+      const path = data?.required_permission === 'study_legendob' ? '/topics/notices' : '/announcements'
+      return `${path}#announcement-${targetId}`
+    }
     case 'solution': {
       const { data, error } = await supabase
         .from('solutions')
@@ -140,6 +153,10 @@ export type Announcement = {
   isPinned: boolean
   author: Author | null
   createdAt: string
+  upvoteCount: number
+  commentCount: number
+  /** 지금 로그인한 사람이 추천했는지 */
+  upvoted: boolean
 }
 
 export type AnnouncementPreview = Pick<Announcement, 'id' | 'title' | 'content' | 'createdAt'>
@@ -152,11 +169,12 @@ export type AnnouncementPreview = Pick<Announcement, 'id' | 'title' | 'content' 
  */
 export async function fetchAnnouncements(
   requiredPermission: string | null = null,
+  userId = '',
 ): Promise<Announcement[]> {
   let query = supabase
     .from('announcements')
     .select(
-      `id, title, content, is_pinned, author_id, created_at,
+      `id, title, content, is_pinned, author_id, created_at, upvote_count, comment_count,
        profiles!announcements_author_id_fkey (id, display_name, avatar_url)`,
     )
 
@@ -170,21 +188,30 @@ export async function fetchAnnouncements(
 
   if (error) throw error
 
-  return ((data ?? []) as unknown as {
+  const rows = (data ?? []) as unknown as {
     id: string
     title: string
     content: unknown
     is_pinned: boolean
     author_id: string | null
     created_at: string
+    upvote_count: number
+    comment_count: number
     profiles: { id: string; display_name: string; avatar_url: string | null } | null
-  }[]).map((row) => ({
+  }[]
+
+  const mine = await fetchMyAnnouncementUpvotes(rows.map((row) => row.id), userId)
+
+  return rows.map((row) => ({
     id: row.id,
     title: row.title,
     content: parseRichDoc(row.content),
     isPinned: row.is_pinned,
     author: row.author_id ? toAuthor(row.profiles, row.author_id) : null,
     createdAt: row.created_at,
+    upvoteCount: row.upvote_count,
+    commentCount: row.comment_count,
+    upvoted: mine.has(row.id),
   }))
 }
 
@@ -214,6 +241,134 @@ export async function fetchLatestAnnouncement(
     content: parseRichDoc(data.content),
     createdAt: data.created_at,
   }
+}
+
+// -----------------------------------------------------------------------------
+// 공지 추천·댓글
+// -----------------------------------------------------------------------------
+
+async function fetchMyAnnouncementUpvotes(ids: string[], userId: string): Promise<Set<string>> {
+  if (ids.length === 0 || !userId) return new Set()
+  const { data, error } = await supabase
+    .from('announcement_upvotes')
+    .select('announcement_id')
+    .eq('user_id', userId)
+    .in('announcement_id', ids)
+
+  if (error) {
+    // 추천 표시가 없다고 공지 목록까지 못 보게 할 이유는 없다.
+    console.error('공지 추천 상태를 불러오지 못했습니다.', error)
+    return new Set()
+  }
+  return new Set((data ?? []).map((row) => row.announcement_id))
+}
+
+/** 추천을 켜고 끈다. 알림은 DB 트리거가 보내며 껐다 켜도 한 번만 간다. */
+export async function toggleAnnouncementUpvote(
+  announcementId: string,
+  userId: string,
+  on: boolean,
+): Promise<void> {
+  if (on) {
+    const { error } = await supabase
+      .from('announcement_upvotes')
+      .insert({ announcement_id: announcementId, user_id: userId })
+    if (error) throw error
+    return
+  }
+  const { error } = await supabase
+    .from('announcement_upvotes')
+    .delete()
+    .eq('announcement_id', announcementId)
+    .eq('user_id', userId)
+  if (error) throw error
+}
+
+export type AnnouncementComment = {
+  id: string
+  parentId: string | null
+  author: Author
+  content: RichDoc
+  isDeleted: boolean
+  createdAt: string
+  children: AnnouncementComment[]
+}
+
+export async function fetchAnnouncementComments(
+  announcementId: string,
+): Promise<AnnouncementComment[]> {
+  const { data, error } = await supabase
+    .from('announcement_comments')
+    .select(
+      `id, parent_id, author_id, content, is_deleted, created_at,
+       profiles!announcement_comments_author_id_fkey (id, display_name, avatar_url)`,
+    )
+    .eq('announcement_id', announcementId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+
+  const rows = (data ?? []) as unknown as {
+    id: string
+    parent_id: string | null
+    author_id: string
+    content: unknown
+    is_deleted: boolean
+    created_at: string
+    profiles: { id: string; display_name: string; avatar_url: string | null } | null
+  }[]
+
+  const byId = new Map<string, AnnouncementComment>()
+  for (const row of rows) {
+    byId.set(row.id, {
+      id: row.id,
+      parentId: row.parent_id,
+      author: toAuthor(row.profiles, row.author_id),
+      content: parseRichDoc(row.content),
+      isDeleted: row.is_deleted,
+      createdAt: row.created_at,
+      children: [],
+    })
+  }
+
+  const roots: AnnouncementComment[] = []
+  for (const row of rows) {
+    const comment = byId.get(row.id)
+    if (!comment) continue
+    const parent = row.parent_id ? byId.get(row.parent_id) : null
+    if (parent) parent.children.push(comment)
+    else roots.push(comment)
+  }
+  return roots
+}
+
+export async function createAnnouncementComment(params: {
+  announcementId: string
+  authorId: string
+  parentId: string | null
+  content: RichDoc
+}): Promise<void> {
+  const { error } = await supabase.from('announcement_comments').insert({
+    announcement_id: params.announcementId,
+    author_id: params.authorId,
+    parent_id: params.parentId,
+    content: toJson(params.content),
+  })
+  if (error) throw error
+}
+
+export async function updateAnnouncementComment(id: string, content: RichDoc): Promise<void> {
+  const { error } = await supabase
+    .from('announcement_comments')
+    .update({ content: toJson(content) })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** 답글이 달린 댓글은 DB 트리거가 내용만 비운다. */
+export async function deleteAnnouncementComment(id: string): Promise<void> {
+  const { error } = await supabase.from('announcement_comments').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function createAnnouncement(params: {

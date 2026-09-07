@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       access_permissions: {
@@ -115,9 +90,98 @@ export type Database = {
           },
         ]
       }
+      announcement_comments: {
+        Row: {
+          announcement_id: string
+          author_id: string
+          content: Json
+          created_at: string
+          id: string
+          is_deleted: boolean
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          announcement_id: string
+          author_id: string
+          content: Json
+          created_at?: string
+          id?: string
+          is_deleted?: boolean
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          announcement_id?: string
+          author_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          is_deleted?: boolean
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_comments_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "announcement_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_upvotes: {
+        Row: {
+          announcement_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_upvotes_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_upvotes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           author_id: string | null
+          comment_count: number
           content: Json
           created_at: string
           id: string
@@ -125,9 +189,11 @@ export type Database = {
           required_permission: string | null
           title: string
           updated_at: string
+          upvote_count: number
         }
         Insert: {
           author_id?: string | null
+          comment_count?: number
           content: Json
           created_at?: string
           id?: string
@@ -135,9 +201,11 @@ export type Database = {
           required_permission?: string | null
           title: string
           updated_at?: string
+          upvote_count?: number
         }
         Update: {
           author_id?: string | null
+          comment_count?: number
           content?: Json
           created_at?: string
           id?: string
@@ -145,6 +213,7 @@ export type Database = {
           required_permission?: string | null
           title?: string
           updated_at?: string
+          upvote_count?: number
         }
         Relationships: [
           {
@@ -1597,6 +1666,7 @@ export type Database = {
           default_solution_permission: string | null
           display_name: string
           email: string | null
+          font_family: string
           font_scale: number
           id: string
           is_suspended: boolean
@@ -1613,6 +1683,7 @@ export type Database = {
           default_solution_permission?: string | null
           display_name: string
           email?: string | null
+          font_family?: string
           font_scale?: number
           id: string
           is_suspended?: boolean
@@ -1629,6 +1700,7 @@ export type Database = {
           default_solution_permission?: string | null
           display_name?: string
           email?: string | null
+          font_family?: string
           font_scale?: number
           id?: string
           is_suspended?: boolean
@@ -3099,7 +3171,7 @@ export type Database = {
           anchor_question_code: string
           anchor_question_id: string
           created_at: string
-          error_code: string | null
+          error_code: string
           error_message: string
           id: string
           target_question_code: string
@@ -3175,6 +3247,7 @@ export type Database = {
         Args: { p_bucket: string; p_object_name: string; p_operation?: string }
         Returns: boolean
       }
+      can_access_announcement: { Args: { p_id: string }; Returns: boolean }
       can_cluster: { Args: never; Returns: boolean }
       can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
       can_read_exam_source: {
@@ -3297,6 +3370,7 @@ export type Database = {
           default_solution_permission: string | null
           display_name: string
           email: string | null
+          font_family: string
           font_scale: number
           id: string
           is_suspended: boolean
@@ -3416,12 +3490,12 @@ export type Database = {
       record_cluster_attach_failure: {
         Args: {
           p_anchor_id: string
-          p_error_code?: string | null
+          p_error_code?: string
           p_error_message: string
           p_target_id: string
           p_variant: string
         }
-        Returns: string | null
+        Returns: string
       }
       reset_progress: {
         Args: { p_exam_id?: string; p_subject_id?: string; p_unit_id?: string }
@@ -3692,9 +3766,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

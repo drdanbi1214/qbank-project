@@ -21,6 +21,7 @@ export type IconName =
   | 'logout'
   | 'search'
   | 'shuffle'
+  | 'thumbs-up'
   | 'stethoscope'
   | 'scalpel'
   | 'venus'
@@ -53,6 +54,7 @@ const PATHS: Record<IconName, string> = {
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16M21 21l-4.3-4.3',
   shuffle: 'M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5',
+  'thumbs-up': 'M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM7 10l4.5-7a2.5 2.5 0 0 1 2.4 3.2L13 10h5.5a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17 21H7',
 
   // 과목 아이콘. 목록에서 과목을 한눈에 구별하려고 기관/도구 모양으로 그린다.
   stethoscope: 'M6 3v6a4 4 0 0 0 8 0V3M4 3h4M12 3h4M10 13v3a4 4 0 0 0 8 0v-3M18 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4',
