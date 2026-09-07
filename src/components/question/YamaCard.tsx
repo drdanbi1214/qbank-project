@@ -116,7 +116,7 @@ function YamaBody({
   const editing = Boolean(onRemove)
   const canCluster = editing && (isAdmin || hasPermission('study_legendob'))
 
-  const { groupId, cards, identicalOf, attach, detach, ensureGroup } = useCluster(
+  const { groupId, cards, identicalOf, attach, detach } = useCluster(
     question.id,
     question.groupId,
   )
@@ -124,8 +124,6 @@ function YamaBody({
   /** 어느 카드에 무엇을 붙이는 중인지 */
   const [adding, setAdding] = useState<{ anchorId: string; variant: VariantType } | null>(null)
   const [peeking, setPeeking] = useState<ClusterSibling | null>(null)
-  const [solutionGroupId, setSolutionGroupId] = useState<string | null>(groupId)
-  const preparing = canCluster && solutionGroupId === null
 
   const examLabel = useCallback(
     (examId: string) => {
@@ -169,21 +167,6 @@ function YamaBody({
       : cardCount === 2
         ? 'lg:columns-2 lg:gap-x-2.5'
         : undefined
-
-  // 해설은 항상 그룹에 붙인다. 그룹 없이 문제에 붙이면 나중에 판본을 묶어도
-  // 해설이 따라가지 않는다. 테마에 꽂힌 야마는 어차피 묶을 대상이므로 미리 만든다.
-  useEffect(() => {
-    if (!canCluster || solutionGroupId) return
-    let active = true
-    void ensureGroup()
-      .then((id) => {
-        if (active) setSolutionGroupId(id)
-      })
-      .catch((caught: unknown) => console.error('야마 그룹을 준비하지 못했습니다.', caught))
-    return () => {
-      active = false
-    }
-  }, [canCluster, solutionGroupId, ensureGroup])
 
   return (
     <div
@@ -246,8 +229,8 @@ function YamaBody({
           choices={question.choices}
           note={null}
           identical={identicalOf.get(question.id) ?? []}
-          solutionGroupId={solutionGroupId}
-          preparing={preparing}
+          solutionGroupId={groupId}
+          preparing={false}
           canCluster={canCluster}
           examLabelOf={examLabel}
           onPeek={setPeeking}
@@ -291,7 +274,7 @@ function YamaBody({
       {peeking && (
         <QuestionPeek
           row={peeking}
-          groupId={solutionGroupId}
+          groupId={groupId}
           title={`${examLabel(peeking.examId)} ${peeking.questionNumber}번`}
           onClose={() => setPeeking(null)}
         />
