@@ -2719,6 +2719,61 @@ export type Database = {
           },
         ]
       }
+      topic_comments: {
+        Row: {
+          author_id: string
+          content: Json
+          created_at: string
+          id: string
+          is_deleted: boolean
+          parent_id: string | null
+          topic_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          content: Json
+          created_at?: string
+          id?: string
+          is_deleted?: boolean
+          parent_id?: string | null
+          topic_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          is_deleted?: boolean
+          parent_id?: string | null
+          topic_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "topic_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_comments_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       topic_questions: {
         Row: {
           position: number
@@ -2789,8 +2844,42 @@ export type Database = {
           },
         ]
       }
+      topic_upvotes: {
+        Row: {
+          created_at: string
+          topic_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          topic_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          topic_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_upvotes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_upvotes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       topics: {
         Row: {
+          comment_count: number
           content: Json
           created_at: string
           created_by: string | null
@@ -2801,8 +2890,10 @@ export type Database = {
           unit_id: string | null
           updated_at: string
           updated_by: string | null
+          upvote_count: number
         }
         Insert: {
+          comment_count?: number
           content?: Json
           created_at?: string
           created_by?: string | null
@@ -2813,8 +2904,10 @@ export type Database = {
           unit_id?: string | null
           updated_at?: string
           updated_by?: string | null
+          upvote_count?: number
         }
         Update: {
+          comment_count?: number
           content?: Json
           created_at?: string
           created_by?: string | null
@@ -2825,6 +2918,7 @@ export type Database = {
           unit_id?: string | null
           updated_at?: string
           updated_by?: string | null
+          upvote_count?: number
         }
         Relationships: [
           {
@@ -3248,6 +3342,7 @@ export type Database = {
         Returns: boolean
       }
       can_access_announcement: { Args: { p_id: string }; Returns: boolean }
+      can_access_topic: { Args: { p_id: string }; Returns: boolean }
       can_cluster: { Args: never; Returns: boolean }
       can_edit_topic: { Args: { p_permission: string }; Returns: boolean }
       can_read_exam_source: {

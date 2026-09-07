@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import {
-  createAnnouncementComment,
-  deleteAnnouncementComment,
-  fetchAnnouncementComments,
-  updateAnnouncementComment,
-  type AnnouncementComment,
-} from '@/lib/queries/notifications'
+  createPostComment,
+  deletePostComment,
+  fetchPostComments,
+  updatePostComment,
+  type PostComment,
+  type PostTarget,
+} from '@/lib/queries/postReactions'
 import { emptyDoc, isEmptyDoc, type RichDoc } from '@/types/richtext'
 import { formatShortDate } from '@/utils/date'
 import { cn } from '@/utils/cn'
@@ -20,20 +21,20 @@ import { cn } from '@/utils/cn'
 const PLACEHOLDER = '명예훼손, 무단광고, 불법정보 유포 시 삭제 될 수 있습니다.'
 
 /**
- * 공지 댓글.
+ * 게시물 댓글.
  *
  * 게시판의 CommentThread 는 채택과 댓글별 추천에 묶여 있어 그대로 쓰지 못한다.
- * 공지 댓글에는 그 두 가지가 없으므로 편집기만 공유하고 따로 그린다.
+ * 게시물 댓글에는 그 두 가지가 없으므로 편집기만 공유하고 따로 그린다.
  * 깊이는 DB 트리거가 2단계로 막으므로 대댓글에는 답글 입력을 열지 않는다.
  */
-export function AnnouncementComments({ announcementId }: { announcementId: string }) {
+export function PostComments({ kind, id }: PostTarget) {
   const { session, isAdmin } = useAuth()
   const userId = session?.user.id ?? ''
-  const [comments, setComments] = useState<AnnouncementComment[] | null>(null)
+  const [comments, setComments] = useState<PostComment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    void fetchAnnouncementComments(announcementId)
+    void fetchPostComments({ kind, id })
       .then((rows) => {
         setComments(rows)
         setError(null)
@@ -41,7 +42,7 @@ export function AnnouncementComments({ announcementId }: { announcementId: strin
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '댓글을 불러오지 못했습니다.')
       })
-  }, [announcementId])
+  }, [kind, id])
 
   useEffect(load, [load])
 
@@ -60,7 +61,7 @@ export function AnnouncementComments({ announcementId }: { announcementId: strin
             <li key={comment.id}>
               <CommentRow
                 comment={comment}
-                announcementId={announcementId}
+                kind={kind} id={id}
                 userId={userId}
                 isAdmin={isAdmin}
                 onChanged={load}
@@ -74,7 +75,7 @@ export function AnnouncementComments({ announcementId }: { announcementId: strin
                     >
                       <CommentRow
                         comment={child}
-                        announcementId={announcementId}
+                        kind={kind} id={id}
                         userId={userId}
                         isAdmin={isAdmin}
                         canReply={false}
@@ -89,21 +90,23 @@ export function AnnouncementComments({ announcementId }: { announcementId: strin
         </ul>
       )}
 
-      {userId && <Composer announcementId={announcementId} userId={userId} onDone={load} />}
+      {userId && <Composer kind={kind} id={id} userId={userId} onDone={load} />}
     </div>
   )
 }
 
 function CommentRow({
   comment,
-  announcementId,
+  kind,
+  id,
   userId,
   isAdmin,
   canReply = true,
   onChanged,
 }: {
-  comment: AnnouncementComment
-  announcementId: string
+  comment: PostComment
+  kind: PostTarget['kind']
+  id: string
   userId: string
   isAdmin: boolean
   canReply?: boolean
@@ -121,7 +124,7 @@ function CommentRow({
   async function remove() {
     if (!window.confirm('댓글을 삭제할까요?')) return
     try {
-      await deleteAnnouncementComment(comment.id)
+      await deletePostComment({ kind, id }, comment.id)
       onChanged()
     } catch (caught) {
       console.error('댓글을 삭제하지 못했습니다.', caught)
@@ -131,7 +134,7 @@ function CommentRow({
   if (editing) {
     return (
       <Composer
-        announcementId={announcementId}
+        kind={kind} id={id}
         userId={userId}
         editing={{ id: comment.id, content: comment.content }}
         onDone={() => {
@@ -189,7 +192,7 @@ function CommentRow({
       {replying && (
         <div className="mt-2">
           <Composer
-            announcementId={announcementId}
+            kind={kind} id={id}
             userId={userId}
             parentId={comment.id}
             onDone={() => {
@@ -205,14 +208,16 @@ function CommentRow({
 }
 
 function Composer({
-  announcementId,
+  kind,
+  id,
   userId,
   parentId = null,
   editing = null,
   onDone,
   onCancel,
 }: {
-  announcementId: string
+  kind: PostTarget['kind']
+  id: string
   userId: string
   parentId?: string | null
   editing?: { id: string; content: RichDoc } | null
@@ -234,10 +239,10 @@ function Composer({
     setError(null)
     try {
       if (editing) {
-        await updateAnnouncementComment(editing.id, doc.current)
+        await updatePostComment({ kind, id }, editing.id, doc.current)
       } else {
-        await createAnnouncementComment({
-          announcementId,
+        await createPostComment({
+          target: { kind, id },
           authorId: userId,
           parentId,
           content: doc.current,

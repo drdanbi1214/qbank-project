@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
-import { AnnouncementReactions } from '@/components/announcement/AnnouncementReactions'
+import { PostReactions } from '@/components/post/PostReactions'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -122,7 +122,14 @@ export function AnnouncementsPage() {
                 )}
               </div>
               <RichTextViewer doc={item.content} />
-              <AnnouncementReactions announcement={item} />
+              <PostReactions
+                kind="announcement"
+                id={item.id}
+                authorId={item.author?.id ?? null}
+                upvoteCount={item.upvoteCount}
+                commentCount={item.commentCount}
+                upvoted={item.upvoted}
+              />
             </li>
           ))}
         </ul>

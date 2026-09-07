@@ -17,6 +17,7 @@ import {
   updateTopic,
   type Topic,
 } from '@/lib/queries/topics'
+import { PostReactions } from '@/components/post/PostReactions'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { TopicScopeProvider } from '@/components/question/TopicContext'
 import { LecturePicker } from '@/components/lecture/LecturePicker'
@@ -83,13 +84,14 @@ export function TopicsPage() {
 
   const load = useCallback(() => {
     if (!subjectId) return
-    void fetchTopics(subjectId)
+    void fetchTopics(subjectId, userId)
       .then(setTopics)
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '주제를 불러오지 못했습니다.')
         setTopics([])
       })
-  }, [subjectId])
+  // userId 가 늦게 잡히면 내 추천 표시가 빠진 채로 남는다.
+  }, [subjectId, userId])
 
   useEffect(load, [load])
 
@@ -643,7 +645,18 @@ export function TopicsPage() {
                   onRequestLecture={userId ? requestLecture : undefined}
                 />
               ) : (
-                <RichTextViewer doc={selected.content} />
+                <>
+                  <RichTextViewer doc={selected.content} />
+                  <PostReactions
+                    key={selected.id}
+                    kind="topic"
+                    id={selected.id}
+                    authorId={selected.createdBy}
+                    upvoteCount={selected.upvoteCount}
+                    commentCount={selected.commentCount}
+                    upvoted={selected.upvoted}
+                  />
+                </>
               )}
               </TopicScopeProvider>
             </div>

@@ -1,23 +1,40 @@
 import { useState } from 'react'
-import { AnnouncementComments } from '@/components/announcement/AnnouncementComments'
+import { PostComments } from '@/components/post/PostComments'
 import { Icon } from '@/components/ui/Icon'
 import { useAuth } from '@/lib/auth'
-import { toggleAnnouncementUpvote, type Announcement } from '@/lib/queries/notifications'
+import { togglePostUpvote, type PostTarget } from '@/lib/queries/postReactions'
 import { cn } from '@/utils/cn'
 
+type Props = PostTarget & {
+  /** 글쓴이. 자기 글은 추천할 수 없다. */
+  authorId: string | null
+  upvoteCount: number
+  commentCount: number
+  upvoted: boolean
+}
+
 /**
- * 공지 맨 아래의 추천·댓글 줄.
+ * 글 맨 아래의 추천·댓글 줄. 공지와 테마가 같이 쓴다.
  *
  * 추천 알림은 DB 트리거가 보낸다. 껐다 켜도 알림은 한 번만 가고, 글쓴이
  * 자신에게는 가지 않는다.
  */
-export function AnnouncementReactions({ announcement }: { announcement: Announcement }) {
+export function PostReactions({
+  kind,
+  id,
+  authorId,
+  upvoteCount,
+  commentCount,
+  upvoted: initialUpvoted,
+}: Props) {
+  // 다른 글로 옮기면 부모가 key 를 갈아 끼워 이 컴포넌트를 새로 만든다.
+  // 그래서 여기서는 처음 받은 값만 들고 있어도 된다.
   const { session } = useAuth()
   const userId = session?.user.id ?? ''
-  const isAuthor = announcement.author?.id === userId
+  const isAuthor = !!authorId && authorId === userId
 
-  const [upvoted, setUpvoted] = useState(announcement.upvoted)
-  const [count, setCount] = useState(announcement.upvoteCount)
+  const [upvoted, setUpvoted] = useState(initialUpvoted)
+  const [count, setCount] = useState(upvoteCount)
   const [openComments, setOpenComments] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -29,7 +46,7 @@ export function AnnouncementReactions({ announcement }: { announcement: Announce
     setCount((prev) => prev + (next ? 1 : -1))
     setBusy(true)
     try {
-      await toggleAnnouncementUpvote(announcement.id, userId, next)
+      await togglePostUpvote({ kind, id }, userId, next)
     } catch (caught) {
       setUpvoted(!next)
       setCount((prev) => prev + (next ? -1 : 1))
@@ -56,7 +73,7 @@ export function AnnouncementReactions({ announcement }: { announcement: Announce
           )}
         >
           <Icon name="thumbs-up" size={16} />
-          추천 {count}
+          좋아요 {count}
         </button>
 
         <button
@@ -65,13 +82,13 @@ export function AnnouncementReactions({ announcement }: { announcement: Announce
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-sm text-slate-600 transition-colors hover:border-emerald-300 dark:border-slate-700 dark:text-slate-300"
         >
           <Icon name="board" size={16} />
-          댓글 {announcement.commentCount}
+          댓글 {commentCount}
         </button>
       </div>
 
       {openComments && (
         <div className="mt-3">
-          <AnnouncementComments announcementId={announcement.id} />
+          <PostComments kind={kind} id={id} />
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { fetchMyUpvotes } from '@/lib/queries/postReactions'
 import type { Database } from '@/types/database'
 import { toAuthor, type Author } from '@/lib/queries/solutions'
 import { emptyDoc, parseRichDoc, toJson, type RichDoc, type RichNode } from '@/types/richtext'
@@ -28,6 +29,10 @@ export type Topic = {
   /** 처음 쓴 사람. 프로필이 없으면 null */
   author: Author | null
   updatedAt: string
+  upvoteCount: number
+  commentCount: number
+  /** 지금 로그인한 사람이 추천했는지 */
+  upvoted: boolean
 }
 
 type TopicRow = {
@@ -42,14 +47,17 @@ type TopicRow = {
   updated_at: string
   topic_units?: { unit_id: string }[] | null
   profiles?: { id: string; display_name: string; avatar_url: string | null } | null
+  upvote_count: number
+  comment_count: number
 }
 
 const TOPIC_SELECT =
   `id, subject_id, unit_id, title, content, required_permission, created_by, updated_by, updated_at,
+   upvote_count, comment_count,
    topic_units (unit_id),
    profiles!topics_created_by_fkey (id, display_name, avatar_url)`
 
-function toTopic(row: TopicRow): Topic {
+function toTopic(row: TopicRow, upvoted: Set<string> = new Set()): Topic {
   return {
     id: row.id,
     subjectId: row.subject_id,
@@ -62,6 +70,9 @@ function toTopic(row: TopicRow): Topic {
     updatedBy: row.updated_by,
     author: row.created_by ? toAuthor(row.profiles ?? null, row.created_by) : null,
     updatedAt: row.updated_at,
+    upvoteCount: row.upvote_count,
+    commentCount: row.comment_count,
+    upvoted: upvoted.has(row.id),
   }
 }
 
@@ -71,7 +82,7 @@ function toTopic(row: TopicRow): Topic {
  * 본문이 큰 편이지만 한 과목의 테마가 수백 개가 될 일은 없고, 목록에서 미리보기
  * 몇 줄을 보여주려면 어차피 필요하다. 무거워지면 그때 나눈다.
  */
-export async function fetchTopics(subjectId: string): Promise<Topic[]> {
+export async function fetchTopics(subjectId: string, userId = ''): Promise<Topic[]> {
   const { data, error } = await supabase
     .from('topics')
     .select(TOPIC_SELECT)
@@ -79,7 +90,9 @@ export async function fetchTopics(subjectId: string): Promise<Topic[]> {
     .order('title')
 
   if (error) throw error
-  return ((data ?? []) as TopicRow[]).map(toTopic)
+  const rows = (data ?? []) as TopicRow[]
+  const upvoted = await fetchMyUpvotes('topic', rows.map((row) => row.id), userId)
+  return rows.map((row) => toTopic(row, upvoted))
 }
 
 /**
@@ -99,7 +112,7 @@ export async function fetchAllTopicCounts(): Promise<Map<string, number>> {
   return counts
 }
 
-export async function fetchTopic(id: string): Promise<Topic | null> {
+export async function fetchTopic(id: string, userId = ''): Promise<Topic | null> {
   const { data, error } = await supabase
     .from('topics')
     .select(TOPIC_SELECT)
@@ -107,7 +120,9 @@ export async function fetchTopic(id: string): Promise<Topic | null> {
     .maybeSingle()
 
   if (error) throw error
-  return data ? toTopic(data as TopicRow) : null
+  if (!data) return null
+  const upvoted = await fetchMyUpvotes('topic', [id], userId)
+  return toTopic(data as TopicRow, upvoted)
 }
 
 export async function createTopic(params: {

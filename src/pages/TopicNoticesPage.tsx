@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { AnnouncementReactions } from '@/components/announcement/AnnouncementReactions'
+import { PostReactions } from '@/components/post/PostReactions'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
@@ -295,7 +295,14 @@ export function TopicNoticesPage() {
                 </span>
               </div>
               <RichTextViewer doc={row.content} />
-              <AnnouncementReactions announcement={row} />
+              <PostReactions
+                kind="announcement"
+                id={row.id}
+                authorId={row.author?.id ?? null}
+                upvoteCount={row.upvoteCount}
+                commentCount={row.commentCount}
+                upvoted={row.upvoted}
+              />
               </li>
             )
           })}
