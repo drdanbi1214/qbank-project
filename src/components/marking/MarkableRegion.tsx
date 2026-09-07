@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { MarkToolbar } from '@/components/marking/MarkToolbar'
 import {
   readSelectionRange,
@@ -12,6 +12,9 @@ type Props = {
   onErase: (range: SelectionRange) => void
   /** 값이 있으면 툴바에 Q 버튼이 붙는다 */
   onAsk?: (range: SelectionRange) => void
+  /** 값이 있으면 선택한 부분에 개인 메모를 남기는 버튼이 붙는다. */
+  onMemo?: (range: SelectionRange) => void
+  regionRef?: RefObject<HTMLDivElement | null>
   className?: string
 }
 
@@ -21,7 +24,7 @@ type Props = {
  * 웹의 드래그와 모바일의 길게 눌러 선택은 둘 다 selection 이 확정되는 시점이
  * 같아서 mouseup 과 touchend 를 함께 듣는다.
  */
-export function MarkableRegion({ children, onApply, onErase, onAsk, className }: Props) {
+export function MarkableRegion({ children, onApply, onErase, onAsk, onMemo, regionRef, className }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const [pending, setPending] = useState<{ range: SelectionRange; rect: DOMRect } | null>(null)
 
@@ -61,7 +64,15 @@ export function MarkableRegion({ children, onApply, onErase, onAsk, className }:
 
   return (
     <>
-      <div ref={container} onMouseUp={capture} onTouchEnd={capture} className={className}>
+      <div
+        ref={(node) => {
+          container.current = node
+          if (regionRef) regionRef.current = node
+        }}
+        onMouseUp={capture}
+        onTouchEnd={capture}
+        className={className}
+      >
         {children}
       </div>
 
@@ -80,6 +91,14 @@ export function MarkableRegion({ children, onApply, onErase, onAsk, className }:
             onAsk
               ? () => {
                   onAsk(pending.range)
+                  dismiss()
+                }
+              : undefined
+          }
+          onMemo={
+            onMemo
+              ? () => {
+                  onMemo(pending.range)
                   dismiss()
                 }
               : undefined

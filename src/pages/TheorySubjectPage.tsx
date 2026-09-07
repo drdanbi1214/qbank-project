@@ -2,9 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useEmbedPickers } from '@/components/editor/useEmbedPickers'
-import { RichTextViewer } from '@/components/editor/RichTextViewer'
-import { MarkableRegion } from '@/components/marking/MarkableRegion'
-import { useTextMarks } from '@/components/marking/useTextMarks'
 import { formatDateTime } from '@/utils/date'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
@@ -21,6 +18,7 @@ import {
   type TheoryDocument,
 } from '@/lib/queries/theory'
 import { MoveDialog } from '@/components/theory/TheoryOutlineTools'
+import { TheoryMemoWorkspace } from '@/components/theory/TheoryMemoWorkspace'
 import { uploadTheoryImage } from '@/lib/uploads'
 import { exportTheoryDocumentsToDocx } from '@/lib/exportTheoryDocx'
 import type { RichDoc } from '@/types/richtext'
@@ -276,7 +274,7 @@ export function TheorySubjectPage() {
       ) : nestedSectionRoots.length > 0 && !outlineEditing ? (
         <TheorySectionLanding subjectId={subject.id} subjectName={activeSection?.title ?? subject.name} sections={nestedSectionRoots} documents={documents} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <div className="grid gap-3 lg:grid-cols-[13.5rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
             {outlineEditing && (
               <div className="mb-1 flex gap-1 border-b border-slate-200 pb-1 dark:border-slate-700">
@@ -294,8 +292,8 @@ export function TheorySubjectPage() {
           </nav>
 
           {selected && (
-            <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-              <div className="mb-5 flex items-start justify-between gap-3">
+            <article className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-4 flex items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
                 <h2 className="min-w-0 flex-1 text-2xl font-bold tracking-tight">
                   {selected.title}
                 </h2>
@@ -319,7 +317,7 @@ export function TheorySubjectPage() {
                 )}
               </div>
               {editingId === selected.id && session ? (
-                <div className="space-y-3">
+                <div className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
                   <LazyRichTextEditor
                     key={selected.id}
                     initialValue={selected.content}
@@ -354,12 +352,17 @@ export function TheorySubjectPage() {
                 </div>
               ) : (
                 <>
-                  <MarkedTheoryContent document={selected} />
-                  <TheoryPager
-                    subjectId={subject.id}
-                    current={selected}
-                    ordered={readingOrder}
-                    titleOf={(id) => documentById.get(id)?.title ?? ''}
+                  <TheoryMemoWorkspace
+                    key={selected.id}
+                    document={selected}
+                    footer={(
+                      <TheoryPager
+                        subjectId={subject.id}
+                        current={selected}
+                        ordered={readingOrder}
+                        titleOf={(id) => documentById.get(id)?.title ?? ''}
+                      />
+                    )}
                   />
                 </>
               )}
@@ -389,21 +392,6 @@ export function TheorySubjectPage() {
         />
       )}
     </section>
-  )
-}
-
-/** 알렌 본문에 남긴 표시는 text_marks RLS에 의해 로그인한 본인에게만 보인다. */
-function MarkedTheoryContent({ document }: { document: TheoryDocument }) {
-  const textMarks = useTextMarks('theory', document.id)
-
-  return (
-    <MarkableRegion onApply={textMarks.apply} onErase={textMarks.erase}>
-      <RichTextViewer
-        doc={document.content}
-        hierarchicalIndent
-        marks={textMarks.marks}
-      />
-    </MarkableRegion>
   )
 }
 

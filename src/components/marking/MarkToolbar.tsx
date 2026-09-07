@@ -22,19 +22,21 @@ type Props = {
   onErase: () => void
   /** 질문하기. 제공되지 않으면 Q 버튼을 숨긴다. */
   onAsk?: () => void
+  /** 개인 메모 만들기. 제공되지 않으면 버튼을 숨긴다. */
+  onMemo?: () => void
 }
 
 /**
  * 텍스트를 드래그하면 뜨는 서식 툴바.
- * 형광펜 4색, 빨간 글씨, 굵은 글씨, 질문, 지우개 순으로 가로 배치한다.
+ * 기존 펜 선택기를 유지하고, 화면별로 질문 또는 개인 메모 버튼을 덧붙인다.
  */
-export function MarkToolbar({ rect, onPick, onErase, onAsk }: Props) {
+export function MarkToolbar({ rect, onPick, onErase, onAsk, onMemo }: Props) {
   // 화면 위쪽에 공간이 없으면 선택 영역 아래로 내린다.
   const above = rect.top > 60
   const top = above ? rect.top - 48 : rect.bottom + 8
   const left = Math.min(
-    Math.max(rect.left + rect.width / 2, 130),
-    Math.max(window.innerWidth - 130, 130),
+    Math.max(rect.left + rect.width / 2, onMemo ? 170 : 130),
+    Math.max(window.innerWidth - (onMemo ? 170 : 130), onMemo ? 170 : 130),
   )
 
   return (
@@ -111,6 +113,25 @@ export function MarkToolbar({ rect, onPick, onErase, onAsk }: Props) {
           />
         </svg>
       </button>
+
+      {onMemo && (
+        <>
+          <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-slate-600" />
+          <button
+            type="button"
+            title="이 부분에 메모하기"
+            aria-label="이 부분에 메모하기"
+            onClick={onMemo}
+            className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/30"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+              <path d="M6 3h12a2 2 0 0 1 2 2v10l-6 6H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              <path d="M14 21v-4a2 2 0 0 1 2-2h4M8 8h8M8 12h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            메모
+          </button>
+        </>
+      )}
     </div>
   )
 }

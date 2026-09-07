@@ -388,6 +388,47 @@ export type Database = {
           },
         ]
       }
+      cluster_attach_failure_logs: {
+        Row: {
+          actor_id: string
+          anchor_question_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string
+          id: string
+          target_question_id: string
+          variant: string
+        }
+        Insert: {
+          actor_id: string
+          anchor_question_id: string
+          created_at?: string
+          error_code?: string | null
+          error_message: string
+          id?: string
+          target_question_id: string
+          variant: string
+        }
+        Update: {
+          actor_id?: string
+          anchor_question_id?: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string
+          id?: string
+          target_question_id?: string
+          variant?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cluster_attach_failure_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_deletion_audit: {
         Row: {
           actor_id: string | null
@@ -2552,6 +2593,60 @@ export type Database = {
           },
         ]
       }
+      theory_memos: {
+        Row: {
+          anchor_from: number
+          anchor_to: number
+          body: string
+          created_at: string
+          document_id: string
+          id: string
+          image_paths: string[]
+          selected_text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anchor_from: number
+          anchor_to: number
+          body?: string
+          created_at?: string
+          document_id: string
+          id?: string
+          image_paths?: string[]
+          selected_text?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anchor_from?: number
+          anchor_to?: number
+          body?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          image_paths?: string[]
+          selected_text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_memos_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "theory_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_memos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       topic_questions: {
         Row: {
           position: number
@@ -2996,6 +3091,22 @@ export type Database = {
           id: string
         }[]
       }
+      admin_list_cluster_attach_failures: {
+        Args: { p_limit?: number }
+        Returns: {
+          actor_id: string
+          actor_name: string
+          anchor_question_code: string
+          anchor_question_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string
+          id: string
+          target_question_code: string
+          target_question_id: string
+          variant: string
+        }[]
+      }
       admin_list_deletion_audit: {
         Args: { p_limit?: number }
         Returns: {
@@ -3105,22 +3216,6 @@ export type Database = {
         Args: { p_note: string; p_question_id: string }
         Returns: undefined
       }
-      admin_list_cluster_attach_failures: {
-        Args: { p_limit?: number }
-        Returns: {
-          actor_id: string
-          actor_name: string
-          anchor_question_code: string
-          anchor_question_id: string
-          created_at: string
-          error_code: string | null
-          error_message: string
-          id: string
-          target_question_code: string
-          target_question_id: string
-          variant: string
-        }[]
-      }
       compact_search_text: { Args: { input_text: string }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {
@@ -3133,16 +3228,6 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
-      }
-      record_cluster_attach_failure: {
-        Args: {
-          p_anchor_id: string
-          p_error_code?: string | null
-          p_error_message: string
-          p_target_id: string
-          p_variant: string
-        }
-        Returns: string | null
       }
       effective_answer: {
         Args: { q: Database["public"]["Tables"]["questions"]["Row"] }
@@ -3327,6 +3412,16 @@ export type Database = {
       question_code_for: {
         Args: { p_exam_id: string; p_question_number: number }
         Returns: string
+      }
+      record_cluster_attach_failure: {
+        Args: {
+          p_anchor_id: string
+          p_error_code?: string | null
+          p_error_message: string
+          p_target_id: string
+          p_variant: string
+        }
+        Returns: string | null
       }
       reset_progress: {
         Args: { p_exam_id?: string; p_subject_id?: string; p_unit_id?: string }

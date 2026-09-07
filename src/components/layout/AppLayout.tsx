@@ -11,7 +11,7 @@ import { cn } from '@/utils/cn'
  */
 export function AppLayout() {
   const location = useLocation()
-  const wideContent = location.pathname.startsWith('/topics')
+  const wideContent = location.pathname.startsWith('/topics') || /^\/theory\/[^/]+/.test(location.pathname)
   const lectureReader = /^\/lectures\/(?!c\/)[^/]+\/?$/.test(location.pathname)
 
   useEffect(() => {
