@@ -33,6 +33,11 @@ const TOOLS: { to: string | null; title: string; description: string; phase?: st
     description: '신고된 문제와 글을 확인하고 처리합니다.',
   },
   {
+    to: '/admin/cluster-failures',
+    title: '야마 묶기 실패 기록',
+    description: '문제-문제 연결 실패 원인과 시도한 문제 조합을 확인합니다.',
+  },
+  {
     to: '/admin/revisions',
     title: '최근 변경',
     description: '전체 편집 이력을 보고 문제를 되돌립니다.',

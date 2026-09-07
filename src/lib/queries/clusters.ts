@@ -187,6 +187,66 @@ export async function attachToCluster(params: {
 }
 
 /**
+ * 묶기 요청은 실패하면 원래 DB 트랜잭션도 취소되므로, 실패를 받은 뒤 별도 요청으로
+ * 남긴다. 기록 실패가 원래 오류를 가리면 안 되므로 호출부에서는 항상 무시한다.
+ */
+export async function recordClusterAttachFailure(params: {
+  anchorId: string
+  targetId: string
+  variant: VariantType
+  errorMessage: string
+  errorCode?: string | null
+}): Promise<void> {
+  const { error } = await supabase.rpc('record_cluster_attach_failure', {
+    p_anchor_id: params.anchorId,
+    p_target_id: params.targetId,
+    p_variant: params.variant,
+    p_error_message: params.errorMessage,
+    p_error_code: params.errorCode ?? null,
+  })
+  if (error) throw error
+}
+
+export type ClusterAttachFailure = {
+  id: string
+  createdAt: string
+  actorId: string
+  actorName: string
+  anchorQuestionId: string
+  anchorQuestionCode: string
+  targetQuestionId: string
+  targetQuestionCode: string
+  variant: VariantType
+  errorMessage: string
+  errorCode: string | null
+}
+
+/** 관리자용 최근 야마 묶기 실패 기록. */
+export async function fetchClusterAttachFailures(limit = 100): Promise<ClusterAttachFailure[]> {
+  const { data, error } = await supabase.rpc('admin_list_cluster_attach_failures', { p_limit: limit })
+  if (error) throw error
+  return (data ?? []).flatMap((row) =>
+    row.variant === 'identical' || row.variant === 'modified'
+      ? [
+          {
+            id: row.id,
+            createdAt: row.created_at,
+            actorId: row.actor_id,
+            actorName: row.actor_name,
+            anchorQuestionId: row.anchor_question_id,
+            anchorQuestionCode: row.anchor_question_code,
+            targetQuestionId: row.target_question_id,
+            targetQuestionCode: row.target_question_code,
+            variant: row.variant,
+            errorMessage: row.error_message,
+            errorCode: row.error_code,
+          },
+        ]
+      : [],
+  )
+}
+
+/**
  * 이 문제의 클러스터를 보장한다. 없으면 혼자짜리 그룹을 만들어 돌려준다.
  *
  * 해설을 항상 그룹에 붙이기 위한 것이다. 그룹 없이 문제에 직접 붙이면 나중에

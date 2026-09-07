@@ -9,7 +9,12 @@ import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import { fetchQuestionById, type SolveQuestion } from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
-import { setVariantNote, type ClusterSibling, type VariantType } from '@/lib/queries/clusters'
+import {
+  recordClusterAttachFailure,
+  setVariantNote,
+  type ClusterSibling,
+  type VariantType,
+} from '@/lib/queries/clusters'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -32,6 +37,12 @@ function messageOf(caught: unknown, fallback: string): string {
     return caught.message
   }
   return caught instanceof Error && caught.message ? caught.message : fallback
+}
+
+function codeOf(caught: unknown): string | null {
+  return typeof caught === 'object' && caught !== null && 'code' in caught && typeof caught.code === 'string'
+    ? caught.code
+    : null
 }
 
 /**
@@ -309,8 +320,19 @@ function YamaBody({
             onPick={(found) => {
               void attach(found.id, adding.variant, adding.anchorId)
                 .then(() => setAdding(null))
-                .catch((caught: unknown) => {
-                  window.alert(messageOf(caught, '문제 묶기에 실패했습니다. 잠시 후 다시 시도해 주세요.'))
+                .catch(async (caught: unknown) => {
+                  const message = messageOf(caught, '문제 묶기에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+                  await recordClusterAttachFailure({
+                    anchorId: adding.anchorId,
+                    targetId: found.id,
+                    variant: adding.variant,
+                    errorMessage: message,
+                    errorCode: codeOf(caught),
+                  }).catch((logError: unknown) => {
+                    // 진단 기록 자체가 실패해도 원래 실패 원인은 반드시 사용자에게 보인다.
+                    console.error('야마 묶기 실패 기록을 남기지 못했습니다.', logError)
+                  })
+                  window.alert(message)
                 })
             }}
           />

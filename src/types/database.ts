@@ -3105,6 +3105,22 @@ export type Database = {
         Args: { p_note: string; p_question_id: string }
         Returns: undefined
       }
+      admin_list_cluster_attach_failures: {
+        Args: { p_limit?: number }
+        Returns: {
+          actor_id: string
+          actor_name: string
+          anchor_question_code: string
+          anchor_question_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string
+          id: string
+          target_question_code: string
+          target_question_id: string
+          variant: string
+        }[]
+      }
       compact_search_text: { Args: { input_text: string }; Returns: string }
       count_my_open_assignments: { Args: never; Returns: number }
       create_notification: {
@@ -3117,6 +3133,16 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      record_cluster_attach_failure: {
+        Args: {
+          p_anchor_id: string
+          p_error_code?: string | null
+          p_error_message: string
+          p_target_id: string
+          p_variant: string
+        }
+        Returns: string | null
       }
       effective_answer: {
         Args: { q: Database["public"]["Tables"]["questions"]["Row"] }

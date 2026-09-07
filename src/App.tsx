@@ -16,6 +16,7 @@ import { AdminRoute, ApprovedRoute, ProtectedRoute } from '@/routes/ProtectedRou
 // Route modules are deliberately loaded only when visited. In particular, the
 // login and study screens no longer download every admin/editor page up front.
 const AdminAssignmentsPage = lazy(() => import('@/pages/AdminAssignmentsPage').then((m) => ({ default: m.AdminAssignmentsPage })))
+const AdminClusterFailureLogsPage = lazy(() => import('@/pages/AdminClusterFailureLogsPage').then((m) => ({ default: m.AdminClusterFailureLogsPage })))
 const AdminHomePage = lazy(() => import('@/pages/AdminHomePage').then((m) => ({ default: m.AdminHomePage })))
 const AdminLabelingPage = lazy(() => import('@/pages/AdminLabelingPage').then((m) => ({ default: m.AdminLabelingPage })))
 const AdminQuestionsPage = lazy(() => import('@/pages/AdminQuestionsPage').then((m) => ({ default: m.AdminQuestionsPage })))
@@ -118,6 +119,7 @@ export default function App() {
                           <Route element={<AdminRoute />}>
                             <Route path="/admin" element={<AdminHomePage />} />
                             <Route path="/admin/assignments" element={<AdminAssignmentsPage />} />
+                            <Route path="/admin/cluster-failures" element={<AdminClusterFailureLogsPage />} />
                             <Route path="/admin/questions" element={<AdminQuestionsPage />} />
                             <Route path="/admin/labeling" element={<AdminLabelingPage />} />
                             <Route path="/admin/review" element={<AdminReviewPage />} />
