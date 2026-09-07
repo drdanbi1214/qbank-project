@@ -20,6 +20,20 @@ type Props = {
   onRemove?: () => void
 }
 
+/** Supabase의 PostgrestError는 Error 인스턴스가 아닐 수 있어 메시지를 직접 꺼낸다. */
+function messageOf(caught: unknown, fallback: string): string {
+  if (
+    typeof caught === 'object' &&
+    caught !== null &&
+    'message' in caught &&
+    typeof caught.message === 'string' &&
+    caught.message.trim() !== ''
+  ) {
+    return caught.message
+  }
+  return caught instanceof Error && caught.message ? caught.message : fallback
+}
+
 /**
  * 테마 본문 안에 그려지는 야마 카드.
  *
@@ -296,7 +310,7 @@ function YamaBody({
               void attach(found.id, adding.variant, adding.anchorId)
                 .then(() => setAdding(null))
                 .catch((caught: unknown) => {
-                  window.alert(caught instanceof Error ? caught.message : '묶지 못했습니다.')
+                  window.alert(messageOf(caught, '문제 묶기에 실패했습니다. 잠시 후 다시 시도해 주세요.'))
                 })
             }}
           />
