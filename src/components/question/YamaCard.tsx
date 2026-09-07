@@ -306,7 +306,6 @@ function YamaBody({
             exams={taxonomy.exams}
             subjectId={subjectId}
             excludeQuestionId={question.id}
-            rejectGrouped
             examLabelOf={examLabel}
             confirmLabel="이 문제로 확정"
             onCancel={() => setAdding(null)}
