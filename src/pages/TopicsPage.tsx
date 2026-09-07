@@ -75,6 +75,9 @@ export function TopicsPage() {
   const editedContent = useRef<RichDoc | null>(null)
   // 목록이 대표 단원으로 묶이므로 나중에 옮길 길이 있어야 한다.
   const [editedUnitId, setEditedUnitId] = useState<string | null>(null)
+  // 기존 글도 제목을 바꿀 수 있다. 새 글의 draftTitle 과 분리해야, 취소한 새 글의
+  // 제목이 이미 있는 글 편집 화면에 남지 않는다.
+  const [editedTitle, setEditedTitle] = useState('')
 
   const subject = subjectId ? taxonomy?.subjectById.get(subjectId) : undefined
 
@@ -209,9 +212,15 @@ export function TopicsPage() {
       setEditing(false)
       return
     }
+    const title = editedTitle.trim()
+    if (title === '') {
+      setError('제목을 입력해 주세요.')
+      return
+    }
     const content = editedContent.current
     setBusy(true)
-    void updateTopic({ id: selected.id, userId, content, unitId: editedUnitId })
+    setError(null)
+    void updateTopic({ id: selected.id, userId, title, content, unitId: editedUnitId })
       // 본문이 정본이고 topic_questions 는 거기서 뽑아낸 역인덱스다.
       // 본문 저장이 끝난 뒤에 맞춘다.
       .then(() => syncTopicQuestions(selected.id, content))
@@ -225,7 +234,7 @@ export function TopicsPage() {
         setError(caught instanceof Error ? caught.message : '저장하지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [selected, userId, editedUnitId, discardTopicDraft, load])
+  }, [selected, userId, editedTitle, editedUnitId, discardTopicDraft, load])
 
   const saveDraft = useCallback(() => {
     if (!draft || !subjectId) return
@@ -286,11 +295,11 @@ export function TopicsPage() {
   )
 
   const scheduleEditedTopicDraft = useCallback(
-    (content: RichDoc, unitId = editedUnitId) => {
+    (content: RichDoc, unitId = editedUnitId, title = editedTitle) => {
       editedContent.current = content
-      scheduleTopicDraft(content, { unitId })
+      scheduleTopicDraft(content, { title, unitId })
     },
-    [editedUnitId, scheduleTopicDraft],
+    [editedTitle, editedUnitId, scheduleTopicDraft],
   )
 
   const saveTemporary = useCallback(() => {
@@ -310,6 +319,9 @@ export function TopicsPage() {
       setDraft({ unitId: storedUnitId })
     } else if (editing) {
       setEditedUnitId(storedUnitId)
+      // 제목 저장 기능이 생기기 전에 만들어진 임시저장은 title 이 없다.
+      // 그런 경우에는 현재 게시된 제목을 그대로 쓴다.
+      setEditedTitle(typeof metadata.title === 'string' ? metadata.title : (selected?.title ?? ''))
     }
 
     editedContent.current = savedTopicDraft.content
@@ -318,7 +330,7 @@ export function TopicsPage() {
       version: previous.version + 1,
     }))
     setDraftDismissed(true)
-  }, [savedTopicDraft, draft, editing])
+  }, [savedTopicDraft, draft, editing, selected])
 
   const dismissTopicDraft = useCallback(() => {
     setDraftDismissed(true)
@@ -329,6 +341,7 @@ export function TopicsPage() {
     void flushTopicDraft()
     setEditing(false)
     editedContent.current = null
+    setEditedTitle('')
   }, [flushTopicDraft])
 
   const remove = useCallback(() => {
@@ -496,7 +509,26 @@ export function TopicsPage() {
           ) : (
             <div className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-bold tracking-tight">{selected.title}</h2>
+                {editing ? (
+                  <input
+                    aria-label="주제 제목"
+                    autoFocus
+                    value={editedTitle}
+                    onChange={(event) => {
+                      const title = event.target.value
+                      setEditedTitle(title)
+                      scheduleEditedTopicDraft(
+                        editedContent.current ?? editorSeed.doc,
+                        editedUnitId,
+                        title,
+                      )
+                    }}
+                    placeholder="주제 제목"
+                    className="min-w-0 flex-1 border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-2xl font-bold tracking-tight outline-none focus:border-brand-500 dark:border-slate-700"
+                  />
+                ) : (
+                  <h2 className="text-2xl font-bold tracking-tight">{selected.title}</h2>
+                )}
                 {editing ? (
                   <select
                     aria-label="대표 단원"
@@ -549,6 +581,7 @@ export function TopicsPage() {
                         variant="secondary"
                         onClick={() => {
                           setEditedUnitId(selected.unitId)
+                          setEditedTitle(selected.title)
                           editedContent.current = selected.content
                           setEditorSeed((previous) => ({
                             doc: selected.content,
