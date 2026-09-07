@@ -297,8 +297,14 @@
     @apply mt-4 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-400;
   }
 
+  /*
+   * 모서리를 둥글리거나 좌우 여백을 주면 안 된다. 형광펜 구간이 굵게·밑줄로
+   * 쪼개지면 <mark> 도 함께 나뉘는데, 조각마다 둥근 끝이 생겨 알약이 이어
+   * 붙은 것처럼 울퉁불퉁해진다. 색이 반투명이라 여백만큼 겹치는 자리는
+   * 이음매가 진하게 비치기도 한다. 붙여서 한 줄로 이어지게 둔다.
+   */
   .rich-text mark {
-    @apply rounded bg-amber-200 px-0.5 text-inherit dark:bg-amber-500/40;
+    @apply bg-amber-200 text-inherit dark:bg-amber-500/40;
   }
 
   /*
