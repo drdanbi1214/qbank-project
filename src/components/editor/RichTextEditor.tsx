@@ -54,11 +54,17 @@ type Props = {
   placeholder?: string
   /** 댓글 입력처럼 좁은 자리에서는 도구 모음을 줄인다 */
   compact?: boolean
+  /** 우측 메모지용 초소형 도구 모음과 촘촘한 본문 */
+  memo?: boolean
   minHeight?: string
   className?: string
   /** 도구 모음 우측에 붙일 요소 (등록 버튼 등) */
   toolbarExtra?: ReactNode
   onUploadError?: (message: string) => void
+  /** 진행 중인 이미지 업로드 수. 저장 버튼이 자리표시자를 저장하지 않게 할 때 쓴다. */
+  onPendingUploadsChange?: (count: number) => void
+  /** 한 문서에 넣을 수 있는 이미지 수. 생략하면 제한하지 않는다. */
+  maxImages?: number
   /** 본문 종류별 Storage 버킷을 선택할 수 있게 한다. */
   uploadImageFile?: (file: File, userId: string) => Promise<string>
   /** 넘긴 화면에만 영상 첨부 버튼을 표시한다. 현재는 레옵스 공지에서 쓴다. */
@@ -86,10 +92,13 @@ export function RichTextEditor({
   userId,
   placeholder = '내용을 입력하세요',
   compact = false,
+  memo = false,
   minHeight = '12rem',
   className,
   toolbarExtra,
   onUploadError,
+  onPendingUploadsChange,
+  maxImages,
   uploadImageFile = uploadImage,
   uploadVideoFile,
   onRequestYama,
@@ -100,6 +109,8 @@ export function RichTextEditor({
   // 붙여넣기 핸들러는 에디터 생성 시점의 값을 붙잡으므로 ref 로 최신 값을 넘긴다.
   const userIdRef = useRef(userId)
   const errorRef = useRef(onUploadError)
+  const pendingUploadsRef = useRef(0)
+  const pendingUploadsChangeRef = useRef(onPendingUploadsChange)
   const uploadImageRef = useRef(uploadImageFile)
   const uploadVideoRef = useRef(uploadVideoFile)
   const onChangeRef = useRef(onChange)
@@ -121,10 +132,16 @@ export function RichTextEditor({
   useEffect(() => {
     userIdRef.current = userId
     errorRef.current = onUploadError
+    pendingUploadsChangeRef.current = onPendingUploadsChange
     uploadImageRef.current = uploadImageFile
     uploadVideoRef.current = uploadVideoFile
     onChangeRef.current = onChange
-  }, [userId, onUploadError, uploadImageFile, uploadVideoFile, onChange])
+  }, [userId, onUploadError, onPendingUploadsChange, uploadImageFile, uploadVideoFile, onChange])
+
+  const changePendingUploads = useCallback((change: number) => {
+    pendingUploadsRef.current = Math.max(0, pendingUploadsRef.current + change)
+    pendingUploadsChangeRef.current?.(pendingUploadsRef.current)
+  }, [])
 
   const emitDocumentChange = useCallback((doc: ProseMirrorNode) => {
     // compositionend 뒤 DOM observer와 아래 microtask가 모두 같은 문서를 알릴 수
@@ -137,7 +154,19 @@ export function RichTextEditor({
   const insertImages = useCallback((view: EditorView, files: File[], at?: number) => {
     if (files.length === 0) return
     const { state } = view
-    const uploads = files.map((file) => {
+    let currentImageCount = 0
+    state.doc.descendants((node) => {
+      if (node.type.name === 'image') currentImageCount += 1
+    })
+    const remaining = maxImages === undefined ? files.length : Math.max(0, maxImages - currentImageCount)
+    const acceptedFiles = files.slice(0, remaining)
+    if (acceptedFiles.length < files.length) {
+      errorRef.current?.(`사진은 메모 하나에 ${maxImages}장까지 넣을 수 있습니다.`)
+    }
+    if (acceptedFiles.length === 0) return
+
+    changePendingUploads(acceptedFiles.length)
+    const uploads = acceptedFiles.map((file) => {
       const uploadId = crypto.randomUUID()
       return {
         file,
@@ -145,7 +174,11 @@ export function RichTextEditor({
         node: state.schema.nodes.image.create({ uploadId }),
       }
     })
-    const content = Fragment.fromArray(uploads.map(({ node }) => node))
+    const nodes = uploads.map(({ node }) => node)
+    // 메모에서는 사진도 글의 한 줄처럼 본문 흐름에 들어간다. 뒤에 빈 문단을
+    // 함께 만들면 사진이 마지막이어도 즉시 아래쪽에 커서를 놓고 쓸 수 있다.
+    if (memo && at === undefined) nodes.push(state.schema.nodes.paragraph.create())
+    const content = Fragment.fromArray(nodes)
     const tr = state.tr
 
     if (at !== undefined) {
@@ -183,8 +216,9 @@ export function RichTextEditor({
             caught instanceof Error ? caught.message : '이미지를 올리지 못했습니다.',
           )
         })
+        .finally(() => changePendingUploads(-1))
     }
-  }, [])
+  }, [changePendingUploads, maxImages, memo])
 
   const insertVideos = useCallback((view: EditorView, files: File[], at?: number) => {
     const upload = uploadVideoRef.current
@@ -247,8 +281,12 @@ export function RichTextEditor({
   const editorProps = useMemo<EditorProps>(
     () => ({
       attributes: {
-        class: cn('rich-text focus:outline-none', contentClassName, compact ? 'min-h-24' : ''),
-        style: compact ? '' : `min-height:${minHeight}`,
+        class: cn(
+          'rich-text focus:outline-none',
+          contentClassName,
+          memo ? 'min-h-16 text-[11px] leading-[1.4]' : compact ? 'min-h-24' : '',
+        ),
+        style: compact || memo ? '' : `min-height:${minHeight}`,
       },
       handleDOMEvents: {
         pointerdown(view: EditorView, event: PointerEvent) {
@@ -447,7 +485,7 @@ export function RichTextEditor({
         return true
       },
     }),
-    [compact, contentClassName, emitDocumentChange, insertImages, insertVideos, minHeight],
+    [compact, contentClassName, emitDocumentChange, insertImages, insertVideos, memo, minHeight],
   )
 
   const editor = useEditor({
@@ -476,6 +514,7 @@ export function RichTextEditor({
       <Toolbar
         editor={editor}
         compact={compact}
+        memo={memo}
         onPickImage={insertImages}
         onPickVideo={uploadVideoFile ? insertVideos : undefined}
         extra={toolbarExtra}
@@ -722,6 +761,7 @@ function findPlaceholder(
 function Toolbar({
   editor,
   compact,
+  memo,
   onPickImage,
   onPickVideo,
   extra,
@@ -731,6 +771,7 @@ function Toolbar({
 }: {
   editor: Editor
   compact: boolean
+  memo: boolean
   onPickImage: (view: EditorView, files: File[]) => void
   onPickVideo?: (view: EditorView, files: File[]) => void
   extra?: ReactNode
@@ -765,7 +806,12 @@ function Toolbar({
       //
       // top 은 사이트 머리글 높이(h-14)만큼 띄운다. 0 으로 두면 z-30 인 머리글
       // 뒤로 들어가 보이지 않는다.
-      className="sticky top-14 z-20 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-slate-200 bg-white/95 px-2 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+      className={cn(
+        'z-20 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b px-2 py-1.5 backdrop-blur',
+        memo
+          ? 'relative border-slate-900/10 bg-white/25 dark:border-white/10 dark:bg-black/10'
+          : 'sticky top-14 border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95',
+      )}
     >
       {onRequestYama && (
         <ToolButton
@@ -822,7 +868,7 @@ function Toolbar({
       >
         <span className="font-serif italic">I</span>
       </ToolButton>
-      {NOTE_HIGHLIGHTS.map(({ label, color, className }) => (
+      {!memo && NOTE_HIGHLIGHTS.map(({ label, color, className }) => (
         <ToolButton
           key={color}
           label={label}
@@ -832,7 +878,7 @@ function Toolbar({
           <span className={cn('h-4 w-4 rounded border border-black/10', className)} />
         </ToolButton>
       ))}
-      {NOTE_TEXT_COLORS.map(({ label, color, className }) => (
+      {!memo && NOTE_TEXT_COLORS.map(({ label, color, className }) => (
         <ToolButton
           key={color}
           label={label}
@@ -848,6 +894,8 @@ function Toolbar({
           <span className={cn('font-semibold', className)}>A</span>
         </ToolButton>
       ))}
+
+      {memo && <FontSizeSelect editor={editor} compact />}
 
       {!compact && (
         <>
@@ -875,22 +923,7 @@ function Toolbar({
             <option value="3">제목 2</option>
             <option value="4">제목 3</option>
           </select>
-          <select
-            aria-label="글씨 크기"
-            value={safeFontSize(editor.getAttributes('textStyle').fontSize) ?? ''}
-            onChange={(event) => {
-              const value = event.target.value
-              if (value === '') editor.chain().focus().unsetFontSize().run()
-              else editor.chain().focus().setFontSize(value).run()
-            }}
-            className="mx-0.5 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
-          >
-            {FONT_SIZES.map((item) => (
-              <option key={item.label} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          <FontSizeSelect editor={editor} />
           <select
             aria-label="줄간격"
             value={
@@ -1051,7 +1084,7 @@ function Toolbar({
         </>
       )}
 
-      <Divider />
+      {!memo && <Divider />}
       <ToolButton label="이미지" onClick={() => fileInput.current?.click()}>
         🖼
       </ToolButton>
@@ -1060,21 +1093,25 @@ function Toolbar({
           ▶
         </ToolButton>
       )}
-      <ToolButton
-        label="인라인 수식"
-        onClick={() => editor.chain().focus().setMathInline('').run()}
-      >
-        <span className="font-serif italic">x</span>
-      </ToolButton>
-      <ToolButton
-        label="각주"
-        active={editor.isActive('footnote')}
-        onClick={() => editor.chain().focus().insertFootnote().run()}
-      >
-        <span className="text-xs">
-          가<sup className="text-[9px] font-bold">1</sup>
-        </span>
-      </ToolButton>
+      {!memo && (
+        <>
+          <ToolButton
+            label="인라인 수식"
+            onClick={() => editor.chain().focus().setMathInline('').run()}
+          >
+            <span className="font-serif italic">x</span>
+          </ToolButton>
+          <ToolButton
+            label="각주"
+            active={editor.isActive('footnote')}
+            onClick={() => editor.chain().focus().insertFootnote().run()}
+          >
+            <span className="text-xs">
+              가<sup className="text-[9px] font-bold">1</sup>
+            </span>
+          </ToolButton>
+        </>
+      )}
       {!compact && (
         <ToolButton
           label="블록 수식"
@@ -1113,6 +1150,33 @@ function Toolbar({
 
       {extra && <div className="ml-auto flex items-center gap-2">{extra}</div>}
     </div>
+  )
+}
+
+function FontSizeSelect({ editor, compact = false }: { editor: Editor; compact?: boolean }) {
+  return (
+    <select
+      aria-label="글씨 크기"
+      title="글씨 크기"
+      value={safeFontSize(editor.getAttributes('textStyle').fontSize) ?? ''}
+      onChange={(event) => {
+        const value = event.target.value
+        if (value === '') editor.chain().focus().unsetFontSize().run()
+        else editor.chain().focus().setFontSize(value).run()
+      }}
+      className={cn(
+        'mx-0.5 rounded border bg-white px-1 py-0.5 text-xs dark:bg-slate-800',
+        compact
+          ? 'max-w-20 border-amber-300/70 dark:border-amber-700'
+          : 'border-slate-300 dark:border-slate-600',
+      )}
+    >
+      {FONT_SIZES.map((item) => (
+        <option key={item.label} value={item.value}>
+          {item.label}
+        </option>
+      ))}
+    </select>
   )
 }
 
