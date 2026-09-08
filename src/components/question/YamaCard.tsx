@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StemBlocks } from '@/components/question/StemBlocks'
+import { ChoiceList } from '@/components/question/ChoiceList'
 import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { useCluster } from '@/components/question/useCluster'
 import { TopicSolutionBox } from '@/components/question/TopicSolutionBox'
+import { useTopicScope } from '@/components/question/TopicContext'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchQuestionById, type SolveQuestion } from '@/lib/queries/questions'
+import { fetchQuestionById, submitAttempt, type SolveQuestion } from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
+import { effectiveAnswer, formatAnswer, type AnswerPayload } from '@/types/question'
 import {
   recordClusterAttachFailure,
   setVariantNote,
@@ -138,6 +140,7 @@ function YamaBody({
 }) {
   const { taxonomy } = useData()
   const { isAdmin, hasPermission } = useAuth()
+  const topicScope = useTopicScope()
   const editing = Boolean(onRemove)
   const canCluster = editing && (isAdmin || hasPermission('study_legendob'))
 
@@ -214,14 +217,6 @@ function YamaBody({
           유사 문제 {cards.length + 1}개
         </span>
         <span className="ml-auto flex items-center gap-2">
-          <Link
-            // 카드에 묶인 문제를 대표부터 순서대로 이어 푼다. 하나만 열면
-            // "유사 문제 3개" 라고 해 놓고 한 문제만 나와 앞뒤가 맞지 않는다.
-            to={`/solve?questions=${[question.id, ...cards.map((row) => row.id)].join(',')}`}
-            className="text-brand-600 hover:underline dark:text-brand-300"
-          >
-            풀어보기
-          </Link>
           {onRemove && (
             <button
               type="button"
@@ -246,6 +241,7 @@ function YamaBody({
         className={columnClass}
       >
         <QuestionCard
+          key={`${question.id}-${topicScope?.yamaDisplayMode ?? 'all'}`}
           className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
           kind="anchor"
           questionId={question.id}
@@ -261,11 +257,13 @@ function YamaBody({
           onPeek={setPeeking}
           onAdd={(variant) => setAdding({ anchorId: question.id, variant })}
           onDetach={detach}
+          interactive={!editing}
+          defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
         />
 
         {orderedCards.map((row) => (
           <QuestionCard
-            key={row.id}
+            key={`${row.id}-${topicScope?.yamaDisplayMode ?? 'all'}`}
             className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
             kind="variant"
             questionId={row.id}
@@ -282,6 +280,8 @@ function YamaBody({
             onPeek={setPeeking}
             onAdd={(variant) => setAdding({ anchorId: row.id, variant })}
             onDetach={detach}
+            interactive={!editing}
+            defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
           />
         ))}
 
@@ -367,6 +367,8 @@ function QuestionCard({
   onPeek,
   onAdd,
   onDetach,
+  interactive,
+  defaultView,
 }: {
   className?: string
   kind: 'anchor' | 'variant'
@@ -383,9 +385,44 @@ function QuestionCard({
   onPeek: (row: ClusterSibling) => void
   onAdd: (variant: VariantType) => void
   onDetach: (id: string) => void
+  interactive: boolean
+  defaultView: 'question' | 'solution'
 }) {
+  const { refreshProgress } = useData()
   const [editingNote, setEditingNote] = useState(false)
   const [noteValue, setNoteValue] = useState(note ?? '')
+  const [showSolution, setShowSolution] = useState(defaultView === 'solution')
+  const [selectedChoices, setSelectedChoices] = useState<number[]>([])
+  const [answer, setAnswer] = useState<AnswerPayload | null>(null)
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const [grading, setGrading] = useState(false)
+  const [gradeError, setGradeError] = useState<string | null>(null)
+  const startedAt = useRef(0)
+
+  useEffect(() => {
+    startedAt.current = Date.now()
+  }, [])
+
+  const grade = useCallback(async () => {
+    if (selectedChoices.length === 0 || grading) return
+    setGrading(true)
+    setGradeError(null)
+    try {
+      const result = await submitAttempt({
+        questionId,
+        selected: selectedChoices,
+        timeSpentSec: Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
+      })
+      setAnswer(result.answer)
+      setIsCorrect(result.isCorrect)
+      setShowSolution(true)
+      refreshProgress()
+    } catch (caught) {
+      setGradeError(caught instanceof Error ? caught.message : '채점하지 못했습니다.')
+    } finally {
+      setGrading(false)
+    }
+  }, [grading, questionId, selectedChoices, refreshProgress])
 
   return (
     <section
@@ -460,13 +497,67 @@ function QuestionCard({
       <div>
         <StemBlocks blocks={stemBlocks} compact />
       </div>
-      <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
-        {choices.map((choice) => (
-          <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-            {choice.text ?? '(이미지 보기)'}
-          </li>
-        ))}
-      </ol>
+      {interactive && (!showSolution || answer) ? (
+        <div className="mt-1.5 text-sm">
+          <ChoiceList
+            choices={choices}
+            selected={selectedChoices}
+            onChange={setSelectedChoices}
+            revealed={showSolution ? answer : null}
+            disabled={showSolution}
+          />
+        </div>
+      ) : (
+        <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
+          {choices.map((choice) => (
+            <li key={choice.no} className="text-slate-700 dark:text-slate-300">
+              {choice.text ?? '(이미지 보기)'}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {interactive && !showSolution && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void grade()}
+            disabled={selectedChoices.length === 0 || grading}
+            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {grading ? '채점 중…' : '채점하기'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSolution(true)}
+            className="px-1 py-1.5 text-xs text-slate-500 hover:text-emerald-700 dark:text-slate-400 dark:hover:text-emerald-300"
+          >
+            풀이 바로 보기
+          </button>
+          {gradeError && (
+            <span className="text-xs text-rose-600 dark:text-rose-400">{gradeError}</span>
+          )}
+        </div>
+      )}
+
+      {interactive && showSolution && answer && (
+        <p
+          className={cn(
+            'mt-2.5 rounded-md px-2.5 py-1.5 text-xs font-bold',
+            isCorrect === true
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+              : isCorrect === false
+                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+          )}
+        >
+          {isCorrect === true
+            ? `정답입니다 · ${formatAnswer(effectiveAnswer(answer))}`
+            : isCorrect === false
+              ? `오답입니다 · 정답 ${formatAnswer(effectiveAnswer(answer))}`
+              : `채점되었습니다 · 정답 ${formatAnswer(effectiveAnswer(answer))}`}
+        </p>
+      )}
 
       {(identical.length > 0 || canCluster) && (
         <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -493,7 +584,7 @@ function QuestionCard({
         </p>
       )}
 
-      {preparing ? (
+      {showSolution && (preparing ? (
         <div className="mt-2.5 flex justify-center py-3">
           <Spinner className="h-4 w-4" />
         </div>
@@ -503,7 +594,7 @@ function QuestionCard({
           groupId={solutionGroupId}
           choiceCount={choices.length}
         />
-      )}
+      ))}
     </section>
   )
 }

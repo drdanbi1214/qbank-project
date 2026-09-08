@@ -57,6 +57,25 @@ export function TopicsPage() {
     }
   })
 
+  // 유사 문제를 읽는 방식은 주제를 옮겨도 유지한다. 문제를 먼저 풀고 싶은
+  // 사람과 기존처럼 문제·해설을 한 번에 훑고 싶은 사람이 모두 쓸 수 있다.
+  const [yamaDisplayMode, setYamaDisplayModeState] = useState<'solve' | 'all'>(() => {
+    try {
+      return window.localStorage.getItem('topics.yamaDisplayMode') === 'solve' ? 'solve' : 'all'
+    } catch {
+      return 'all'
+    }
+  })
+
+  const setYamaDisplayMode = useCallback((mode: 'solve' | 'all') => {
+    setYamaDisplayModeState(mode)
+    try {
+      window.localStorage.setItem('topics.yamaDisplayMode', mode)
+    } catch {
+      // 저장이 막힌 브라우저에서도 현재 화면의 전환은 그대로 동작한다.
+    }
+  }, [])
+
   const toggleOutline = useCallback((open: boolean) => {
     setOutlineOpen(open)
     try {
@@ -378,9 +397,12 @@ export function TopicsPage() {
         </Link>
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <h1 className="text-xl font-bold">{subject?.name ?? ''}</h1>
-        <Button size="sm" className="ml-auto" onClick={() => startDraft(null)}>
-          새 주제
-        </Button>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <YamaDisplayModeControl mode={yamaDisplayMode} onChange={setYamaDisplayMode} />
+          <Button size="sm" onClick={() => startDraft(null)}>
+            새 주제
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -629,6 +651,7 @@ export function TopicsPage() {
                 authorId={selected.createdBy}
                 requiredPermission={selected.requiredPermission}
                 editing={editing}
+                yamaDisplayMode={editing ? 'all' : yamaDisplayMode}
               >
               {editing && session ? (
                 <LazyRichTextEditor
@@ -695,6 +718,48 @@ export function TopicsPage() {
         </div>
       )}
     </section>
+  )
+}
+
+function YamaDisplayModeControl({
+  mode,
+  onChange,
+}: {
+  mode: 'solve' | 'all'
+  onChange: (mode: 'solve' | 'all') => void
+}) {
+  return (
+    <div
+      className="inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm dark:border-slate-600 dark:bg-slate-900"
+      aria-label="유사 문제 표시 방식"
+    >
+        <button
+          type="button"
+          onClick={() => onChange('solve')}
+          aria-pressed={mode === 'solve'}
+          className={cn(
+            'rounded px-2 py-1 text-[11px] font-medium transition-colors',
+            mode === 'solve'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
+          )}
+        >
+          문제 먼저 풀기
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('all')}
+          aria-pressed={mode === 'all'}
+          className={cn(
+            'rounded px-2 py-1 text-[11px] font-medium transition-colors',
+            mode === 'all'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
+          )}
+        >
+          풀이 한번에 보기
+        </button>
+    </div>
   )
 }
 

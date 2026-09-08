@@ -8,6 +8,8 @@ type TopicScope = {
   requiredPermission: string
   /** 테마가 편집 중인지. 저장된 상태에서는 해설도 고칠 수 없다. */
   editing: boolean
+  /** 읽기 화면에서 야마를 문제부터 보여줄지, 해설까지 한 번에 보여줄지. */
+  yamaDisplayMode?: 'solve' | 'all'
 }
 
 const Context = createContext<TopicScope | null>(null)
@@ -22,11 +24,12 @@ export function TopicScopeProvider({
   authorId,
   requiredPermission,
   editing,
+  yamaDisplayMode = 'all',
   children,
 }: TopicScope & { children: ReactNode }) {
   const value = useMemo(
-    () => ({ authorId, requiredPermission, editing }),
-    [authorId, requiredPermission, editing],
+    () => ({ authorId, requiredPermission, editing, yamaDisplayMode }),
+    [authorId, requiredPermission, editing, yamaDisplayMode],
   )
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
