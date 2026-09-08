@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
-import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { useDraft } from '@/components/editor/useDraft'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -24,6 +23,7 @@ import { LecturePicker } from '@/components/lecture/LecturePicker'
 import { TheoryPicker } from '@/components/question/TheoryPicker'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { TopicSidebar } from '@/components/question/TopicSidebar'
+import { TopicMemoWorkspace } from '@/components/theory/TheoryMemoWorkspace'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatDateTime, formatShortDate } from '@/utils/date'
 import { emptyDoc, type RichDoc } from '@/types/richtext'
@@ -645,18 +645,21 @@ export function TopicsPage() {
                   onRequestLecture={userId ? requestLecture : undefined}
                 />
               ) : (
-                <>
-                  <RichTextViewer doc={selected.content} />
-                  <PostReactions
-                    key={selected.id}
-                    kind="topic"
-                    id={selected.id}
-                    authorId={selected.createdBy}
-                    upvoteCount={selected.upvoteCount}
-                    commentCount={selected.commentCount}
-                    upvoted={selected.upvoted}
-                  />
-                </>
+                <TopicMemoWorkspace
+                  topicId={selected.id}
+                  content={selected.content}
+                  footer={(
+                    <PostReactions
+                      key={selected.id}
+                      kind="topic"
+                      id={selected.id}
+                      authorId={selected.createdBy}
+                      upvoteCount={selected.upvoteCount}
+                      commentCount={selected.commentCount}
+                      upvoted={selected.upvoted}
+                    />
+                  )}
+                />
               )}
               </TopicScopeProvider>
             </div>

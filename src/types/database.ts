@@ -2670,6 +2670,8 @@ export type Database = {
           anchor_from: number
           anchor_to: number
           body: string
+          color: string
+          content: Json | null
           created_at: string
           document_id: string
           id: string
@@ -2682,6 +2684,8 @@ export type Database = {
           anchor_from: number
           anchor_to: number
           body?: string
+          color?: string
+          content?: Json | null
           created_at?: string
           document_id: string
           id?: string
@@ -2694,6 +2698,8 @@ export type Database = {
           anchor_from?: number
           anchor_to?: number
           body?: string
+          color?: string
+          content?: Json | null
           created_at?: string
           document_id?: string
           id?: string
@@ -2712,6 +2718,63 @@ export type Database = {
           },
           {
             foreignKeyName: "theory_memos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      topic_memos: {
+        Row: {
+          anchor_from: number
+          anchor_to: number
+          color: string
+          content: Json
+          created_at: string
+          id: string
+          plain_text: string
+          selected_text: string
+          topic_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anchor_from: number
+          anchor_to: number
+          color?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          plain_text?: string
+          selected_text?: string
+          topic_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anchor_from?: number
+          anchor_to?: number
+          color?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          plain_text?: string
+          selected_text?: string
+          topic_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_memos_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_memos_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

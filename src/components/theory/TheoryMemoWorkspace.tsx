@@ -6,26 +6,34 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ClipboardEvent,
   type ReactNode,
 } from 'react'
+import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { MarkableRegion } from '@/components/marking/MarkableRegion'
 import type { RenderMark, SelectionRange } from '@/components/marking/marks'
 import { useTextMarks } from '@/components/marking/useTextMarks'
-import { ImageZoomModal } from '@/components/question/ImageZoomModal'
-import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
+import type { MarkTargetType } from '@/lib/queries/marks'
+import {
+  createTopicMemo,
+  deleteTopicMemo,
+  fetchTopicMemos,
+  updateTopicMemo,
+  updateTopicMemoColor,
+} from '@/lib/queries/topicMemos'
 import {
   createTheoryMemo,
   deleteTheoryMemo,
   fetchTheoryMemos,
+  THEORY_MEMO_COLORS,
   updateTheoryMemo,
-  type TheoryMemo,
+  updateTheoryMemoColor,
+  type PersonalMemo,
+  type TheoryMemoColor,
 } from '@/lib/queries/theoryMemos'
 import type { TheoryDocument } from '@/lib/queries/theory'
-import { useSignedUrl } from '@/lib/storage'
-import { clipboardHasImage, imageFilesFromClipboard, uploadImage } from '@/lib/uploads'
+import { richTextToPlain, type RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
 type Props = {
@@ -33,13 +41,150 @@ type Props = {
   footer: ReactNode
 }
 
+type TopicProps = {
+  topicId: string
+  content: RichDoc
+  footer: ReactNode
+}
+
+type MemoStore = {
+  markTargetType: MarkTargetType
+  fetch: (targetId: string) => Promise<PersonalMemo[]>
+  create: (params: {
+    userId: string
+    targetId: string
+    from: number
+    to: number
+    selectedText: string
+  }) => Promise<PersonalMemo>
+  updateContent: (id: string, content: RichDoc) => Promise<void>
+  updateColor: (id: string, color: TheoryMemoColor) => Promise<void>
+  delete: (id: string) => Promise<void>
+}
+
 type Point = { id: string; x1: number; y1: number; x2: number; y2: number }
+
+const MEMO_COLOR_STYLES: Record<TheoryMemoColor, {
+  label: string
+  swatch: string
+  card: string
+  active: string
+  header: string
+  mutedText: string
+  action: string
+  collapsed: string
+}> = {
+  yellow: {
+    label: '노랑',
+    swatch: 'bg-[#fff1a8]',
+    card: 'border-amber-300/90 bg-[#fff8cf] dark:border-amber-600/70 dark:bg-amber-950',
+    active: 'border-amber-400 ring-amber-300/70 dark:border-amber-500 dark:ring-amber-700',
+    header: 'border-amber-300/60 dark:border-amber-700/70',
+    mutedText: 'text-amber-900/55 dark:text-amber-100/55',
+    action: 'text-amber-900/55 hover:bg-amber-200/80 hover:text-amber-950 dark:text-amber-100/60 dark:hover:bg-amber-800 dark:hover:text-amber-50',
+    collapsed: 'text-amber-950/70 hover:bg-amber-100/60 dark:text-amber-50/70 dark:hover:bg-amber-900/50',
+  },
+  rose: {
+    label: '분홍',
+    swatch: 'bg-[#ffcdd5]',
+    card: 'border-rose-300/90 bg-[#fff0f2] dark:border-rose-700/70 dark:bg-rose-950',
+    active: 'border-rose-400 ring-rose-300/70 dark:border-rose-500 dark:ring-rose-700',
+    header: 'border-rose-300/60 dark:border-rose-700/70',
+    mutedText: 'text-rose-900/55 dark:text-rose-100/55',
+    action: 'text-rose-900/55 hover:bg-rose-200/80 hover:text-rose-950 dark:text-rose-100/60 dark:hover:bg-rose-800 dark:hover:text-rose-50',
+    collapsed: 'text-rose-950/70 hover:bg-rose-100/60 dark:text-rose-50/70 dark:hover:bg-rose-900/50',
+  },
+  green: {
+    label: '초록',
+    swatch: 'bg-[#bcebd1]',
+    card: 'border-emerald-300/90 bg-[#eaf9ef] dark:border-emerald-700/70 dark:bg-emerald-950',
+    active: 'border-emerald-400 ring-emerald-300/70 dark:border-emerald-500 dark:ring-emerald-700',
+    header: 'border-emerald-300/60 dark:border-emerald-700/70',
+    mutedText: 'text-emerald-900/55 dark:text-emerald-100/55',
+    action: 'text-emerald-900/55 hover:bg-emerald-200/80 hover:text-emerald-950 dark:text-emerald-100/60 dark:hover:bg-emerald-800 dark:hover:text-emerald-50',
+    collapsed: 'text-emerald-950/70 hover:bg-emerald-100/60 dark:text-emerald-50/70 dark:hover:bg-emerald-900/50',
+  },
+  blue: {
+    label: '파랑',
+    swatch: 'bg-[#bfdefa]',
+    card: 'border-sky-300/90 bg-[#edf7ff] dark:border-sky-700/70 dark:bg-sky-950',
+    active: 'border-sky-400 ring-sky-300/70 dark:border-sky-500 dark:ring-sky-700',
+    header: 'border-sky-300/60 dark:border-sky-700/70',
+    mutedText: 'text-sky-900/55 dark:text-sky-100/55',
+    action: 'text-sky-900/55 hover:bg-sky-200/80 hover:text-sky-950 dark:text-sky-100/60 dark:hover:bg-sky-800 dark:hover:text-sky-50',
+    collapsed: 'text-sky-950/70 hover:bg-sky-100/60 dark:text-sky-50/70 dark:hover:bg-sky-900/50',
+  },
+  violet: {
+    label: '보라',
+    swatch: 'bg-[#ddcff8]',
+    card: 'border-violet-300/90 bg-[#f6f0ff] dark:border-violet-700/70 dark:bg-violet-950',
+    active: 'border-violet-400 ring-violet-300/70 dark:border-violet-500 dark:ring-violet-700',
+    header: 'border-violet-300/60 dark:border-violet-700/70',
+    mutedText: 'text-violet-900/55 dark:text-violet-100/55',
+    action: 'text-violet-900/55 hover:bg-violet-200/80 hover:text-violet-950 dark:text-violet-100/60 dark:hover:bg-violet-800 dark:hover:text-violet-50',
+    collapsed: 'text-violet-950/70 hover:bg-violet-100/60 dark:text-violet-50/70 dark:hover:bg-violet-900/50',
+  },
+}
+
+const THEORY_MEMO_STORE: MemoStore = {
+  markTargetType: 'theory',
+  fetch: fetchTheoryMemos,
+  create: ({ targetId, ...params }) => createTheoryMemo({ ...params, documentId: targetId }),
+  updateContent: updateTheoryMemo,
+  updateColor: updateTheoryMemoColor,
+  delete: deleteTheoryMemo,
+}
+
+const TOPIC_MEMO_STORE: MemoStore = {
+  markTargetType: 'topic',
+  fetch: fetchTopicMemos,
+  create: ({ targetId, ...params }) => createTopicMemo({ ...params, topicId: targetId }),
+  updateContent: updateTopicMemo,
+  updateColor: updateTopicMemoColor,
+  delete: deleteTopicMemo,
+}
 
 /** 알렌 본문의 개인 표시와 여백 메모를 한 좌표계에서 그린다. */
 export function TheoryMemoWorkspace({ document, footer }: Props) {
+  return (
+    <PersonalMemoWorkspace
+      targetId={document.id}
+      content={document.content}
+      footer={footer}
+      store={THEORY_MEMO_STORE}
+      hierarchicalIndent
+    />
+  )
+}
+
+/** 레옵스 본문의 메모도 알렌과 같은 UI를 쓰되 별도 개인 저장소에 저장한다. */
+export function TopicMemoWorkspace({ topicId, content, footer }: TopicProps) {
+  return (
+    <PersonalMemoWorkspace
+      targetId={topicId}
+      content={content}
+      footer={footer}
+      store={TOPIC_MEMO_STORE}
+    />
+  )
+}
+
+function PersonalMemoWorkspace({
+  targetId,
+  content,
+  footer,
+  store,
+  hierarchicalIndent = false,
+}: {
+  targetId: string
+  content: RichDoc
+  footer: ReactNode
+  store: MemoStore
+  hierarchicalIndent?: boolean
+}) {
   const { session } = useAuth()
-  const textMarks = useTextMarks('theory', document.id)
-  const [memos, setMemos] = useState<TheoryMemo[]>([])
+  const textMarks = useTextMarks(store.markTargetType, targetId)
+  const [memos, setMemos] = useState<PersonalMemo[]>([])
   const [activeMemoId, setActiveMemoId] = useState<string | null>(null)
   const [focusMemoId, setFocusMemoId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +207,7 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
 
   useEffect(() => {
     let active = true
-    void fetchTheoryMemos(document.id)
+    void store.fetch(targetId)
       .then((rows) => {
         if (active) setMemos(rows)
       })
@@ -70,7 +215,7 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
         if (active) setError(caught instanceof Error ? caught.message : '메모를 불러오지 못했습니다.')
       })
     return () => { active = false }
-  }, [document.id])
+  }, [store, targetId])
 
   const sortedMemos = useMemo(
     () => [...memos].sort((a, b) => a.from - b.from || a.id.localeCompare(b.id)),
@@ -81,7 +226,7 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
     [sortedMemos],
   )
 
-  const findAnchor = useCallback((memo: TheoryMemo): HTMLElement | null => {
+  const findAnchor = useCallback((memo: PersonalMemo): HTMLElement | null => {
     const region = regionRef.current
     if (!region) return null
     const exact = region.querySelector<HTMLElement>(`[data-pos="${memo.from}"]`)
@@ -161,64 +306,58 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
     if (!session) return
     setError(null)
     try {
-      const memo = await createTheoryMemo({
+      const memo = await store.create({
         userId: session.user.id,
-        documentId: document.id,
+        targetId,
         from: range.from,
         to: range.to,
         selectedText: range.text,
       })
+      // 새 카드가 처음 렌더되고 편집기에 포커스될 때 브라우저가 절대 위치의
+      // 카드로 스크롤하지 않도록, 렌더 직전 위치도 한 번 보존한다.
+      const left = window.scrollX
+      const top = window.scrollY
       setMemos((current) => [...current, memo])
       setActiveMemoId(memo.id)
       setFocusMemoId(memo.id)
+      window.requestAnimationFrame(() => window.scrollTo(left, top))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '메모를 만들지 못했습니다.')
     }
-  }, [document.id, session])
+  }, [session, store, targetId])
 
-  const saveBody = useCallback(async (id: string, body: string) => {
+  const saveContent = useCallback(async (id: string, content: RichDoc) => {
     try {
-      await updateTheoryMemo(id, { body })
-      setMemos((current) => current.map((memo) => memo.id === id ? { ...memo, body } : memo))
+      await store.updateContent(id, content)
+      setMemos((current) => current.map((memo) => memo.id === id ? { ...memo, content } : memo))
       setError(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '메모를 저장하지 못했습니다.')
+      throw caught
     }
-  }, [])
+  }, [store])
 
-  const addImages = useCallback(async (memo: TheoryMemo, files: File[]) => {
-    if (!session || files.length === 0) return
-    setError(null)
+  const saveColor = useCallback(async (id: string, color: TheoryMemoColor) => {
     try {
-      const added = await Promise.all(files.map((file) => uploadImage(file, session.user.id)))
-      const imagePaths = [...memo.imagePaths, ...added].slice(0, 12)
-      await updateTheoryMemo(memo.id, { imagePaths })
-      setMemos((current) => current.map((item) => item.id === memo.id ? { ...item, imagePaths } : item))
+      await store.updateColor(id, color)
+      setMemos((current) => current.map((memo) => memo.id === id ? { ...memo, color } : memo))
+      setError(null)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '사진을 넣지 못했습니다.')
+      setError(caught instanceof Error ? caught.message : '메모지 색을 저장하지 못했습니다.')
+      throw caught
     }
-  }, [session])
+  }, [store])
 
-  const removeImage = useCallback(async (memo: TheoryMemo, path: string) => {
-    const imagePaths = memo.imagePaths.filter((item) => item !== path)
-    try {
-      await updateTheoryMemo(memo.id, { imagePaths })
-      setMemos((current) => current.map((item) => item.id === memo.id ? { ...item, imagePaths } : item))
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '사진을 빼지 못했습니다.')
-    }
-  }, [])
-
-  const removeMemo = useCallback(async (memo: TheoryMemo) => {
+  const removeMemo = useCallback(async (memo: PersonalMemo) => {
     if (!window.confirm('이 메모를 삭제할까요?')) return
     try {
-      await deleteTheoryMemo(memo.id)
+      await store.delete(memo.id)
       setMemos((current) => current.filter((item) => item.id !== memo.id))
       if (activeMemoId === memo.id) setActiveMemoId(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '메모를 삭제하지 못했습니다.')
     }
-  }, [activeMemoId])
+  }, [activeMemoId, store])
 
   const focusMemo = useCallback((id: string) => {
     if (!memos.some((memo) => memo.id === id)) return
@@ -227,7 +366,10 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
   }, [memos])
 
   return (
-    <div ref={workspaceRef} className="relative grid min-w-0 xl:grid-cols-[minmax(0,1fr)_18rem]">
+    // Grid의 기본 stretch 상태에서 오른쪽 레일 안에 측정 높이만큼 spacer를 두면
+    // 왼쪽 본문도 늘어나고 다음 ResizeObserver 측정이 그 값을 다시 더해 무한히
+    // 길어진다. 두 열은 intrinsic 높이를 유지하고 레일 자체에만 최소 높이를 준다.
+    <div ref={workspaceRef} className="relative grid min-w-0 items-start xl:grid-cols-[minmax(0,1fr)_18rem]">
       <div ref={contentRef} className="min-w-0 px-4 pb-4 sm:px-5 sm:pb-5">
         <MarkableRegion
           regionRef={regionRef}
@@ -236,8 +378,8 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
           onMemo={(range) => void addMemo(range)}
         >
           <RichTextViewer
-            doc={document.content}
-            hierarchicalIndent
+            doc={content}
+            hierarchicalIndent={hierarchicalIndent}
             marks={[...memoMarks, ...textMarks.marks]}
             onMarkClick={focusMemo}
             activeMarkId={activeMemoId}
@@ -249,6 +391,7 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
       <aside
         ref={railRef}
         aria-label="내 메모"
+        style={desktop ? { minHeight: railHeight } : undefined}
         className="relative border-t border-slate-200 bg-slate-50/70 px-2 pb-3 pt-2 dark:border-slate-700 dark:bg-slate-950/35 xl:border-l xl:border-t-0"
       >
         <div className="mb-2 flex h-8 items-center justify-between px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -265,7 +408,6 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
             본문을 드래그한 뒤 메모 버튼을 누르면 여기에 메모지가 생깁니다.
           </p>
         )}
-        <div aria-hidden="true" style={desktop ? { height: railHeight } : undefined} />
         <div className={cn(!desktop && 'space-y-2')}>
           {sortedMemos.map((memo) => (
             <TheoryMemoCard
@@ -283,9 +425,10 @@ export function TheoryMemoWorkspace({ document, footer }: Props) {
                 setActiveMemoId(memo.id)
                 if (focusMemoId === memo.id) setFocusMemoId(null)
               }}
-              onSaveBody={(body) => saveBody(memo.id, body)}
-              onAddImages={(files) => addImages(memo, files)}
-              onRemoveImage={(path) => removeImage(memo, path)}
+              userId={session?.user.id ?? ''}
+              onSaveContent={(content) => saveContent(memo.id, content)}
+              onSaveColor={(color) => saveColor(memo.id, color)}
+              onUploadError={setError}
               onDelete={() => void removeMemo(memo)}
             />
           ))}
@@ -323,176 +466,286 @@ function TheoryMemoCard({
   className,
   cardRef,
   onFocus,
-  onSaveBody,
-  onAddImages,
-  onRemoveImage,
+  userId,
+  onSaveContent,
+  onSaveColor,
+  onUploadError,
   onDelete,
 }: {
-  memo: TheoryMemo
+  memo: PersonalMemo
   active: boolean
   autoFocus: boolean
   style?: CSSProperties
   className?: string
   cardRef: (node: HTMLDivElement | null) => void
   onFocus: () => void
-  onSaveBody: (body: string) => Promise<void>
-  onAddImages: (files: File[]) => Promise<void>
-  onRemoveImage: (path: string) => Promise<void>
+  userId: string
+  onSaveContent: (content: RichDoc) => Promise<void>
+  onSaveColor: (color: TheoryMemoColor) => Promise<void>
+  onUploadError: (message: string | null) => void
   onDelete: () => void
 }) {
-  const [body, setBody] = useState(memo.body)
+  const [draft, setDraft] = useState(memo.content)
   const [dirty, setDirty] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [zoomed, setZoomed] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [saving, setSaving] = useState(false)
+  const [pendingUploads, setPendingUploads] = useState(0)
+  const [editing, setEditing] = useState(autoFocus)
+  const [collapsed, setCollapsed] = useState(false)
+  const [color, setColor] = useState(memo.color)
+  const [savingColor, setSavingColor] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (autoFocus) textareaRef.current?.focus()
-  }, [autoFocus])
+    if (!autoFocus || !editing || !rootRef.current) return
+    const root = rootRef.current
+    let frame = 0
+    let timeout = 0
+    const focusWithoutJump = () => {
+      const editor = root.querySelector<HTMLElement>('.ProseMirror')
+      if (!editor) return false
+      const left = window.scrollX
+      const top = window.scrollY
+      editor.focus({ preventScroll: true })
+      // 일부 Safari는 preventScroll을 무시하므로 같은 프레임에 원위치를 복원한다.
+      window.scrollTo(left, top)
+      frame = window.requestAnimationFrame(() => window.scrollTo(left, top))
+      return true
+    }
+    if (focusWithoutJump()) return () => window.cancelAnimationFrame(frame)
 
-  useLayoutEffect(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.style.height = '0px'
-    textarea.style.height = `${Math.max(42, textarea.scrollHeight)}px`
-  }, [body])
+    // 편집기 청크가 지연 로딩된 경우 DOM이 생긴 순간 한 번만 포커스한다.
+    const observer = new MutationObserver(() => {
+      if (focusWithoutJump()) observer.disconnect()
+    })
+    observer.observe(root, { childList: true, subtree: true })
+    timeout = window.setTimeout(() => observer.disconnect(), 5_000)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timeout)
+      window.cancelAnimationFrame(frame)
+    }
+  }, [autoFocus, editing])
 
-  useEffect(() => {
-    if (!dirty) return
-    const timer = window.setTimeout(() => {
-      void onSaveBody(body).then(() => setDirty(false))
-    }, 700)
-    return () => window.clearTimeout(timer)
-  }, [body, dirty, onSaveBody])
-
-  async function upload(files: File[]) {
-    if (files.length === 0) return
-    setUploading(true)
+  async function save(closeEditor = true): Promise<boolean> {
+    if (pendingUploads > 0) {
+      onUploadError('사진 업로드가 끝난 뒤 저장해 주세요.')
+      return false
+    }
+    if (!dirty) {
+      if (closeEditor) setEditing(false)
+      return true
+    }
+    setSaving(true)
     try {
-      await onAddImages(files)
+      await onSaveContent(draft)
+      setDirty(false)
+      if (closeEditor) setEditing(false)
+      return true
+    } catch {
+      return false
     } finally {
-      setUploading(false)
+      setSaving(false)
     }
   }
 
-  async function paste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    if (!clipboardHasImage(event.clipboardData)) return
-    event.preventDefault()
-    const files = await imageFilesFromClipboard(event.clipboardData)
-    if (files.length === 0) return
-    await upload(files)
+  async function collapse() {
+    if (editing && !(await save())) return
+    setCollapsed(true)
   }
+
+  async function chooseColor(nextColor: TheoryMemoColor) {
+    if (nextColor === color || savingColor) return
+    const previousColor = color
+    setColor(nextColor)
+    setSavingColor(true)
+    try {
+      await onSaveColor(nextColor)
+    } catch {
+      setColor(previousColor)
+    } finally {
+      setSavingColor(false)
+    }
+  }
+
+  const preview = richTextToPlain(memo.content) || memo.selectedText || '빈 메모'
+  const colorStyle = MEMO_COLOR_STYLES[color]
 
   return (
     <div
-      ref={cardRef}
+      ref={(node) => {
+        rootRef.current = node
+        cardRef(node)
+      }}
       style={style}
-      onFocus={onFocus}
+      onFocusCapture={onFocus}
       onClick={onFocus}
       className={cn(
-        'group z-20 overflow-hidden rounded-[5px] border border-amber-300/90 bg-[#fff8cf] p-2 shadow-sm transition-[box-shadow,border-color] dark:border-amber-600/70 dark:bg-amber-950',
-        active && 'border-amber-400 shadow-md ring-1 ring-amber-300/70 dark:border-amber-500 dark:ring-amber-700',
+        'group z-20 overflow-hidden rounded-[5px] border shadow-sm transition-[box-shadow,border-color,background-color]',
+        colorStyle.card,
+        active && cn('shadow-md ring-1', colorStyle.active),
         className,
       )}
     >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute right-[-1px] top-[-1px] h-5 w-5 border-b border-l border-amber-300 bg-amber-100 dark:border-amber-600 dark:bg-amber-900"
-        style={{ clipPath: 'polygon(0 0, 100% 100%, 0 100%)' }}
-      />
-      <button
-        type="button"
-        aria-label="메모 삭제"
-        title="메모 삭제"
-        onClick={(event) => {
-          event.stopPropagation()
-          onDelete()
-        }}
-        className="absolute right-1.5 top-1.5 z-10 grid h-5 w-5 place-items-center rounded text-sm leading-none text-amber-900/40 opacity-0 transition-opacity hover:bg-amber-200/70 hover:text-amber-950 group-hover:opacity-100 focus:opacity-100 dark:text-amber-100/50 dark:hover:bg-amber-800"
-      >
-        ×
-      </button>
-      <textarea
-        ref={textareaRef}
-        value={body}
-        onChange={(event) => {
-          setBody(event.target.value)
-          setDirty(true)
-        }}
-        onPaste={(event) => void paste(event)}
-        onBlur={() => {
-          if (!dirty) return
-          void onSaveBody(body).then(() => setDirty(false))
-        }}
-        placeholder="메모를 입력하세요"
-        aria-label="메모 내용"
-        className="block min-h-10 w-full resize-none overflow-hidden border-0 bg-transparent pr-4 text-[13px] font-medium leading-[1.28] text-slate-800 outline-none placeholder:text-amber-900/35 dark:text-amber-50 dark:placeholder:text-amber-200/40"
-      />
-      {memo.imagePaths.length > 0 && (
-        <div className={cn('mt-1 grid gap-1', memo.imagePaths.length > 1 && 'grid-cols-2')}>
-          {memo.imagePaths.map((path) => (
-            <MemoImage key={path} path={path} onZoom={setZoomed} onRemove={() => void onRemoveImage(path)} />
-          ))}
-        </div>
-      )}
-      {uploading ? (
-        <Spinner className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 border-amber-800/20 border-t-amber-700 dark:border-amber-200/20 dark:border-t-amber-200" />
-      ) : (
+      <div className={cn('flex h-7 items-center gap-1 border-b px-1.5', colorStyle.header)}>
+        <span className={cn('min-w-0 flex-1 truncate px-0.5 text-[10px]', colorStyle.mutedText)}>
+          {memo.selectedText || '내 메모'}
+        </span>
+        {editing && (
+          <div role="group" aria-label="메모지 색상" className="flex shrink-0 items-center gap-0.5">
+            {THEORY_MEMO_COLORS.map((option) => {
+              const optionStyle = MEMO_COLOR_STYLES[option]
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  aria-label={`${optionStyle.label} 메모지`}
+                  title={`${optionStyle.label} 메모지`}
+                  aria-pressed={color === option}
+                  disabled={savingColor}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void chooseColor(option)
+                  }}
+                  className={cn(
+                    'h-3.5 w-3.5 rounded-full border border-black/15 transition-transform hover:scale-110 disabled:opacity-50',
+                    optionStyle.swatch,
+                    color === option && 'ring-1 ring-slate-700 ring-offset-1 dark:ring-slate-100 dark:ring-offset-slate-900',
+                  )}
+                />
+              )
+            })}
+          </div>
+        )}
+        {/* 접었을 때는 다시 키우는 □ 와 삭제 × 만 남긴다. */}
+        {!collapsed && (editing ? (
+          <MemoAction
+            label={pendingUploads > 0 ? '사진 업로드 중' : saving ? '저장 중' : dirty ? '메모 저장' : '편집 끝내기'}
+            disabled={saving || pendingUploads > 0}
+            onClick={() => void save()}
+            className={colorStyle.action}
+          >
+            <SaveIcon />
+          </MemoAction>
+        ) : (
+          <MemoAction
+            label="메모 편집"
+            className={colorStyle.action}
+            onClick={() => {
+              setCollapsed(false)
+              setEditing(true)
+            }}
+          >
+            <PencilIcon />
+          </MemoAction>
+        ))}
+        <MemoAction
+          className={colorStyle.action}
+          label={collapsed ? '메모 펼치기' : '메모 접기'}
+          disabled={saving || pendingUploads > 0}
+          onClick={() => {
+            if (collapsed) setCollapsed(false)
+            else void collapse()
+          }}
+        >
+          {collapsed ? <ExpandIcon /> : <span aria-hidden="true" className="-mt-1 text-base">_</span>}
+        </MemoAction>
+        <MemoAction className={colorStyle.action} label="메모 삭제" disabled={saving || pendingUploads > 0} onClick={onDelete}>
+          <span aria-hidden="true" className="text-base">×</span>
+        </MemoAction>
+      </div>
+
+      {collapsed ? (
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
-          className="absolute bottom-1 right-1 grid h-5 w-5 place-items-center rounded text-amber-800/55 opacity-0 transition-opacity hover:bg-amber-200/70 hover:text-amber-900 group-hover:opacity-100 focus:opacity-100 dark:text-amber-200/60 dark:hover:bg-amber-800"
-          aria-label="사진 추가"
-          title="사진 추가 (붙여넣기도 가능)"
+          onClick={() => setCollapsed(false)}
+          className={cn('block w-full truncate px-2 py-1.5 text-left text-xs', colorStyle.collapsed)}
+          aria-label="메모 펼치기"
+          title="눌러서 메모 펼치기"
         >
-          <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
-            <circle cx="8.5" cy="9" r="1.5" fill="currentColor" />
-            <path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          {preview}
         </button>
+      ) : editing ? (
+        <LazyRichTextEditor
+          key={`${memo.id}:editor`}
+          initialValue={draft}
+          onChange={(content) => {
+            setDraft(content)
+            setDirty(true)
+          }}
+          userId={userId}
+          compact
+          memo
+          placeholder="메모를 입력하세요"
+          onUploadError={onUploadError}
+          onPendingUploadsChange={setPendingUploads}
+          maxImages={12}
+          className="!rounded-none !border-0 !bg-transparent"
+          contentClassName="memo-rich-text"
+        />
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          onDoubleClick={() => setEditing(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') setEditing(true)
+          }}
+          className="block min-h-14 w-full px-2 py-2 text-left"
+          aria-label="메모 내용. 두 번 눌러 편집"
+        >
+          <RichTextViewer doc={memo.content} className="memo-rich-text" />
+        </div>
       )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        multiple
-        className="hidden"
-        onChange={(event) => {
-          void upload(Array.from(event.target.files ?? []))
-          event.target.value = ''
-        }}
-      />
-      {zoomed && <ImageZoomModal src={zoomed} caption={null} onClose={() => setZoomed(null)} />}
     </div>
   )
 }
 
-function MemoImage({ path, onZoom, onRemove }: {
-  path: string
-  onZoom: (url: string) => void
-  onRemove: () => void
+function MemoAction({ label, disabled = false, onClick, children, className }: {
+  label: string
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+  className?: string
 }) {
-  const src = useSignedUrl(path)
-  if (!src) return <div className="h-16 animate-pulse rounded bg-amber-200/60 dark:bg-amber-900" />
   return (
-    <div className="group/image relative min-w-0">
-      <button type="button" onClick={() => onZoom(src)} className="block w-full cursor-zoom-in overflow-hidden rounded-sm">
-        <img src={src} alt="메모 사진" className="max-h-44 w-full object-cover" />
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation()
-          onRemove()
-        }}
-        aria-label="사진 빼기"
-        title="사진 빼기"
-        className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-slate-950/65 text-sm leading-none text-white opacity-0 group-hover/image:opacity-100 focus:opacity-100"
-      >
-        ×
-      </button>
-    </div>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick()
+      }}
+      className={cn('grid h-5 w-5 shrink-0 place-items-center rounded disabled:opacity-35', className)}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+      <path d="M5 4h12l2 2v14H5V4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 4v6h8V4M8 20v-6h8v6" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+      <path d="m5 19 1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L9 18l-4 1Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="m14.5 6.5 3 3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
+function ExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="1" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
   )
 }
