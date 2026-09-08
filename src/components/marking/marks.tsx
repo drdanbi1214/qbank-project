@@ -14,12 +14,12 @@ import { cn } from '@/utils/cn'
 
 export type MarkStyle = 'yellow' | 'green' | 'sky' | 'pink' | 'red' | 'bold'
 
-/** 화면에 그릴 표시 하나. 인라인 코멘트도 같은 통로로 그린다. */
+/** 화면에 그릴 표시 하나. 인라인 코멘트와 여백 메모도 같은 통로로 그린다. */
 export type RenderMark = {
   id: string
   from: number
   to: number
-  style: MarkStyle | 'comment'
+  style: MarkStyle | 'comment' | 'memo'
   /** 인라인 코멘트가 해결 처리된 경우 흐리게 */
   resolved?: boolean
 }
@@ -35,6 +35,7 @@ const BACKGROUND_CLASS: Record<string, string> = {
   sky: 'bg-sky-200 dark:bg-sky-400/40',
   pink: 'bg-pink-200 dark:bg-pink-400/40',
   comment: 'bg-amber-100 dark:bg-amber-500/30',
+  memo: 'bg-amber-100/80 dark:bg-amber-500/20',
 }
 
 const RESOLVED_CLASS = 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
@@ -42,7 +43,7 @@ const RESOLVED_CLASS = 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-
 export const HIGHLIGHT_STYLES: MarkStyle[] = ['yellow', 'green', 'sky', 'pink']
 
 /** 배경을 칠하는 표시인지 (빨간 글씨, 굵게는 배경을 건드리지 않는다) */
-function isBackgroundStyle(style: MarkStyle | 'comment'): boolean {
+function isBackgroundStyle(style: MarkStyle | 'comment' | 'memo'): boolean {
   return style !== 'red' && style !== 'bold'
 }
 
@@ -112,6 +113,9 @@ export function renderMarkedText(
     const background = segment.marks.filter((mark) => isBackgroundStyle(mark.style)).at(-1)
     const hasRed = segment.marks.some((mark) => mark.style === 'red')
     const hasBold = segment.marks.some((mark) => mark.style === 'bold')
+    // 여백 메모는 굵은 글씨나 형광펜 경계마다 조각이 나뉘어도 한 덩어리처럼
+    // 보여야 한다. 조각마다 네모 테두리를 두르는 대신 밑줄로 이어 붙인다.
+    const isMemo = segment.marks.some((mark) => mark.style === 'memo')
 
     // 표시된 구간을 누르면 첫 번째 표시를 대상으로 삼는다.
     const target = segment.marks[0]
@@ -124,13 +128,18 @@ export function renderMarkedText(
         data-pos={segment.from}
         onClick={options?.onMarkClick ? () => options.onMarkClick?.(target.id) : undefined}
         className={cn(
-          'rounded-sm',
+          isMemo
+            ? cn(
+                'underline decoration-2 underline-offset-[3px]',
+                active ? 'decoration-brand-400' : 'decoration-amber-400/80 dark:decoration-amber-500/70',
+              )
+            : 'rounded-sm',
           background?.resolved
             ? RESOLVED_CLASS
             : background && BACKGROUND_CLASS[background.style],
           hasRed && 'text-marker-red',
           hasBold && 'font-bold',
-          active && 'ring-2 ring-brand-400',
+          active && !isMemo && 'ring-2 ring-brand-400',
           options?.onMarkClick && 'cursor-pointer',
         )}
       >

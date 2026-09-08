@@ -222,7 +222,7 @@ function PersonalMemoWorkspace({
     [memos],
   )
   const memoMarks = useMemo<RenderMark[]>(
-    () => sortedMemos.map((memo) => ({ id: memo.id, from: memo.from, to: memo.to, style: 'comment' })),
+    () => sortedMemos.map((memo) => ({ id: memo.id, from: memo.from, to: memo.to, style: 'memo' })),
     [sortedMemos],
   )
 
