@@ -241,19 +241,25 @@ function indentClass(level?: number): string | undefined {
   return undefined
 }
 
+// \uae00\uba38\ub9ac\ud45c\ub85c \uc2dc\uc791\ud558\ub294 \uc904. \ud3b8\uc9d1\uae30 \ubaa9\ub85d(-, *, +)\ubfd0 \uc544\ub2c8\ub77c \ubcf8\ubb38\uc5d0 \uc9c1\uc811 \ucc0d\uc740
+// \uac00\uc6b4\ub383\uc810/\ub3d9\uadf8\ub77c\ubbf8(\u2022, \u00b7, \u25cf, \u25aa, \u25e6, \u2023)\ub3c4 \ubaa9\ub85d \ud56d\ubaa9\uc73c\ub85c \ubcf8\ub2e4.
+const BULLET_LINE = /^\s*[-*+\u2022\u00b7\u25cf\u25aa\u25e6\u2023]\s+/
+
 function inferIndentLevels(nodes: RichNode[]): number[] {
   let previousLevel = 0
   return nodes.map((node) => {
     const text = nodeText(node)
+    const isBullet = node.type === 'bulletList' || BULLET_LINE.test(text)
     let level: number
     if (/^\s*\d+\./.test(text)) level = 0
     else if (/^\s*\d+\)/.test(text)) level = 1
     else if (/^\s*\(\d+\)/.test(text)) level = 2
     else if (/^\s*[\u2460-\u2473]/.test(text)) level = 3
-    else if (node.type === 'bulletList' || /^\s*[-*+]\s+/.test(text)) level = previousLevel
+    // \uae00\uba38\ub9ac\ud45c \uc904\uc740 \uacc4\uce35 \uae30\ud638\uac00 \uc5c6\uc73c\ubbc0\ub85c \ubc14\ub85c \uc717\uc904\uc758 \ub4e4\uc5ec\uc4f0\uae30\ub97c \uadf8\ub300\ub85c \ubb3c\ub824\ubc1b\ub294\ub2e4.
+    else if (isBullet) level = previousLevel
     else level = 0
 
-    if (node.type !== 'bulletList' && !/^\s*[-*+]\s+/.test(text)) previousLevel = level
+    if (!isBullet) previousLevel = level
     return level
   })
 }
