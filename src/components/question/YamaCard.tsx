@@ -8,7 +8,12 @@ import { useTopicScope } from '@/components/question/TopicContext'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchQuestionById, submitAttempt, type SolveQuestion } from '@/lib/queries/questions'
+import {
+  fetchQuestionById,
+  revealAnswer,
+  submitAttempt,
+  type SolveQuestion,
+} from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { effectiveAnswer, formatAnswer, type AnswerPayload } from '@/types/question'
 import {
@@ -397,11 +402,29 @@ function QuestionCard({
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
   const [grading, setGrading] = useState(false)
   const [gradeError, setGradeError] = useState<string | null>(null)
+  const [authoringYamaAnswer, setAuthoringYamaAnswer] = useState<number[] | null>(null)
   const startedAt = useRef(0)
 
   useEffect(() => {
     startedAt.current = Date.now()
   }, [])
+
+  // 레옵스 작성자는 해설을 쓰면서 복기 당시의 Y답을 확인할 수 있어야 한다.
+  // 읽기 화면에서는 문제를 풀기 전에 정답 요청 자체를 하지 않아 미리 노출되지 않는다.
+  useEffect(() => {
+    if (interactive) return
+    let active = true
+    void revealAnswer(questionId)
+      .then((revealed) => {
+        if (active) setAuthoringYamaAnswer(revealed?.yamaAnswer ?? [])
+      })
+      .catch(() => {
+        if (active) setAuthoringYamaAnswer([])
+      })
+    return () => {
+      active = false
+    }
+  }, [interactive, questionId])
 
   const grade = useCallback(async () => {
     if (selectedChoices.length === 0 || grading) return
@@ -509,11 +532,26 @@ function QuestionCard({
         </div>
       ) : (
         <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
-          {choices.map((choice) => (
-            <li key={choice.no} className="text-slate-700 dark:text-slate-300">
-              {choice.text ?? '(이미지 보기)'}
-            </li>
-          ))}
+          {choices.map((choice) => {
+            const isYamaAnswer = !interactive && authoringYamaAnswer?.includes(choice.no)
+            return (
+              <li
+                key={choice.no}
+                className={cn(
+                  'flex items-start gap-1.5 rounded px-1 py-0.5 text-slate-700 dark:text-slate-300',
+                  isYamaAnswer &&
+                    'bg-yellow-200/80 font-semibold text-slate-900 dark:bg-yellow-400/25 dark:text-yellow-100',
+                )}
+              >
+                <span className="min-w-0 flex-1">{choice.text ?? '(이미지 보기)'}</span>
+                {isYamaAnswer && (
+                  <span className="shrink-0 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    Y답
+                  </span>
+                )}
+              </li>
+            )
+          })}
         </ol>
       )}
 
