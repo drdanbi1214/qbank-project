@@ -22,6 +22,8 @@ export type RenderMark = {
   style: MarkStyle | 'comment' | 'memo'
   /** 인라인 코멘트가 해결 처리된 경우 흐리게 */
   resolved?: boolean
+  /** 여백 메모(style === 'memo')의 메모지 색. 밑줄·배경을 메모지와 맞춘다. */
+  color?: string
 }
 
 /**
@@ -37,6 +39,20 @@ const BACKGROUND_CLASS: Record<string, string> = {
   comment: 'bg-amber-100 dark:bg-amber-500/30',
   memo: 'bg-amber-100/80 dark:bg-amber-500/20',
 }
+
+/**
+ * 여백 메모(style === 'memo')의 본문 표시. 메모지 색과 맞춘 옅은 배경 위에
+ * 이어진 밑줄을 얹는다. 굵은 글씨나 형광펜 경계로 조각이 나뉘어도 밑줄이
+ * 이어져 한 덩어리로 읽힌다.
+ */
+const MEMO_TONE: Record<string, { line: string; lineActive: string; bg: string }> = {
+  yellow: { line: 'decoration-amber-400/80 dark:decoration-amber-500/70', lineActive: 'decoration-amber-500 dark:decoration-amber-300', bg: 'bg-amber-100/80 dark:bg-amber-500/20' },
+  rose: { line: 'decoration-rose-400/80 dark:decoration-rose-500/70', lineActive: 'decoration-rose-500 dark:decoration-rose-300', bg: 'bg-rose-100/80 dark:bg-rose-500/20' },
+  green: { line: 'decoration-emerald-400/80 dark:decoration-emerald-500/70', lineActive: 'decoration-emerald-500 dark:decoration-emerald-300', bg: 'bg-emerald-100/80 dark:bg-emerald-500/20' },
+  blue: { line: 'decoration-sky-400/80 dark:decoration-sky-500/70', lineActive: 'decoration-sky-500 dark:decoration-sky-300', bg: 'bg-sky-100/80 dark:bg-sky-500/20' },
+  violet: { line: 'decoration-violet-400/80 dark:decoration-violet-500/70', lineActive: 'decoration-violet-500 dark:decoration-violet-300', bg: 'bg-violet-100/80 dark:bg-violet-500/20' },
+}
+const DEFAULT_MEMO_TONE = MEMO_TONE.yellow
 
 const RESOLVED_CLASS = 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
 
@@ -114,32 +130,35 @@ export function renderMarkedText(
     const hasRed = segment.marks.some((mark) => mark.style === 'red')
     const hasBold = segment.marks.some((mark) => mark.style === 'bold')
     // 여백 메모는 굵은 글씨나 형광펜 경계마다 조각이 나뉘어도 한 덩어리처럼
-    // 보여야 한다. 조각마다 네모 테두리를 두르는 대신 밑줄로 이어 붙인다.
-    const isMemo = segment.marks.some((mark) => mark.style === 'memo')
+    // 보여야 한다. 조각마다 네모 테두리를 두르는 대신 메모지 색 밑줄로 이어 붙인다.
+    const memoMark = segment.marks.find((mark) => mark.style === 'memo')
+    const memoTone = memoMark ? MEMO_TONE[memoMark.color ?? 'yellow'] ?? DEFAULT_MEMO_TONE : null
 
     // 표시된 구간을 누르면 첫 번째 표시를 대상으로 삼는다.
     const target = segment.marks[0]
     const content = options?.renderText ? options.renderText(slice) : slice
 
-    // mark 요소는 브라우저 기본 배경(노랑)이 있어 span 으로 그린다.
+    // 형광펜은 조각마다 모서리를 둥글리면 굵기 경계에서 울퉁불퉁해 보인다.
+    // 각을 살려 이웃한 조각과 이음매 없이 한 덩어리로 붙고 양끝도 네모지게 둔다.
     return (
       <span
         key={key}
         data-pos={segment.from}
         onClick={options?.onMarkClick ? () => options.onMarkClick?.(target.id) : undefined}
         className={cn(
-          isMemo
-            ? cn(
-                'underline decoration-2 underline-offset-[3px]',
-                active ? 'decoration-brand-400' : 'decoration-amber-400/80 dark:decoration-amber-500/70',
-              )
-            : 'rounded-sm',
+          memoTone &&
+            cn(
+              'underline decoration-2 underline-offset-[3px]',
+              active ? memoTone.lineActive : memoTone.line,
+            ),
           background?.resolved
             ? RESOLVED_CLASS
-            : background && BACKGROUND_CLASS[background.style],
+            : background?.style === 'memo'
+              ? memoTone?.bg
+              : background && BACKGROUND_CLASS[background.style],
           hasRed && 'text-marker-red',
           hasBold && 'font-bold',
-          active && !isMemo && 'ring-2 ring-brand-400',
+          active && !memoMark && 'rounded-sm ring-2 ring-brand-400',
           options?.onMarkClick && 'cursor-pointer',
         )}
       >

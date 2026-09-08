@@ -126,6 +126,15 @@ const MEMO_COLOR_STYLES: Record<TheoryMemoColor, {
   },
 }
 
+/** 본문과 메모지를 잇는 곡선/점의 색. 메모지 색을 따라간다. */
+const MEMO_STROKE: Record<TheoryMemoColor, string> = {
+  yellow: '#f3b913',
+  rose: '#f43f5e',
+  green: '#10b981',
+  blue: '#0ea5e9',
+  violet: '#8b5cf6',
+}
+
 const THEORY_MEMO_STORE: MemoStore = {
   markTargetType: 'theory',
   fetch: fetchTheoryMemos,
@@ -222,7 +231,9 @@ function PersonalMemoWorkspace({
     [memos],
   )
   const memoMarks = useMemo<RenderMark[]>(
-    () => sortedMemos.map((memo) => ({ id: memo.id, from: memo.from, to: memo.to, style: 'memo' })),
+    () => sortedMemos.map((memo) => ({
+      id: memo.id, from: memo.from, to: memo.to, style: 'memo', color: memo.color,
+    })),
     [sortedMemos],
   )
 
@@ -439,16 +450,19 @@ function PersonalMemoWorkspace({
         <svg aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
           {connectors.map((point) => {
             const bend = Math.max(24, Math.min(70, (point.x2 - point.x1) / 2))
+            const stroke = MEMO_STROKE[
+              sortedMemos.find((memo) => memo.id === point.id)?.color ?? 'yellow'
+            ]
             return (
               <g key={point.id}>
                 <path
                   d={`M ${point.x1} ${point.y1} C ${point.x1 + bend} ${point.y1}, ${point.x2 - bend} ${point.y2}, ${point.x2} ${point.y2}`}
                   fill="none"
-                  stroke="#f3b913"
+                  stroke={stroke}
                   strokeWidth="1.5"
                 />
-                <circle cx={point.x1} cy={point.y1} r="3" fill="#f3b913" />
-                <circle cx={point.x2} cy={point.y2} r="3" fill="#f3b913" />
+                <circle cx={point.x1} cy={point.y1} r="3" fill={stroke} />
+                <circle cx={point.x2} cy={point.y2} r="3" fill={stroke} />
               </g>
             )
           })}
