@@ -71,13 +71,13 @@ export function useDraft(params: {
     }
   }, [targetType, targetKey, enabled])
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(async (): Promise<boolean> => {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
     }
     const payload = pending.current
-    if (!payload) return
+    if (!payload) return true
 
     pending.current = null
     const statusTarget = { targetType: payload.targetType, key: payload.targetKey }
@@ -85,9 +85,11 @@ export function useDraft(params: {
     try {
       await saveDraft(payload)
       setStatusState({ ...statusTarget, status: 'saved' })
+      return true
     } catch (caught) {
       console.error('임시저장에 실패했습니다.', caught)
       setStatusState({ ...statusTarget, status: 'failed' })
+      return false
     }
   }, [])
 

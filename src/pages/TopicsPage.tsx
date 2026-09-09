@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { LazyRichTextEditor } from '@/components/editor/LazyRichTextEditor'
 import { useDraft } from '@/components/editor/useDraft'
 import { Avatar } from '@/components/ui/Avatar'
@@ -13,6 +13,7 @@ import {
   fetchTopics,
   findSimilarTopics,
   syncTopicQuestions,
+  TopicEditConflictError,
   updateTopic,
   type Topic,
 } from '@/lib/queries/topics'
@@ -28,6 +29,9 @@ import { uploadTopicImage } from '@/lib/uploads'
 import { formatDateTime, formatShortDate } from '@/utils/date'
 import { emptyDoc, type RichDoc } from '@/types/richtext'
 import { cn } from '@/utils/cn'
+
+const LEAVE_EDITOR_MESSAGE =
+  '작성 중인 내용이 있습니다. 현재 페이지에서 나갈까요?\n\n변경 내용은 이 게시물의 임시저장으로 남습니다.'
 
 /**
  * 테마 — 주제별 이론 정리.
@@ -90,7 +94,12 @@ export function TopicsPage() {
   const [editorSeed, setEditorSeed] = useState(() => ({ doc: emptyDoc(), version: 0 }))
   const [draftDismissed, setDraftDismissed] = useState(false)
   const [similar, setSimilar] = useState<{ id: string; title: string }[]>([])
-  const [editing, setEditing] = useState(false)
+  // boolean 하나로만 편집 상태를 들고 있으면 URL이 다른 글로 바뀐 순간 그 글 ID에
+  // 이전 편집기 내용을 저장할 수 있다. 편집 대상과 시작 시각을 세션에 고정한다.
+  const [editSession, setEditSession] = useState<{
+    topicId: string
+    expectedUpdatedAt: string
+  } | null>(null)
   const [busy, setBusy] = useState(false)
   const editedContent = useRef<RichDoc | null>(null)
   // 목록이 대표 단원으로 묶이므로 나중에 옮길 길이 있어야 한다.
@@ -119,10 +128,13 @@ export function TopicsPage() {
     [topics, topicId],
   )
 
+  const editing = editSession !== null && selected?.id === editSession.topicId
+  const writingActive = draft !== null || editSession !== null
+
   const topicDraftKey = draft
     ? `new:${subjectId ?? ''}`
-    : editing && selected
-      ? `edit:${selected.id}`
+    : editSession
+      ? `edit:${editSession.topicId}`
       : null
   const {
     savedDraft: savedTopicDraft,
@@ -228,9 +240,86 @@ export function TopicsPage() {
     resolveLecture.current = null
   }, [])
 
+  const resetWriter = useCallback(() => {
+    setDraft(null)
+    setDraftTitle('')
+    setSimilar([])
+    setEditSession(null)
+    setEditedUnitId(null)
+    setEditedTitle('')
+    setDraftDismissed(false)
+    editedContent.current = null
+
+    setPicking(false)
+    resolvePick.current?.(null)
+    resolvePick.current = null
+    setPickingTheory(false)
+    resolveTheory.current?.(null)
+    resolveTheory.current = null
+    setPickingLecture(false)
+    resolveLecture.current?.(null)
+    resolveLecture.current = null
+  }, [])
+
+  // 앱 내부 링크와 브라우저 뒤로가기는 실제로 주소가 바뀌기 전에 막는다.
+  // 확인 후에는 현재 글의 키로 임시저장이 끝난 다음에만 이동한다.
+  const allowNextNavigation = useRef(false)
+  const blocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }) =>
+        !allowNextNavigation.current &&
+        writingActive &&
+        (currentLocation.pathname !== nextLocation.pathname ||
+          currentLocation.search !== nextLocation.search),
+      [writingActive],
+    ),
+  )
+  const resolvingBlocker = useRef(false)
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked' || resolvingBlocker.current) return
+    resolvingBlocker.current = true
+
+    if (!window.confirm(LEAVE_EDITOR_MESSAGE)) {
+      blocker.reset()
+      resolvingBlocker.current = false
+      return
+    }
+
+    void flushTopicDraft()
+      .then((saved) => {
+        if (!saved) {
+          setError('임시저장에 실패해 이동하지 않았습니다. 잠시 후 다시 시도해 주세요.')
+          blocker.reset()
+          return
+        }
+        resetWriter()
+        blocker.proceed()
+      })
+      .finally(() => {
+        resolvingBlocker.current = false
+      })
+  }, [blocker, flushTopicDraft, resetWriter])
+
+  // 새로고침·탭 닫기·외부 사이트 이동은 라우터가 막을 수 없으므로 브라우저의
+  // 기본 경고를 사용한다. 앱 내부 이동은 위의 더 구체적인 안내가 담당한다.
+  useEffect(() => {
+    if (!writingActive) return
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [writingActive])
+
   const save = useCallback(() => {
-    if (!selected || !editedContent.current) {
-      setEditing(false)
+    if (!editSession || !selected || selected.id !== editSession.topicId) {
+      setError('편집 중인 게시물과 저장 대상이 달라 저장하지 않았습니다.')
+      return
+    }
+    if (!editedContent.current) {
+      setEditSession(null)
       return
     }
     const title = editedTitle.trim()
@@ -239,23 +328,50 @@ export function TopicsPage() {
       return
     }
     const content = editedContent.current
+    const targetId = editSession.topicId
     setBusy(true)
     setError(null)
-    void updateTopic({ id: selected.id, userId, title, content, unitId: editedUnitId })
+    void updateTopic({
+      id: targetId,
+      userId,
+      expectedUpdatedAt: editSession.expectedUpdatedAt,
+      title,
+      content,
+      unitId: editedUnitId,
+    })
       // 본문이 정본이고 topic_questions 는 거기서 뽑아낸 역인덱스다.
       // 본문 저장이 끝난 뒤에 맞춘다.
-      .then(() => syncTopicQuestions(selected.id, content))
+      .then(() => syncTopicQuestions(targetId, content))
       .then(() => discardTopicDraft())
       .then(() => {
-        setEditing(false)
+        setEditSession(null)
         editedContent.current = null
         load()
       })
       .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : '저장하지 못했습니다.')
+        editedContent.current = content
+        scheduleTopicDraft(content, { title, unitId: editedUnitId })
+        void flushTopicDraft()
+        setError(
+          caught instanceof TopicEditConflictError
+            ? '다른 멤버가 이 게시물을 먼저 수정했습니다. 현재 내용은 임시저장했습니다. 새로고침 후 내용을 확인해 주세요.'
+            : caught instanceof Error
+              ? caught.message
+              : '저장하지 못했습니다.',
+        )
       })
       .finally(() => setBusy(false))
-  }, [selected, userId, editedTitle, editedUnitId, discardTopicDraft, load])
+  }, [
+    editSession,
+    selected,
+    userId,
+    editedTitle,
+    editedUnitId,
+    discardTopicDraft,
+    flushTopicDraft,
+    load,
+    scheduleTopicDraft,
+  ])
 
   const saveDraft = useCallback(() => {
     if (!draft || !subjectId) return
@@ -276,28 +392,32 @@ export function TopicsPage() {
           await syncTopicQuestions(id, content)
         }
         await discardTopicDraft()
-        setDraft(null)
-        setDraftTitle('')
-        editedContent.current = null
+        resetWriter()
         load()
+        allowNextNavigation.current = true
         navigate(`/topics/${subjectId}/${id}`)
+        window.setTimeout(() => {
+          allowNextNavigation.current = false
+        }, 0)
       })
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '만들지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [draft, draftTitle, subjectId, userId, discardTopicDraft, load, navigate])
+  }, [draft, draftTitle, subjectId, userId, discardTopicDraft, load, navigate, resetWriter])
 
   const cancelDraft = useCallback(() => {
-    void flushTopicDraft()
-    setDraft(null)
-    setDraftTitle('')
-    setSimilar([])
-    editedContent.current = null
-  }, [flushTopicDraft])
+    void flushTopicDraft().then((saved) => {
+      if (!saved) {
+        setError('임시저장에 실패해 편집 화면을 닫지 않았습니다. 잠시 후 다시 시도해 주세요.')
+        return
+      }
+      resetWriter()
+    })
+  }, [flushTopicDraft, resetWriter])
 
-  const startDraft = useCallback((unitId: string | null) => {
-    setEditing(false)
+  const beginDraft = useCallback((unitId: string | null) => {
+    setEditSession(null)
     const doc = emptyDoc()
     editedContent.current = doc
     setEditorSeed((previous) => ({ doc, version: previous.version + 1 }))
@@ -306,6 +426,23 @@ export function TopicsPage() {
     setDraftDismissed(false)
     setDraft({ unitId })
   }, [])
+
+  const startDraft = useCallback((unitId: string | null) => {
+    if (!writingActive) {
+      beginDraft(unitId)
+      return
+    }
+    if (!window.confirm(LEAVE_EDITOR_MESSAGE)) return
+
+    void flushTopicDraft().then((saved) => {
+      if (!saved) {
+        setError('임시저장에 실패해 새 글로 이동하지 않았습니다. 잠시 후 다시 시도해 주세요.')
+        return
+      }
+      resetWriter()
+      beginDraft(unitId)
+    })
+  }, [beginDraft, flushTopicDraft, resetWriter, writingActive])
 
   const scheduleNewTopicDraft = useCallback(
     (content: RichDoc, title = draftTitle, unitId = draft?.unitId ?? null) => {
@@ -359,11 +496,14 @@ export function TopicsPage() {
   }, [discardTopicDraft])
 
   const cancelEditing = useCallback(() => {
-    void flushTopicDraft()
-    setEditing(false)
-    editedContent.current = null
-    setEditedTitle('')
-  }, [flushTopicDraft])
+    void flushTopicDraft().then((saved) => {
+      if (!saved) {
+        setError('임시저장에 실패해 편집 화면을 닫지 않았습니다. 잠시 후 다시 시도해 주세요.')
+        return
+      }
+      resetWriter()
+    })
+  }, [flushTopicDraft, resetWriter])
 
   const remove = useCallback(() => {
     if (!selected) return
@@ -612,7 +752,10 @@ export function TopicsPage() {
                             version: previous.version + 1,
                           }))
                           setDraftDismissed(false)
-                          setEditing(true)
+                          setEditSession({
+                            topicId: selected.id,
+                            expectedUpdatedAt: selected.updatedAt,
+                          })
                         }}
                       >
                         편집

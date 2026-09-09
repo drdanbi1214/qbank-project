@@ -1,5 +1,12 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Navigate,
+  Outlet,
+  Route,
+  RouterProvider,
+} from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LearningActivityTracker } from '@/components/analytics/LearningActivityTracker'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -56,18 +63,31 @@ const UnitQuestionsPage = lazy(() => import('@/pages/UnitQuestionsPage').then((m
 const WrongNotesPage = lazy(() => import('@/pages/WrongNotesPage').then((m) => ({ default: m.WrongNotesPage })))
 const NotFoundPage = lazy(() => import('@/pages/placeholders').then((m) => ({ default: m.NotFoundPage })))
 
-export default function App() {
+function AppProviders() {
   return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <AutoUpdate />
-        <AuthProvider>
-          <LearningActivityTracker />
-          <ThemeProvider>
-            <NotificationProvider>
-              <DataProvider>
-                <Suspense fallback={<FullPageSpinner />}>
-                  <Routes>
+    <ErrorBoundary>
+      <AutoUpdate />
+      <AuthProvider>
+        <LearningActivityTracker />
+        <ThemeProvider>
+          <NotificationProvider>
+            <DataProvider>
+              <Suspense fallback={<FullPageSpinner />}>
+                <Outlet />
+              </Suspense>
+            </DataProvider>
+          </NotificationProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </ErrorBoundary>
+  )
+}
+
+// Data Router를 써야 작성 화면에서 앱 내부 이동(목차 클릭·뒤로가기)을
+// 실제 전환 전에 막을 수 있다. 기존 라우트 구조는 그대로 유지한다.
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppProviders />}>
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
 
@@ -136,13 +156,12 @@ export default function App() {
                       </Route>
                     </Route>
                   </Route>
-                  </Routes>
-                </Suspense>
-              </DataProvider>
-            </NotificationProvider>
-          </ThemeProvider>
-        </AuthProvider>
-      </ErrorBoundary>
-    </BrowserRouter>
+    </Route>,
+  ),
+)
+
+export default function App() {
+  return (
+    <RouterProvider router={router} />
   )
 }

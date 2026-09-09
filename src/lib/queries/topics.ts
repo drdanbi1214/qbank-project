@@ -151,6 +151,8 @@ export async function createTopic(params: {
 export async function updateTopic(params: {
   id: string
   userId: string
+  /** 편집을 시작했을 때의 수정 시각. 다르면 다른 사람이 먼저 저장한 것이다. */
+  expectedUpdatedAt?: string
   title?: string
   unitId?: string | null
   content?: RichDoc
@@ -162,8 +164,20 @@ export async function updateTopic(params: {
   if (params.unitId !== undefined) patch.unit_id = params.unitId
   if (params.content !== undefined) patch.content = toJson(params.content)
 
-  const { error } = await supabase.from('topics').update(patch).eq('id', params.id)
+  let query = supabase.from('topics').update(patch).eq('id', params.id)
+  if (params.expectedUpdatedAt) query = query.eq('updated_at', params.expectedUpdatedAt)
+
+  // 행을 돌려받아야 조건이 맞지 않아 0건 수정된 경우를 정상 응답과 구분할 수 있다.
+  const { data, error } = await query.select('id').maybeSingle()
   if (error) throw error
+  if (!data) throw new TopicEditConflictError()
+}
+
+export class TopicEditConflictError extends Error {
+  constructor() {
+    super('다른 멤버가 이 게시물을 먼저 수정했습니다.')
+    this.name = 'TopicEditConflictError'
+  }
 }
 
 /**
