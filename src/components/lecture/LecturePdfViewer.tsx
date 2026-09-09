@@ -79,10 +79,12 @@ const HIGHLIGHT_COLORS = [
 ] as const
 const PEN_WIDTHS = [0.0025, 0.004, 0.007] as const
 const HIGHLIGHT_WIDTHS = [0.018, 0.03, 0.05] as const
+const PENCIL_WIDTHS = [0.003, 0.0065, 0.012] as const
 
 type AnnotationSettings = {
   penColor: string
   highlightColor: string
+  pencilColor: string
   size: number
 }
 
@@ -91,7 +93,12 @@ function isAnnotationColor(value: unknown): value is string {
 }
 
 function initialAnnotationSettings(): AnnotationSettings {
-  const fallback = { penColor: '#2563eb', highlightColor: '#facc15', size: 1 }
+  const fallback = {
+    penColor: '#2563eb',
+    highlightColor: '#facc15',
+    pencilColor: '#e11d48',
+    size: 1,
+  }
   if (typeof window === 'undefined') return fallback
   try {
     const parsed = JSON.parse(window.localStorage.getItem(ANNOTATION_SETTINGS_STORAGE_KEY) ?? '') as Partial<AnnotationSettings>
@@ -99,6 +106,8 @@ function initialAnnotationSettings(): AnnotationSettings {
       penColor: isAnnotationColor(parsed.penColor) ? parsed.penColor : fallback.penColor,
       highlightColor:
         isAnnotationColor(parsed.highlightColor) ? parsed.highlightColor : fallback.highlightColor,
+      pencilColor:
+        isAnnotationColor(parsed.pencilColor) ? parsed.pencilColor : fallback.pencilColor,
       size: Number.isInteger(parsed.size) && parsed.size! >= 0 && parsed.size! <= 2
         ? parsed.size!
         : fallback.size,
@@ -499,8 +508,13 @@ export function LecturePdfViewer({
   const selectedSet = useMemo(() => new Set(selectedPages ?? []), [selectedPages])
   const annotationEnabled = Boolean(lectureId && !selectable)
   const annotations = useLecturePdfAnnotations(lectureId, annotationVariantId, annotationEnabled)
-  const { penColor, highlightColor, size: annotationSize } = annotationSettings
-  const annotationColor = annotationTool === 'highlight' ? highlightColor : penColor
+  const { penColor, highlightColor, pencilColor, size: annotationSize } = annotationSettings
+  const annotationColor =
+    annotationTool === 'highlight'
+      ? highlightColor
+      : annotationTool === 'pencil'
+        ? pencilColor
+        : penColor
   const annotationPalette = annotationTool === 'highlight' ? HIGHLIGHT_COLORS : PEN_COLORS
   const annotationColorLabel =
     annotationPalette.find((item) => item.value === annotationColor)?.label ?? '직접 선택'
@@ -510,6 +524,8 @@ export function LecturePdfViewer({
   const annotationWidth =
     annotationTool === 'highlight'
       ? HIGHLIGHT_WIDTHS[annotationSize]
+      : annotationTool === 'pencil'
+        ? PENCIL_WIDTHS[annotationSize]
       : PEN_WIDTHS[annotationSize]
   const lastAnnotationMarks = lastAnnotationPage
     ? (annotations.pages[lastAnnotationPage] ?? [])
@@ -758,6 +774,8 @@ export function LecturePdfViewer({
     setAnnotationSettings((current) =>
       annotationTool === 'highlight'
         ? { ...current, highlightColor: color }
+        : annotationTool === 'pencil'
+          ? { ...current, pencilColor: color }
         : { ...current, penColor: color },
     )
   }
@@ -979,6 +997,13 @@ export function LecturePdfViewer({
               형광펜
             </AnnotationToolButton>
             <AnnotationToolButton
+              active={annotationTool === 'pencil'}
+              disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
+              onClick={() => selectAnnotationTool('pencil')}
+            >
+              색연필
+            </AnnotationToolButton>
+            <AnnotationToolButton
               active={annotationTool === 'erase'}
               disabled={!annotations.available || annotations.status === 'loading' || annotations.loadFailed}
               onClick={() => selectAnnotationTool('erase')}
@@ -998,12 +1023,12 @@ export function LecturePdfViewer({
               </span>
             )}
 
-            {(annotationTool === 'pen' || annotationTool === 'highlight') && (
+            {(annotationTool === 'pen' || annotationTool === 'highlight' || annotationTool === 'pencil') && (
               <>
                 <span
                   className="ml-1 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/70"
                   role="group"
-                  aria-label={`${annotationTool === 'highlight' ? '형광펜' : '펜'} 색상: ${annotationColorLabel}`}
+                  aria-label={`${annotationTool === 'highlight' ? '형광펜' : annotationTool === 'pencil' ? '색연필' : '펜'} 색상: ${annotationColorLabel}`}
                 >
                   {annotationPalette.map((item) => (
                     <button

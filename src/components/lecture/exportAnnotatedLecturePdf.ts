@@ -85,7 +85,10 @@ export async function exportAnnotatedLecturePdf(params: {
 
 function strokeThickness(mark: Stroke, pointIndex: number, displayWidth: number): number {
   const pressure = mark.pressures?.[pointIndex]
-  const factor = mark.tool === 'pen' && pressure !== undefined ? 1 + 0.45 * (pressure * 2 - 1) : 1
+  const pressureStrength = mark.tool === 'pencil' ? 0.34 : 0.45
+  const factor = mark.tool !== 'highlight' && pressure !== undefined
+    ? 1 + pressureStrength * (pressure * 2 - 1)
+    : 1
   return Math.max(mark.width * displayWidth * factor, 0.25)
 }
 

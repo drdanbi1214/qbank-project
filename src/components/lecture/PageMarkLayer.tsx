@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_TEXT_BACKGROUND,
   DEFAULT_TEXT_BORDER,
@@ -149,6 +149,7 @@ export function PageMarkLayer({
   const drawingPointerId = useRef<number | null>(null)
   const drawingPointerType = useRef<string | null>(null)
   const activePenPointerId = useRef<number | null>(null)
+  const lastPenPressure = useRef(0.5)
   const ignoreTouchUntil = useRef(0)
   const activeTouchPointers = useRef(new Set<number>())
   const suppressedTouchPointers = useRef(new Set<number>())
@@ -170,6 +171,7 @@ export function PageMarkLayer({
   const [dragging, setDragging] = useState<{ index: number; at: [number, number] } | null>(null)
   // 글자 입력칸은 SVG 밖의 보통 요소라 실제 픽셀 크기를 알아야 눈금이 맞는다.
   const [pxWidth, setPxWidth] = useState(0)
+  const pencilFilterId = `lecture-pencil-${useId().replaceAll(':', '')}`
   const height = VIEW * aspect
   const active = Boolean(onChange && tool)
 
@@ -270,6 +272,8 @@ export function PageMarkLayer({
     path.style.display = ''
     path.setAttribute('d', pressurePath || toPath(mark.points, VIEW, height))
     path.setAttribute('opacity', String(TOOL_OPACITY[mark.tool]))
+    if (mark.tool === 'pencil') path.setAttribute('filter', `url(#${pencilFilterId})`)
+    else path.removeAttribute('filter')
     if (pressurePath) {
       path.setAttribute('fill', mark.color)
       path.setAttribute('stroke', 'none')
@@ -284,7 +288,15 @@ export function PageMarkLayer({
 
   function pressureOf(event: { pressure: number; pointerType: string }): number {
     if (event.pointerType === 'mouse') return 0.5
-    return Math.min(Math.max(event.pressure, 0), 1)
+    const pressure = Math.min(Math.max(event.pressure, 0), 1)
+    const fromPencil = event.pointerType === 'pen' || drawingPointerType.current === 'pen'
+    if (!fromPencil) return pressure
+    // iPadOS가 이동 중 간헐적으로 pressure=0을 보내면 외곽선이 0폭으로 줄어
+    // 획 중간이 하얗게 끊긴다. 실제로 펜을 뗄 때까지는 마지막 압력을 이어 쓴다.
+    if (pressure <= 0.02) return lastPenPressure.current
+    const smoothed = lastPenPressure.current * 0.18 + pressure * 0.82
+    lastPenPressure.current = smoothed
+    return smoothed
   }
 
   function showErasingOnNextFrame() {
@@ -574,6 +586,10 @@ export function PageMarkLayer({
 
     clearLineHold()
     snappedToLine.current = false
+    if (event.pointerType === 'pen') {
+      const initialPressure = Math.min(Math.max(event.pressure, 0), 1)
+      lastPenPressure.current = initialPressure > 0.02 ? initialPressure : 0.5
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
     const next: Stroke | PageShape = {
       tool,
@@ -583,7 +599,7 @@ export function PageMarkLayer({
     }
     // 실제 압력을 주는 펜의 값만 저장한다. 마우스·손가락은
     // 고정값을 저장하지 않아 렌더러가 이동 속도로 굵기를 보완할 수 있다.
-    if (next.tool === 'pen' && event.pointerType === 'pen') {
+    if ((next.tool === 'pen' || next.tool === 'pencil') && event.pointerType === 'pen') {
       next.pressures = [pressureOf(event)]
     }
     drawingRef.current = next
@@ -681,7 +697,7 @@ export function PageMarkLayer({
       // 복사하면 긴 획이 갈수록 느려지므로 여기서는 제자리에서 이어 붙인다.
       const appendedPressures = samples.map(pressureOf)
       current.points.push(...points.flat())
-      if (current.tool === 'pen' && current.pressures) {
+      if ((current.tool === 'pen' || current.tool === 'pencil') && current.pressures) {
         const pressures = current.pressures
         pressures.push(...appendedPressures)
         current.pressures = pressures
@@ -712,7 +728,7 @@ export function PageMarkLayer({
         : {
             ...next,
             points: [...next.points, ...predictedPoints.flat()],
-            ...(next.tool === 'pen' && next.pressures
+            ...((next.tool === 'pen' || next.tool === 'pencil') && next.pressures
               ? {
                   pressures: [
                     ...next.pressures,
@@ -912,11 +928,12 @@ export function PageMarkLayer({
             mark={mark}
             scaleX={VIEW}
             scaleY={height}
+            pencilFilterId={pencilFilterId}
             erase={false}
           />,
         ]
       }),
-    [height, visibleMarks],
+    [height, pencilFilterId, visibleMarks],
   )
   // 고치는 중인 글자는 제 색과 크기를 지킨다. 새로 얹는 것만 고르개를 따른다.
   const beingEdited = editing && editing.index !== null ? marks[editing.index] : null
@@ -946,6 +963,43 @@ export function PageMarkLayer({
         onLostPointerCapture={(event) => finish(event, true)}
         onContextMenu={active ? (event) => event.preventDefault() : undefined}
       >
+        <defs>
+          <filter
+            id={pencilFilterId}
+            x="-8%"
+            y="-20%"
+            width="116%"
+            height="140%"
+            colorInterpolationFilters="sRGB"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.72"
+              numOctaves="2"
+              seed="37"
+              result="pencilNoise"
+            />
+            <feColorMatrix
+              in="pencilNoise"
+              type="matrix"
+              values="0 0 0 0 0
+                      0 0 0 0 0
+                      0 0 0 0 0
+                      0.38 0.38 0.38 0 -0.34"
+              result="pencilGrainAlpha"
+            />
+            <feComposite
+              in="SourceGraphic"
+              in2="pencilGrainAlpha"
+              operator="in"
+              result="pencilGrain"
+            />
+            <feComponentTransfer in="SourceGraphic" result="pencilBase">
+              <feFuncA type="linear" slope="0.58" />
+            </feComponentTransfer>
+            <feBlend in="pencilBase" in2="pencilGrain" mode="normal" />
+          </filter>
+        </defs>
         {savedStrokePaths}
         {visibleMarks.map((mark, index) => {
           const grabbable = Boolean(onChange) && tool === 'text'
@@ -1099,12 +1153,14 @@ function StrokeMarkPath({
   mark,
   scaleX,
   scaleY,
+  pencilFilterId,
   erase,
   onErase,
 }: {
   mark: Stroke
   scaleX: number
   scaleY: number
+  pencilFilterId: string
   erase: boolean
   onErase?: (event: React.PointerEvent<SVGPathElement>) => void
 }) {
@@ -1115,6 +1171,7 @@ function StrokeMarkPath({
         d={pressurePath}
         fill={mark.color}
         fillOpacity={TOOL_OPACITY[mark.tool]}
+        filter={mark.tool === 'pencil' ? `url(#${pencilFilterId})` : undefined}
         className={erase ? 'cursor-pointer' : ''}
         style={{ pointerEvents: erase ? 'fill' : 'none' }}
         onPointerDown={erase ? onErase : undefined}

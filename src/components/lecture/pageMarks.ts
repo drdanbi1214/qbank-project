@@ -13,7 +13,7 @@
  * 엉뚱한 것을 지운다. tool 을 보고 선·도형·글자를 갈라내며, 이미 저장된
  * pen/highlight 표시도 같은 방식으로 그대로 읽힌다.
  */
-export type StrokeTool = 'pen' | 'highlight'
+export type StrokeTool = 'pen' | 'highlight' | 'pencil'
 export type ShapeTool = 'rectangle' | 'star'
 export type MarkTool = StrokeTool | ShapeTool | 'text'
 
@@ -87,6 +87,7 @@ export const DEFAULT_TEXT_BORDER = TEXT_BOX_BORDERS[0].value
 export const TOOL_WIDTH: Record<StrokeTool | ShapeTool, number> = {
   pen: 0.004,
   highlight: 0.03,
+  pencil: 0.0065,
   rectangle: 0.004,
   star: 0.005,
 }
@@ -94,6 +95,7 @@ export const TOOL_WIDTH: Record<StrokeTool | ShapeTool, number> = {
 export const TOOL_OPACITY: Record<StrokeTool | ShapeTool, number> = {
   pen: 1,
   highlight: 0.35,
+  pencil: 0.82,
   rectangle: 1,
   star: 1,
 }
@@ -186,31 +188,38 @@ export function toPath(points: number[], scaleX: number, scaleY: number): string
  * 압력이 없으면 이동 속도로 굵기를 자연스럽게 보완한다.
  */
 export function toPressurePenPath(mark: Stroke, scaleX: number, scaleY: number): string {
-  if (mark.tool !== 'pen') return ''
+  if (mark.tool !== 'pen' && mark.tool !== 'pencil') return ''
   const hasPressure = mark.pressures?.length === mark.points.length / 2
+  const isPencil = mark.tool === 'pencil'
   const input = Array.from({ length: mark.points.length / 2 }, (_, index) => {
     const point = [mark.points[index * 2] * scaleX, mark.points[index * 2 + 1] * scaleY]
     return hasPressure ? [...point, mark.pressures![index]] : point
   })
   const outline = getStroke(input, {
     size: mark.width * scaleX,
-    thinning: hasPressure ? 0.45 : 0.32,
-    smoothing: 0.72,
+    thinning: hasPressure ? (isPencil ? 0.34 : 0.45) : isPencil ? 0.2 : 0.32,
+    smoothing: isPencil ? 0.62 : 0.72,
     // 값이 높을수록 손을 더 늦게 따라와 필기감이 둥해진다.
     // 지연은 줄이면서 미세한 떨림만 곡선 보정에 맡긴다.
-    streamline: 0.18,
+    streamline: isPencil ? 0.12 : 0.18,
     simulatePressure: !hasPressure,
-    easing: (pressure) => pressure ** 0.7,
+    easing: (pressure) => pressure ** (isPencil ? 0.82 : 0.7),
     last: true,
   })
   if (outline.length === 0) return ''
   if (outline.length === 1) return `M ${outline[0][0]} ${outline[0][1]} Z`
+  if (outline.length < 4) return ''
 
-  let path = `M ${outline[0][0]} ${outline[0][1]} Q`
-  for (let index = 1; index < outline.length; index += 1) {
+  const first = outline[0]
+  const second = outline[1]
+  const third = outline[2]
+  let path = `M ${first[0]} ${first[1]} Q ${second[0]} ${second[1]} ${(second[0] + third[0]) / 2} ${(second[1] + third[1]) / 2} T`
+  // 외곽점 자체를 제어점으로 계속 쓰면 급한 굴곡에서 선이 교차해 하얀 틈이
+  // 생긴다. 중간점을 잇는 곡선은 같은 모양을 유지하면서 교차를 피한다.
+  for (let index = 2; index < outline.length - 1; index += 1) {
     const point = outline[index]
-    const next = outline[(index + 1) % outline.length]
-    path += ` ${point[0]} ${point[1]} ${(point[0] + next[0]) / 2} ${(point[1] + next[1]) / 2}`
+    const next = outline[index + 1]
+    path += ` ${(point[0] + next[0]) / 2} ${(point[1] + next[1]) / 2}`
   }
   return `${path} Z`
 }
@@ -277,7 +286,7 @@ export function parsePageMarks(value: unknown): PageMark[] {
       ]
     }
 
-    if (record.tool !== 'pen' && record.tool !== 'highlight') return []
+    if (record.tool !== 'pen' && record.tool !== 'highlight' && record.tool !== 'pencil') return []
     const tool: StrokeTool = record.tool
     const pressures = Array.isArray(record.pressures)
       ? record.pressures.filter(
@@ -291,7 +300,7 @@ export function parsePageMarks(value: unknown): PageMark[] {
         color,
         width: validMarkWidth(record.width, TOOL_WIDTH[tool]),
         points,
-        ...(tool === 'pen' && pressures.length === points.length / 2 ? { pressures } : {}),
+        ...(tool !== 'highlight' && pressures.length === points.length / 2 ? { pressures } : {}),
       },
     ]
   })
