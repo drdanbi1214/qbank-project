@@ -3,6 +3,7 @@ import {
   attachToCluster,
   detachFromCluster,
   ensureClusterGroup,
+  findQuestionById,
   fetchClusterSiblings,
   type ClusterSibling,
   type VariantType,
@@ -78,12 +79,20 @@ export function useCluster(questionId: string, initialGroupId: string | null) {
   const detach = useCallback(
     (targetId: string) => {
       void detachFromCluster(targetId)
-        .then(load)
+        .then(async () => {
+          // 서버에서 현재 문제까지 묶기 해제됐을 수 있다. 예전 groupId로 다시
+          // 읽으면 빈 그룹에 해설을 쓰게 되므로 실제 값을 한 번 더 확인한다.
+          const current = await findQuestionById(questionId)
+          const nextGroupId = current?.groupId ?? null
+          setGroupId(nextGroupId)
+          if (nextGroupId) refresh(nextGroupId)
+          else setSiblings([])
+        })
         .catch((caught: unknown) => {
           window.alert(caught instanceof Error ? caught.message : '묶기를 풀지 못했습니다.')
         })
     },
-    [load],
+    [questionId, refresh],
   )
 
   /**

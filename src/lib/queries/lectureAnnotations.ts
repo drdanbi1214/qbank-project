@@ -1,5 +1,5 @@
 import type { PageMark } from '@/components/lecture/pageMarks'
-import { parsePageMarks } from '@/components/lecture/pageMarks'
+import { pageMarksStorageError, parsePageMarks } from '@/components/lecture/pageMarks'
 import { supabase } from '@/lib/supabase'
 import type { Json } from '@/types/database'
 
@@ -53,6 +53,9 @@ export async function saveLecturePdfAnnotations(params: {
   marks: PageMark[]
   expectedRevision: number | null
 }): Promise<SaveLecturePdfAnnotationsResult> {
+  const validationError = pageMarksStorageError(params.marks)
+  if (validationError) throw new Error(validationError)
+
   const { data, error } = await supabase.rpc('save_lecture_pdf_annotations_for_document', {
     p_lecture_id: params.lectureId,
     // PostgreSQL 함수 인자는 nullable이지만 생성 타입은 입력 인자의 nullability를

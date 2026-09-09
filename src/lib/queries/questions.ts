@@ -33,6 +33,8 @@ export type SolveQuestion = {
   groupId: string | null
   /** 클러스터 안에서의 역할. 'identical' 은 이어풀기에서 하나만 남긴다. */
   variantType: ClusterRole
+  /** 이 문제와 글자까지 같은 기준 카드. null이면 자체 카드다. */
+  sameAs: string | null
   completeness: Completeness
   viewCount: number
   /** 'ai_suggested' 면 사람이 아직 확인하지 않은 AI 1차 단원 분류다 */
@@ -81,7 +83,7 @@ export type QuestionState = {
 }
 
 const SOLVE_COLUMNS =
-  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, variant_type, completeness, view_count, unit_source, question_code'
+  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, variant_type, completeness, view_count, unit_source, question_code, same_as'
 
 type SolveRow = {
   id: string
@@ -97,6 +99,7 @@ type SolveRow = {
   source_tags: string[] | null
   group_id: string | null
   variant_type: string | null
+  same_as: string | null
   completeness: string
   view_count: number
   unit_source: string | null
@@ -118,6 +121,7 @@ function toSolveQuestion(row: SolveRow): SolveQuestion {
     sourceTags: row.source_tags ?? [],
     groupId: row.group_id,
     variantType: toClusterRole(row.variant_type),
+    sameAs: row.same_as,
     completeness: (row.completeness as Completeness) ?? 'complete',
     viewCount: row.view_count,
     unitSource: row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed' ? row.unit_source : null,

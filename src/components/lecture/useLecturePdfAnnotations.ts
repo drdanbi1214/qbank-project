@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { parsePageMarks, type PageMark } from '@/components/lecture/pageMarks'
+import {
+  createPageMarkId,
+  pageMarksStorageError,
+  parsePageMarks,
+  type PageMark,
+} from '@/components/lecture/pageMarks'
 import { useAuth } from '@/lib/auth'
 import {
   fetchLectureAnnotationDrafts,
@@ -37,6 +42,13 @@ type SaveSnapshot = {
   marks: PageMark[]
 }
 
+type RemotePage = {
+  pageNumber: number
+  marks: PageMark[]
+  revision: number | null
+  updatedAt: string | null
+}
+
 type SaveQueueEntry = {
   key: string
   contextKey: string
@@ -51,6 +63,8 @@ type SaveQueueEntry = {
   timer: number | null
   inFlight: boolean
   conflicted: boolean
+  /** 저장 중 도착해 아직 비교하지 못한 가장 최근 Realtime 이벤트. */
+  deferredRemote: RemotePage | null
 }
 
 export type AnnotationConflict = {
@@ -63,14 +77,83 @@ export type AnnotationConflict = {
   serverUpdatedAt: string | null
 }
 
-function combineMarks(serverMarks: PageMark[], localMarks: PageMark[]): PageMark[] {
-  const seen = new Set<string>()
-  return [...serverMarks, ...localMarks].filter((mark) => {
-    const key = JSON.stringify(mark)
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+function marksMatch(left: PageMark, right: PageMark) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function combineMarks(baseMarks: PageMark[], serverMarks: PageMark[], localMarks: PageMark[]): PageMark[] {
+  const baseById = new Map(baseMarks.filter((mark) => mark.id).map((mark) => [mark.id!, mark]))
+  const serverById = new Map(serverMarks.filter((mark) => mark.id).map((mark) => [mark.id!, mark]))
+  const localById = new Map(localMarks.filter((mark) => mark.id).map((mark) => [mark.id!, mark]))
+  const orderedIds = Array.from(
+    new Set([
+      ...serverMarks.flatMap((mark) => (mark.id ? [mark.id] : [])),
+      ...localMarks.flatMap((mark) => (mark.id ? [mark.id] : [])),
+      ...baseMarks.flatMap((mark) => (mark.id ? [mark.id] : [])),
+    ]),
+  )
+  const combined: PageMark[] = []
+
+  for (const id of orderedIds) {
+    const base = baseById.get(id)
+    const server = serverById.get(id)
+    const local = localById.get(id)
+
+    if (!base) {
+      if (server && local) {
+        combined.push(server)
+        if (!marksMatch(server, local)) combined.push({ ...local, id: createPageMarkId() })
+      } else if (server) combined.push(server)
+      else if (local) combined.push(local)
+      continue
+    }
+
+    if (!server && !local) continue
+    if (!server) {
+      if (local && !marksMatch(local, base)) combined.push(local)
+      continue
+    }
+    if (!local) {
+      if (!marksMatch(server, base)) combined.push(server)
+      continue
+    }
+    if (marksMatch(server, local)) combined.push(server)
+    else if (marksMatch(local, base)) combined.push(server)
+    else if (marksMatch(server, base)) combined.push(local)
+    else combined.push(server, { ...local, id: createPageMarkId() })
+  }
+
+  // ID가 없던 구버전 필기는 개수 기반 3-way 병합으로 삭제/추가를 보존한다.
+  const legacyCounts = (marks: PageMark[]) => {
+    const counts = new Map<string, { mark: PageMark; count: number }>()
+    for (const mark of marks) {
+      if (mark.id) continue
+      const signature = JSON.stringify(mark)
+      const current = counts.get(signature)
+      counts.set(signature, { mark, count: (current?.count ?? 0) + 1 })
+    }
+    return counts
+  }
+  const baseLegacy = legacyCounts(baseMarks)
+  const serverLegacy = legacyCounts(serverMarks)
+  const localLegacy = legacyCounts(localMarks)
+  const signatures = new Set([
+    ...baseLegacy.keys(),
+    ...serverLegacy.keys(),
+    ...localLegacy.keys(),
+  ])
+  for (const signature of signatures) {
+    const base = baseLegacy.get(signature)?.count ?? 0
+    const server = serverLegacy.get(signature)?.count ?? 0
+    const local = localLegacy.get(signature)?.count ?? 0
+    const count =
+      Math.min(base, server, local) +
+      Math.max(Math.max(0, server - base), Math.max(0, local - base))
+    const mark = serverLegacy.get(signature)?.mark ?? localLegacy.get(signature)?.mark ?? baseLegacy.get(signature)?.mark
+    if (!mark) continue
+    for (let index = 0; index < count; index += 1) combined.push(mark)
+  }
+  return combined
 }
 
 /**
@@ -101,6 +184,10 @@ export function useLecturePdfAnnotations(
   const [saveError, setSaveError] = useState<{ key: string; message: string } | null>(null)
   const [conflicts, setConflicts] = useState<Record<string, AnnotationConflict>>({})
   const [remoteUpdate, setRemoteUpdate] = useState<{ key: string; pageNumber: number; at: number } | null>(null)
+  const [realtime, setRealtime] = useState<{
+    key: string
+    status: 'connecting' | 'connected' | 'disconnected'
+  } | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const pagesRef = useRef<LecturePdfAnnotations>({})
   const revisionsRef = useRef(new Map<number, number | null>())
@@ -111,6 +198,7 @@ export function useLecturePdfAnnotations(
   const failedKeys = useRef(new Set<string>())
   const localWrites = useRef(new Map<string, Promise<void>>())
   const runQueueRef = useRef<(entry: SaveQueueEntry) => Promise<void>>(async () => undefined)
+  const receiveServerPageRef = useRef<(page: RemotePage) => void>(() => undefined)
   const remoteUpdateTimer = useRef<number | null>(null)
   const [, setHistoryVersion] = useState(0)
 
@@ -151,6 +239,13 @@ export function useLecturePdfAnnotations(
     return next
   }, [])
 
+  const releaseInFlight = useCallback((entry: SaveQueueEntry) => {
+    entry.inFlight = false
+    const deferred = entry.deferredRemote
+    entry.deferredRemote = null
+    if (deferred) queueMicrotask(() => receiveServerPageRef.current(deferred))
+  }, [])
+
   const runQueue = useCallback(
     async (entry: SaveQueueEntry) => {
       if (entry.timer !== null) window.clearTimeout(entry.timer)
@@ -181,7 +276,7 @@ export function useLecturePdfAnnotations(
               entry.latest = saving
             }
             entry.conflicted = true
-            entry.inFlight = false
+            releaseInFlight(entry)
             const localMarks = (entry.latest ?? saving).marks
             setConflicts((current) => ({
               ...current,
@@ -210,7 +305,7 @@ export function useLecturePdfAnnotations(
         if (saving && (!entry.latest || entry.latest.generation < saving.generation)) {
           entry.latest = saving
         }
-        entry.inFlight = false
+        releaseInFlight(entry)
         failedKeys.current.add(entry.key)
         setSaveError({
           key: entry.contextKey,
@@ -224,7 +319,7 @@ export function useLecturePdfAnnotations(
       if (finalLocalWrite) await finalLocalWrite.catch(() => undefined)
 
       if (entry.latest || entry.generation !== lastSavedGeneration) {
-        entry.inFlight = false
+        releaseInFlight(entry)
         entry.timer = window.setTimeout(() => void runQueueRef.current(entry), 0)
         return
       }
@@ -233,7 +328,7 @@ export function useLecturePdfAnnotations(
         removeLectureAnnotationDraft(entry.contextKey, entry.pageNumber),
       ).catch(() => undefined)
 
-      entry.inFlight = false
+      releaseInFlight(entry)
       if (entry.latest || entry.generation !== lastSavedGeneration) {
         entry.timer = window.setTimeout(() => void runQueueRef.current(entry), 0)
         return
@@ -248,7 +343,7 @@ export function useLecturePdfAnnotations(
         setSaveError((current) => (current?.key === entry.contextKey ? null : current))
       }
     },
-    [queueLocalOperation, syncPending],
+    [queueLocalOperation, releaseInFlight, syncPending],
   )
 
   useEffect(() => {
@@ -263,6 +358,11 @@ export function useLecturePdfAnnotations(
       recoveredBase?: { revision: number | null; marks: PageMark[] },
     ) => {
       if (!available || !lectureId) return
+      const validationError = pageMarksStorageError(marks)
+      if (validationError) {
+        setSaveError({ key: contextKey, message: validationError })
+        return
+      }
 
       const key = `${contextKey}:${pageNumber}`
       let entry = queues.current.get(key)
@@ -281,6 +381,7 @@ export function useLecturePdfAnnotations(
           timer: null,
           inFlight: false,
           conflicted: false,
+          deferredRemote: null,
         }
         queues.current.set(key, entry)
       }
@@ -303,7 +404,16 @@ export function useLecturePdfAnnotations(
             baseRevision: entry!.expectedRevision,
             baseMarks: entry!.baseMarks,
           }),
-        ).catch(() => undefined)
+        ).catch((caught: unknown) => {
+          setSaveError({
+            key: contextKey,
+            message:
+              caught instanceof Error
+                ? `이 기기에 필기 임시저장 실패: ${caught.message}`
+                : '이 기기에 필기 임시저장에 실패했습니다.',
+          })
+          syncPending(contextKey)
+        })
       }
 
       if (entry.timer !== null) window.clearTimeout(entry.timer)
@@ -447,7 +557,10 @@ export function useLecturePdfAnnotations(
       const entry = queues.current.get(key)
       // 자신의 저장 이벤트는 응답보다 먼저 올 수도 있다. 실행 중 요청의 원자적
       // 결과가 곧 도착하므로 여기서 성급하게 충돌로 만들지 않는다.
-      if (entry?.inFlight) return
+      if (entry?.inFlight) {
+        entry.deferredRemote = params
+        return
+      }
 
       if (entry && dirtyKeys.current.has(key)) {
         if (entry.expectedRevision === params.revision) return
@@ -486,6 +599,11 @@ export function useLecturePdfAnnotations(
       setHistoryVersion((version) => version + 1)
       announceRemoteUpdate(contextKey, pageNumber)
     }
+
+    receiveServerPageRef.current = receiveServerPage
+    queueMicrotask(() => {
+      if (active) setRealtime({ key: contextKey, status: 'connecting' })
+    })
 
     realtimeChannelSequence += 1
     const channel = supabase
@@ -527,7 +645,13 @@ export function useLecturePdfAnnotations(
         },
       )
       .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') return
+        if (status !== 'SUBSCRIBED') {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setRealtime({ key: contextKey, status: 'disconnected' })
+          }
+          return
+        }
+        setRealtime({ key: contextKey, status: 'connected' })
         // 최초 불러오기와 구독 완료 사이의 짧은 틈에 생긴 변경도 다시 비교한다.
         void fetchLecturePdfAnnotations({ userId, lectureId, variantId }).then(
           (snapshot) => {
@@ -551,6 +675,7 @@ export function useLecturePdfAnnotations(
 
     return () => {
       active = false
+      receiveServerPageRef.current = () => undefined
       void supabase.removeChannel(channel)
     }
   }, [
@@ -568,6 +693,11 @@ export function useLecturePdfAnnotations(
   const updatePage = useCallback(
     (pageNumber: number, marks: PageMark[]) => {
       if (!available) return
+      const validationError = pageMarksStorageError(marks)
+      if (validationError) {
+        setSaveError({ key: contextKey, message: validationError })
+        return
+      }
       const previous = pagesRef.current[pageNumber] ?? []
       const history = histories.current.get(pageNumber) ?? { undo: [], redo: [] }
       history.undo.push(previous)
@@ -589,6 +719,11 @@ export function useLecturePdfAnnotations(
   const restorePage = useCallback(
     (pageNumber: number, marks: PageMark[]) => {
       if (!available) return
+      const validationError = pageMarksStorageError(marks)
+      if (validationError) {
+        setSaveError({ key: contextKey, message: validationError })
+        return
+      }
       const next = { ...pagesRef.current }
       if (marks.length === 0) delete next[pageNumber]
       else next[pageNumber] = marks
@@ -642,7 +777,7 @@ export function useLecturePdfAnnotations(
 
       if (entry.timer !== null) window.clearTimeout(entry.timer)
       entry.timer = null
-      entry.inFlight = false
+      releaseInFlight(entry)
 
       const removeConflict = () =>
         setConflicts((current) => {
@@ -680,7 +815,7 @@ export function useLecturePdfAnnotations(
 
       const marks =
         choice === 'combine'
-          ? combineMarks(conflict.serverMarks, conflict.localMarks)
+          ? combineMarks(conflict.baseMarks, conflict.serverMarks, conflict.localMarks)
           : conflict.localMarks
       if (choice === 'combine') {
         const history = histories.current.get(pageNumber) ?? { undo: [], redo: [] }
@@ -717,7 +852,7 @@ export function useLecturePdfAnnotations(
       entry.timer = window.setTimeout(() => void runQueueRef.current(entry), 0)
       syncPending(contextKey)
     },
-    [conflicts, contextKey, queueLocalOperation, syncPending],
+    [conflicts, contextKey, queueLocalOperation, releaseInFlight, syncPending],
   )
 
   const retrySave = useCallback(() => {
@@ -770,6 +905,7 @@ export function useLecturePdfAnnotations(
     .sort((a, b) => a.pageNumber - b.pageNumber)
   const conflict = contextConflicts[0] ?? null
   const visibleRemoteUpdate = remoteUpdate?.key === contextKey ? remoteUpdate : null
+  const realtimeStatus = realtime?.key === contextKey ? realtime.status : 'connecting'
   const error =
     loaded?.key === contextKey && loaded.error
       ? loaded.error
@@ -805,6 +941,7 @@ export function useLecturePdfAnnotations(
     conflict,
     conflictCount: contextConflicts.length,
     remoteUpdate: visibleRemoteUpdate,
+    realtimeStatus,
     loadFailed,
     hasUnsavedChanges,
     updatePage,
@@ -813,6 +950,7 @@ export function useLecturePdfAnnotations(
     canUndoPage,
     canRedoPage,
     retrySave,
+    retryRealtime: () => setReloadToken((token) => token + 1),
     resolveConflict,
   }
 }

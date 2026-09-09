@@ -13,13 +13,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!--
-      본문 IBM Plex Sans KR, 서비스 이름 Jua.
-      한글 웹폰트를 직접 담으면 통짜 파일이라 가중치마다 300KB 가까이 나간다.
-      구글은 같은 폰트를 5KB 안팎의 조각으로 쪼개 실제 쓰인 글자만 내려주므로
-      모바일에서 훨씬 가볍다.
+      본문 기본 함초롬체, 선택 가능한 함초롬바탕·IBM Plex Sans KR, 서비스 이름 Jua.
+      함초롬체·함초롬바탕은 font-display: swap으로 본문 표시를 막지 않고,
+      IBM Plex Sans KR와 Jua는 필요한 글자 조각만 받는 Google Fonts를 쓴다.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Jua&display=swap"
       rel="stylesheet"
@@ -29,6 +29,11 @@
       // FOUC 방지: 앱이 프로필 테마를 받아오기 전 마지막 적용 테마를 먼저 반영한다.
       try {
         var cached = localStorage.getItem('qbank.theme.cache')
+        var cachedFontFamily = localStorage.getItem('qbank.font-family.cache')
+        document.documentElement.dataset.fontFamily =
+          cachedFontFamily === 'hamchorom-batang' || cachedFontFamily === 'ibm-plex-sans'
+            ? cachedFontFamily
+            : 'hamchorom'
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
         if (cached === 'dark' || ((!cached || cached === 'system') && prefersDark)) {
           document.documentElement.classList.add('dark')

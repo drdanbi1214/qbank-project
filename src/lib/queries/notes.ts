@@ -17,7 +17,12 @@ export async function fetchNote(target: NoteTarget): Promise<PersonalNote | null
   let query = supabase.from('personal_notes').select('id, content, updated_at')
 
   query = target.groupId
-    ? query.eq('group_id', target.groupId)
+    // 묶기 전에 이 문제에 써 둔 노트를 잃어버린 것처럼 보이지 않게 한다.
+    // 문제별 노트를 우선하고, 없을 때만 그룹 노트를 사용한다.
+    ? query
+        .or(`question_id.eq.${target.questionId},group_id.eq.${target.groupId}`)
+        .order('question_id', { ascending: false, nullsFirst: false })
+        .limit(1)
     : query.eq('question_id', target.questionId)
 
   const { data, error } = await query.maybeSingle()

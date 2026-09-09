@@ -3,10 +3,12 @@ import {
   DEFAULT_TEXT_BACKGROUND,
   DEFAULT_TEXT_BORDER,
   DEFAULT_TEXT_SIZE,
+  createPageMarkId,
   isPageShape,
   isPageText,
   NOMINAL_PT_WIDTH,
   simplifyStroke,
+  splitStrokeForStorage,
   STROKE_COLORS,
   TEXT_BOX_BACKGROUNDS,
   TEXT_BOX_BORDERS,
@@ -21,7 +23,7 @@ import {
   type Stroke,
 } from '@/components/lecture/pageMarks'
 import {
-  erasePageMarksAt,
+  erasePageMarksAlong,
   marksInsideLasso,
   selectedMarkBounds,
   translateSelectedMarks,
@@ -41,8 +43,15 @@ const PALM_REJECTION_GRACE_MS = 280
 /** 예측 꼬리가 실제 Pencil 위치보다 멀리 튀어 나가지 않게 한다. */
 const MAX_PREDICTION_DISTANCE_PX = 12
 /** 보이는 선보다 넉넉하게 잡아 Pencil로 얇은 획도 쉽게 지운다. */
-const ERASER_RADIUS_PX = 14
-const ERASER_SAMPLE_GAP_PX = 6
+const DEFAULT_ERASER_RADIUS_PX = 14
+const MIN_STROKE_SAMPLE_DISTANCE_PX = 0.08
+/** 포인터 캡처 중 페이지에서 크게 벗어난 좌표를 모서리에 붙여 긴 오작동 선으로 만들지 않는다. */
+const POINTER_OUTSIDE_MARGIN_PX = 24
+/** 긴 획은 앞부분을 이 점 수마다 고정해 매 프레임 전체를 다시 계산하지 않는다. */
+const LIVE_STROKE_CHUNK_POINTS = 480
+/** 고정된 앞부분과 움직이는 꼬리가 벌어지지 않게 조금 겹쳐 그린다. */
+const LIVE_STROKE_OVERLAP_POINTS = 8
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
 type Editing = {
   index: number | null
@@ -55,8 +64,10 @@ type Editing = {
 
 type TouchScroll = {
   pointerId: number
+  lastX: number
   lastY: number
-  target: HTMLElement
+  horizontalTarget: HTMLElement
+  verticalTarget: HTMLElement
 }
 
 type EraserGesture = {
@@ -97,6 +108,21 @@ type PenScrollLock = {
   onScroll: () => void
 }
 
+const legacySelectionKeys = new WeakMap<object, string>()
+let legacySelectionSequence = 0
+
+function pageMarkSelectionKeys(marks: readonly PageMark[]): string[] {
+  return marks.map((mark) => {
+    if (mark.id) return `id:${mark.id}`
+    const existing = legacySelectionKeys.get(mark)
+    if (existing) return existing
+    legacySelectionSequence += 1
+    const created = `legacy:${legacySelectionSequence}`
+    legacySelectionKeys.set(mark, created)
+    return created
+  })
+}
+
 type Props = {
   marks: PageMark[]
   /** 이미지 세로/가로 비. 표시가 늘어지지 않게 좌표계를 이 비율로 세운다. */
@@ -109,6 +135,8 @@ type Props = {
   strokeWidth?: number
   /** 새로 얹을 글자의 크기(pt). */
   textSize?: number
+  /** 화면 픽셀 기준 부분 지우개 반지름. 확대율과 무관하게 손에 보이는 크기를 유지한다. */
+  eraserRadius?: number
   /** false면 Apple Pencil/마우스만 그리고 손가락은 페이지를 스크롤한다. */
   allowTouchDrawing?: boolean
   /** 이 페이지에서 필기 입력을 시작했음을 바깥에 알린다. */
@@ -133,12 +161,17 @@ export function PageMarkLayer({
   color,
   strokeWidth,
   textSize = DEFAULT_TEXT_SIZE,
+  eraserRadius = DEFAULT_ERASER_RADIUS_PX,
   allowTouchDrawing = true,
   onInteract,
   className,
 }: Props) {
   const svg = useRef<SVGSVGElement | null>(null)
+  const liveStrokeChunks = useRef<SVGGElement | null>(null)
+  const liveStrokeUnderlay = useRef<SVGPathElement | null>(null)
   const liveStrokePath = useRef<SVGPathElement | null>(null)
+  const liveStrokeFrozenPoint = useRef(0)
+  const eraserCursorShape = useRef<SVGEllipseElement | null>(null)
   const drawingRef = useRef<Stroke | PageShape | null>(null)
   const drawingPreviewRef = useRef<Stroke | PageShape | null>(null)
   const gestureBoundsRef = useRef<GestureBounds | null>(null)
@@ -162,7 +195,7 @@ export function PageMarkLayer({
   // 매 프레임 저장된 필기까지 다시 비교하지 않아 긴 Pencil 획도 가볍게 따라온다.
   const [drawingShape, setDrawingShape] = useState<PageShape | null>(null)
   const [erasingMarks, setErasingMarks] = useState<PageMark[] | null>(null)
-  const [selectedMarks, setSelectedMarks] = useState<number[]>([])
+  const [selectedMarkKeys, setSelectedMarkKeys] = useState<string[]>([])
   const [lassoPoints, setLassoPoints] = useState<NormalizedPoint[]>([])
   const [movingMarks, setMovingMarks] = useState<PageMark[] | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
@@ -174,6 +207,11 @@ export function PageMarkLayer({
   const pencilFilterId = `lecture-pencil-${useId().replaceAll(':', '')}`
   const height = VIEW * aspect
   const active = Boolean(onChange && tool)
+  const markSelectionKeys = useMemo(() => pageMarkSelectionKeys(marks), [marks])
+  const selectedMarks = useMemo(() => {
+    const selected = new Set(selectedMarkKeys)
+    return markSelectionKeys.flatMap((key, index) => selected.has(key) ? [index] : [])
+  }, [markSelectionKeys, selectedMarkKeys])
 
   useEffect(() => {
     const element = svg.current
@@ -245,6 +283,81 @@ export function PageMarkLayer({
     paintLiveStroke(null)
   }
 
+  function clearLiveStrokeChunks() {
+    liveStrokeFrozenPoint.current = 0
+    liveStrokeChunks.current?.replaceChildren()
+  }
+
+  function sliceStroke(mark: Stroke, startPoint: number, endPoint?: number): Stroke {
+    const pointCount = mark.points.length / 2
+    const safeStart = Math.max(0, Math.min(startPoint, pointCount))
+    const safeEnd = Math.max(safeStart, Math.min(endPoint ?? pointCount, pointCount))
+    const hasPressure = mark.pressures?.length === pointCount
+    return {
+      ...mark,
+      points: mark.points.slice(safeStart * 2, safeEnd * 2),
+      ...(hasPressure ? { pressures: mark.pressures!.slice(safeStart, safeEnd) } : {}),
+    }
+  }
+
+  function paintStrokeElements(
+    mark: Stroke,
+    path: SVGPathElement,
+    underlay: SVGPathElement,
+  ) {
+    const pressurePath = toPressurePenPath(mark, VIEW, height)
+    path.style.display = ''
+    path.setAttribute('d', pressurePath || toPath(mark.points, VIEW, height))
+    path.setAttribute('opacity', String(TOOL_OPACITY[mark.tool]))
+    path.setAttribute('pointer-events', 'none')
+    if (mark.tool === 'pencil') path.setAttribute('filter', `url(#${pencilFilterId})`)
+    else path.removeAttribute('filter')
+    if (pressurePath) {
+      underlay.style.display = ''
+      underlay.setAttribute('d', toPath(mark.points, VIEW, height))
+      underlay.setAttribute('fill', 'none')
+      underlay.setAttribute('stroke', mark.color)
+      underlay.setAttribute('stroke-width', String(Math.max(mark.width * VIEW * 0.28, 0.18)))
+      underlay.setAttribute('stroke-opacity', mark.tool === 'pencil' ? '0.28' : '1')
+      underlay.setAttribute('stroke-linecap', 'round')
+      underlay.setAttribute('stroke-linejoin', 'round')
+      underlay.setAttribute('pointer-events', 'none')
+      path.setAttribute('fill', mark.color)
+      path.setAttribute('stroke', 'none')
+    } else {
+      underlay.style.display = 'none'
+      underlay.setAttribute('d', '')
+      path.setAttribute('fill', 'none')
+      path.setAttribute('stroke', mark.color)
+      path.setAttribute('stroke-width', String(mark.width * VIEW))
+      path.setAttribute('stroke-linecap', 'round')
+      path.setAttribute('stroke-linejoin', 'round')
+    }
+  }
+
+  function appendFrozenStrokeChunk(mark: Stroke) {
+    const group = liveStrokeChunks.current
+    if (!group) return
+    const underlay = document.createElementNS(SVG_NAMESPACE, 'path')
+    const path = document.createElementNS(SVG_NAMESPACE, 'path')
+    paintStrokeElements(mark, path, underlay)
+    group.append(underlay, path)
+  }
+
+  function freezeCompletedStrokeChunks(mark: Stroke) {
+    const pointCount = mark.points.length / 2
+    while (
+      pointCount - liveStrokeFrozenPoint.current >
+      LIVE_STROKE_CHUNK_POINTS + LIVE_STROKE_OVERLAP_POINTS
+    ) {
+      const chunkStart = liveStrokeFrozenPoint.current
+      const chunkEnd = chunkStart + LIVE_STROKE_CHUNK_POINTS
+      // 다음 구간과 경계점 하나를 공유하면 round cap 사이에 틈이 생기지 않는다.
+      appendFrozenStrokeChunk(sliceStroke(mark, chunkStart, chunkEnd + 1))
+      liveStrokeFrozenPoint.current = chunkEnd
+    }
+  }
+
   function showDrawingOnNextFrame() {
     if (drawingFrame.current !== null) return
     drawingFrame.current = window.requestAnimationFrame(() => {
@@ -261,29 +374,22 @@ export function PageMarkLayer({
 
   function paintLiveStroke(mark: Stroke | null) {
     const path = liveStrokePath.current
-    if (!path) return
+    const underlay = liveStrokeUnderlay.current
+    if (!path || !underlay) return
     if (!mark) {
+      clearLiveStrokeChunks()
       path.style.display = 'none'
       path.setAttribute('d', '')
+      underlay.style.display = 'none'
+      underlay.setAttribute('d', '')
       return
     }
-
-    const pressurePath = toPressurePenPath(mark, VIEW, height)
-    path.style.display = ''
-    path.setAttribute('d', pressurePath || toPath(mark.points, VIEW, height))
-    path.setAttribute('opacity', String(TOOL_OPACITY[mark.tool]))
-    if (mark.tool === 'pencil') path.setAttribute('filter', `url(#${pencilFilterId})`)
-    else path.removeAttribute('filter')
-    if (pressurePath) {
-      path.setAttribute('fill', mark.color)
-      path.setAttribute('stroke', 'none')
-    } else {
-      path.setAttribute('fill', 'none')
-      path.setAttribute('stroke', mark.color)
-      path.setAttribute('stroke-width', String(mark.width * VIEW))
-      path.setAttribute('stroke-linecap', 'round')
-      path.setAttribute('stroke-linejoin', 'round')
-    }
+    // 예측 좌표는 고정하지 않는다. 실제 입력이 도착했을 때만 앞부분을 확정하고,
+    // 움직이는 꼬리는 짧게 유지해 획 길이와 무관한 프레임 비용을 만든다.
+    const actual = drawingRef.current
+    if (actual && !isPageShape(actual)) freezeCompletedStrokeChunks(actual)
+    const tailStart = Math.max(0, liveStrokeFrozenPoint.current - LIVE_STROKE_OVERLAP_POINTS)
+    paintStrokeElements(sliceStroke(mark, tailStart), path, underlay)
   }
 
   function pressureOf(event: { pressure: number; pointerType: string }): number {
@@ -291,12 +397,22 @@ export function PageMarkLayer({
     const pressure = Math.min(Math.max(event.pressure, 0), 1)
     const fromPencil = event.pointerType === 'pen' || drawingPointerType.current === 'pen'
     if (!fromPencil) return pressure
-    // iPadOS가 이동 중 간헐적으로 pressure=0을 보내면 외곽선이 0폭으로 줄어
-    // 획 중간이 하얗게 끊긴다. 실제로 펜을 뗄 때까지는 마지막 압력을 이어 쓴다.
+    // 일부 iPad/Safari 버전은 Pencil이 계속 닿아 있는데도 이벤트 묶음 경계마다
+    // pressure=0을 한 번씩 보낸다. 그대로 저장하면 선이 주기적으로 0폭으로
+    // 수축하므로 직전 정상값을 이어 쓴다.
     if (pressure <= 0.02) return lastPenPressure.current
     const smoothed = lastPenPressure.current * 0.18 + pressure * 0.82
     lastPenPressure.current = smoothed
     return smoothed
+  }
+
+  /** 예측 좌표는 화면 꼬리에만 쓰므로 실제 다음 압력의 기준값을 바꾸지 않는다. */
+  function previewPressureOf(event: { pressure: number; pointerType: string }): number {
+    if (event.pointerType === 'mouse') return 0.5
+    const pressure = Math.min(Math.max(event.pressure, 0), 1)
+    const fromPencil = event.pointerType === 'pen' || drawingPointerType.current === 'pen'
+    if (!fromPencil || pressure <= 0.02) return fromPencil ? lastPenPressure.current : pressure
+    return lastPenPressure.current * 0.18 + pressure * 0.82
   }
 
   function showErasingOnNextFrame() {
@@ -307,32 +423,41 @@ export function PageMarkLayer({
     })
   }
 
+  function paintEraserCursor(at: NormalizedPoint | null) {
+    const cursor = eraserCursorShape.current
+    if (!cursor) return
+    if (!at || tool !== 'erase') {
+      cursor.style.display = 'none'
+      return
+    }
+    const box = gestureBoundsRef.current ?? measureBounds()
+    if (!box) return
+    cursor.style.display = ''
+    cursor.setAttribute('cx', String(at[0] * VIEW))
+    cursor.setAttribute('cy', String(at[1] * height))
+    cursor.setAttribute('rx', String((eraserRadius / box.width) * VIEW))
+    cursor.setAttribute('ry', String((eraserRadius / box.height) * height))
+  }
+
   function eraseBetween(from: [number, number], to: [number, number]) {
     const gesture = erasingRef.current
     const box = gestureBoundsRef.current ?? measureBounds()
     if (!gesture || !box || box.width === 0 || box.height === 0) return
-    const distance = Math.hypot((to[0] - from[0]) * box.width, (to[1] - from[1]) * box.height)
-    const steps = Math.max(1, Math.ceil(distance / ERASER_SAMPLE_GAP_PX))
-    for (let step = 0; step <= steps; step += 1) {
-      const progress = step / steps
-      const at: [number, number] = [
-        from[0] + (to[0] - from[0]) * progress,
-        from[1] + (to[1] - from[1]) * progress,
-      ]
-      const result = erasePageMarksAt(
-        gesture.next,
-        at,
-        box.width,
-        box.height,
-        ERASER_RADIUS_PX,
-      )
-      if (result.changed) {
-        gesture.next = result.marks
-        gesture.changed = true
-      }
+    const result = erasePageMarksAlong(
+      gesture.next,
+      from,
+      to,
+      box.width,
+      box.height,
+      eraserRadius,
+    )
+    if (result.changed) {
+      gesture.next = result.marks
+      gesture.changed = true
     }
 
     gesture.last = to
+    paintEraserCursor(to)
     if (gesture.changed) showErasingOnNextFrame()
   }
 
@@ -357,6 +482,8 @@ export function PageMarkLayer({
         ...latest,
         points: [latest.points[0], latest.points[1], latest.points[end], latest.points[end + 1]],
       }
+      // 자유곡선으로 고정해 둔 앞 구간을 없애고 곧게 편 한 줄만 다시 그린다.
+      clearLiveStrokeChunks()
       snappedToLine.current = true
       drawingRef.current = straight
       drawingPreviewRef.current = straight
@@ -375,9 +502,19 @@ export function PageMarkLayer({
     // 때 잰 값을 끝날 때까지 쓴다. 페이지는 획 도중 움직이지 않는다.
     const box = gestureBoundsRef.current ?? measureBounds()
     if (!box || box.width === 0) return null
+    const localX = clientX - box.left
+    const localY = clientY - box.top
+    if (
+      localX < -POINTER_OUTSIDE_MARGIN_PX ||
+      localX > box.width + POINTER_OUTSIDE_MARGIN_PX ||
+      localY < -POINTER_OUTSIDE_MARGIN_PX ||
+      localY > box.height + POINTER_OUTSIDE_MARGIN_PX
+    ) {
+      return null
+    }
     return [
-      Math.min(Math.max((clientX - box.left) / box.width, 0), 1),
-      Math.min(Math.max((clientY - box.top) / box.height, 0), 1),
+      Math.min(Math.max(localX / box.width, 0), 1),
+      Math.min(Math.max(localY / box.height, 0), 1),
     ]
   }
 
@@ -389,11 +526,14 @@ export function PageMarkLayer({
     return allowTouchDrawing || event.pointerType !== 'touch'
   }
 
-  function closestScrollTarget(element: Element): HTMLElement {
+  function closestScrollTarget(element: Element, axis: 'x' | 'y' = 'y'): HTMLElement {
     let current = element.parentElement
     while (current) {
-      const overflowY = window.getComputedStyle(current).overflowY
-      if (/(auto|scroll)/.test(overflowY) && current.scrollHeight > current.clientHeight) return current
+      const style = window.getComputedStyle(current)
+      const overflow = axis === 'x' ? style.overflowX : style.overflowY
+      const scrollSize = axis === 'x' ? current.scrollWidth : current.scrollHeight
+      const clientSize = axis === 'x' ? current.clientWidth : current.clientHeight
+      if (/(auto|scroll)/.test(overflow) && scrollSize > clientSize) return current
       current = current.parentElement
     }
     return (window.document.scrollingElement as HTMLElement | null) ?? window.document.documentElement
@@ -436,6 +576,7 @@ export function PageMarkLayer({
     if (next.index === null) {
       if (value === '') return
       updated.push({
+        id: createPageMarkId(),
         tool: 'text',
         color: color ?? STROKE_COLORS[0],
         background: next.background,
@@ -490,8 +631,10 @@ export function PageMarkLayer({
       event.currentTarget.setPointerCapture(event.pointerId)
       touchScrollRef.current = {
         pointerId: event.pointerId,
+        lastX: event.clientX,
         lastY: event.clientY,
-        target: closestScrollTarget(event.currentTarget),
+        horizontalTarget: closestScrollTarget(event.currentTarget, 'x'),
+        verticalTarget: closestScrollTarget(event.currentTarget, 'y'),
       }
       return
     }
@@ -531,8 +674,8 @@ export function PageMarkLayer({
     if (tool === 'lasso') {
       event.currentTarget.setPointerCapture(event.pointerId)
       const selectionBounds = selectedMarkBounds(marks, selectedMarks)
-      const paddingX = ERASER_RADIUS_PX / gestureBoundsRef.current!.width
-      const paddingY = ERASER_RADIUS_PX / gestureBoundsRef.current!.height
+      const paddingX = eraserRadius / gestureBoundsRef.current!.width
+      const paddingY = eraserRadius / gestureBoundsRef.current!.height
       const insideSelection = selectionBounds &&
         at[0] >= selectionBounds.left - paddingX &&
         at[0] <= selectionBounds.right + paddingX &&
@@ -550,7 +693,7 @@ export function PageMarkLayer({
           delta: [0, 0],
         }
       } else {
-        setSelectedMarks([])
+        setSelectedMarkKeys([])
         setMovingMarks(null)
         setLassoPoints([at])
         lassoRef.current = { pointerId: event.pointerId, mode: 'select', points: [at] }
@@ -565,6 +708,7 @@ export function PageMarkLayer({
         next: marks,
         changed: false,
       }
+      paintEraserCursor(at)
       eraseBetween(at, at)
       return
     }
@@ -592,6 +736,7 @@ export function PageMarkLayer({
     }
     event.currentTarget.setPointerCapture(event.pointerId)
     const next: Stroke | PageShape = {
+      id: createPageMarkId(),
       tool,
       color: color ?? STROKE_COLORS[0],
       width: strokeWidth ?? TOOL_WIDTH[tool],
@@ -606,11 +751,15 @@ export function PageMarkLayer({
     drawingPreviewRef.current = next
     drawingPointerId.current = event.pointerId
     drawingPointerType.current = event.pointerType
+    clearLiveStrokeChunks()
     if (isPageShape(next)) setDrawingShape(next)
     else paintLiveStroke(next)
   }
 
   function move(event: React.PointerEvent) {
+    if (tool === 'erase' && event.pointerType !== 'touch' && !erasingRef.current) {
+      paintEraserCursor(pointAt(event))
+    }
     if (suppressedTouchPointers.current.has(event.pointerId)) {
       event.preventDefault()
       event.stopPropagation()
@@ -626,7 +775,9 @@ export function PageMarkLayer({
     if (touchScroll?.pointerId === event.pointerId) {
       event.preventDefault()
       event.stopPropagation()
-      touchScroll.target.scrollTop += touchScroll.lastY - event.clientY
+      touchScroll.horizontalTarget.scrollLeft += touchScroll.lastX - event.clientX
+      touchScroll.verticalTarget.scrollTop += touchScroll.lastY - event.clientY
+      touchScroll.lastX = event.clientX
       touchScroll.lastY = event.clientY
       return
     }
@@ -681,10 +832,11 @@ export function PageMarkLayer({
     if (!lastSample || lastSample.clientX !== native.clientX || lastSample.clientY !== native.clientY) {
       samples.push(native)
     }
-    const points = samples
-      .map((sample) => pointAtClient(sample.clientX, sample.clientY))
-      .filter((point): point is [number, number] => point !== null)
-    const at = points[points.length - 1]
+    const sampled = samples.flatMap((sample) => {
+      const point = pointAtClient(sample.clientX, sample.clientY)
+      return point ? [{ point, sample }] : []
+    })
+    const at = sampled[sampled.length - 1]?.point
     if (!at) return
     let next: Stroke | PageShape
     if (isPageShape(current)) {
@@ -695,11 +847,24 @@ export function PageMarkLayer({
     } else {
       // 아직 저장되지 않은 이 획은 ref만 소유한다. 매 샘플마다 누적 배열 전체를
       // 복사하면 긴 획이 갈수록 느려지므로 여기서는 제자리에서 이어 붙인다.
-      const appendedPressures = samples.map(pressureOf)
-      current.points.push(...points.flat())
+      const box = gestureBoundsRef.current
+      let previous: [number, number] = [
+        current.points[current.points.length - 2],
+        current.points[current.points.length - 1],
+      ]
+      const accepted = sampled.filter(({ point }) => {
+        const distance = box
+          ? Math.hypot((point[0] - previous[0]) * box.width, (point[1] - previous[1]) * box.height)
+          : Number.POSITIVE_INFINITY
+        if (distance < MIN_STROKE_SAMPLE_DISTANCE_PX) return false
+        previous = point
+        return true
+      })
+      if (accepted.length === 0) return
+      current.points.push(...accepted.flatMap(({ point }) => point))
       if ((current.tool === 'pen' || current.tool === 'pencil') && current.pressures) {
         const pressures = current.pressures
-        pressures.push(...appendedPressures)
+        pressures.push(...accepted.map(({ sample }) => pressureOf(sample)))
         current.pressures = pressures
       }
       next = current
@@ -719,9 +884,18 @@ export function PageMarkLayer({
                 MAX_PREDICTION_DISTANCE_PX,
             )
         : []
-    const predictedPoints = predictedSamples
-      .map((sample) => pointAtClient(sample.clientX, sample.clientY))
-      .filter((point): point is [number, number] => point !== null)
+    const predicted = predictedSamples.flatMap((sample) => {
+      const point = pointAtClient(sample.clientX, sample.clientY)
+      if (!point) return []
+        const box = gestureBoundsRef.current
+        const last = next.points.length - 2
+      if (box && Math.hypot(
+          (point[0] - next.points[last]) * box.width,
+          (point[1] - next.points[last + 1]) * box.height,
+        ) < MIN_STROKE_SAMPLE_DISTANCE_PX) return []
+      return [{ point, sample }]
+    })
+    const predictedPoints = predicted.map(({ point }) => point)
     drawingPreviewRef.current =
       predictedPoints.length === 0 || isPageShape(next)
         ? next
@@ -732,7 +906,7 @@ export function PageMarkLayer({
               ? {
                   pressures: [
                     ...next.pressures,
-                    ...predictedSamples.map(pressureOf),
+                    ...predicted.map(({ sample }) => previewPressureOf(sample)),
                   ],
                 }
               : {}),
@@ -771,12 +945,13 @@ export function PageMarkLayer({
       setLassoPoints([])
       setMovingMarks(null)
       if (cancelled) {
-        if (completed.mode === 'select') setSelectedMarks([])
+        if (completed.mode === 'select') setSelectedMarkKeys([])
         return
       }
       if (completed.mode === 'select') {
         if (releasedAt) completed.points.push(releasedAt)
-        setSelectedMarks(marksInsideLasso(marks, completed.points))
+        const selected = marksInsideLasso(marks, completed.points)
+        setSelectedMarkKeys(selected.flatMap((index) => markSelectionKeys[index] ? [markSelectionKeys[index]] : []))
         return
       }
       if (Math.abs(completed.delta[0]) > 0.0001 || Math.abs(completed.delta[1]) > 0.0001) {
@@ -798,6 +973,7 @@ export function PageMarkLayer({
       erasingFrame.current = null
       gestureBoundsRef.current = null
       setErasingMarks(null)
+      paintEraserCursor(null)
       if (completed.changed) onChange?.(completed.next)
       return
     }
@@ -854,7 +1030,7 @@ export function PageMarkLayer({
       return
     }
     // 화면에 보이는 모양은 그대로면서 점 수만 줄여 본문을 가볍게 둔다.
-    onChange?.([...marks, simplifyStroke(completed)])
+    onChange?.([...marks, ...splitStrokeForStorage(simplifyStroke(completed))])
   }
 
   /** 이미 얹은 글자를 누르면 옮기거나(끌면) 고친다(그냥 놓으면). */
@@ -924,7 +1100,7 @@ export function PageMarkLayer({
         if (isPageText(mark) || isPageShape(mark)) return []
         return [
           <StrokeMarkPath
-            key={index}
+            key={mark.id ?? `${mark.tool}-${index}`}
             mark={mark}
             scaleX={VIEW}
             scaleY={height}
@@ -961,6 +1137,9 @@ export function PageMarkLayer({
         onPointerUp={finish}
         onPointerCancel={(event) => finish(event, true)}
         onLostPointerCapture={(event) => finish(event, true)}
+        onPointerLeave={() => {
+          if (!erasingRef.current) paintEraserCursor(null)
+        }}
         onContextMenu={active ? (event) => event.preventDefault() : undefined}
       >
         <defs>
@@ -1008,7 +1187,7 @@ export function PageMarkLayer({
             const at = dragging?.index === index ? dragging.at : mark.points
             return (
               <PageTextShape
-                key={index}
+                key={mark.id ?? `${mark.tool}-${index}`}
                 mark={mark}
                 x={at[0] * VIEW}
                 y={at[1] * height}
@@ -1023,7 +1202,7 @@ export function PageMarkLayer({
           if (isPageShape(mark)) {
             return (
               <PageShapeShape
-                key={index}
+                key={mark.id ?? `${mark.tool}-${index}`}
                 mark={mark}
                 scaleX={VIEW}
                 scaleY={height}
@@ -1067,6 +1246,16 @@ export function PageMarkLayer({
             pointerEvents="none"
           />
         )}
+        <ellipse
+          ref={eraserCursorShape}
+          style={{ display: 'none', pointerEvents: 'none' }}
+          fill="rgb(255 255 255 / 0.58)"
+          stroke="#64748b"
+          strokeWidth={1.25}
+          vectorEffect="non-scaling-stroke"
+        />
+        <g ref={liveStrokeChunks} pointerEvents="none" />
+        <path ref={liveStrokeUnderlay} style={{ display: 'none', pointerEvents: 'none' }} />
         <path ref={liveStrokePath} style={{ display: 'none', pointerEvents: 'none' }} />
       </svg>
 
@@ -1167,15 +1356,27 @@ function StrokeMarkPath({
   const pressurePath = toPressurePenPath(mark, scaleX, scaleY)
   if (pressurePath) {
     return (
-      <path
-        d={pressurePath}
-        fill={mark.color}
-        fillOpacity={TOOL_OPACITY[mark.tool]}
-        filter={mark.tool === 'pencil' ? `url(#${pencilFilterId})` : undefined}
-        className={erase ? 'cursor-pointer' : ''}
-        style={{ pointerEvents: erase ? 'fill' : 'none' }}
-        onPointerDown={erase ? onErase : undefined}
-      />
+      <g>
+        <path
+          d={toPath(mark.points, scaleX, scaleY)}
+          fill="none"
+          stroke={mark.color}
+          strokeWidth={Math.max(mark.width * scaleX * 0.28, 0.18)}
+          strokeOpacity={mark.tool === 'pencil' ? 0.28 : 1}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pointerEvents="none"
+        />
+        <path
+          d={pressurePath}
+          fill={mark.color}
+          fillOpacity={TOOL_OPACITY[mark.tool]}
+          filter={mark.tool === 'pencil' ? `url(#${pencilFilterId})` : undefined}
+          className={erase ? 'cursor-pointer' : ''}
+          style={{ pointerEvents: erase ? 'fill' : 'none' }}
+          onPointerDown={erase ? onErase : undefined}
+        />
+      </g>
     )
   }
   return (
@@ -1185,6 +1386,7 @@ function StrokeMarkPath({
       stroke={mark.color}
       strokeWidth={mark.width * scaleX}
       strokeOpacity={TOOL_OPACITY[mark.tool]}
+      filter={mark.tool === 'pencil' ? `url(#${pencilFilterId})` : undefined}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={erase ? 'cursor-pointer' : ''}

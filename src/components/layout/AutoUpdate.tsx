@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const CHECK_INTERVAL_MS = 60_000
-const SAFE_RETRY_MS = 3_000
 const FIRST_CHECK_DELAY_MS = 10_000
 const RELOAD_ATTEMPT_PREFIX = 'qbank:auto-update-attempted:'
 
@@ -34,8 +33,9 @@ function reloadAttemptKey(nextVersion: string): string {
 }
 
 /**
- * 배포 후에도 열려 있던 탭이 최신 번들을 스스로 받아오게 한다.
- * 일반 화면은 바로 갱신하고, 풀이·작성 중이면 안내만 띄운 뒤 안전해질 때 갱신한다.
+ * 배포 후에도 열려 있던 일반 화면은 최신 번들을 스스로 받아온다.
+ * 풀이·작성 중인 탭은 작업이 끝난 뒤에도 자동으로 새로고침하지 않고 안내만
+ * 유지한다. 사용자가 직접 반영 시점을 고르게 해야 임시 입력을 잃지 않는다.
  */
 export function AutoUpdate() {
   const checking = useRef(false)
@@ -97,15 +97,6 @@ export function AutoUpdate() {
     }
   }, [checkForUpdate])
 
-  useEffect(() => {
-    if (!availableVersion) return
-    const applyWhenSafe = () => {
-      if (!shouldDeferAutoRefresh()) reloadFor(availableVersion)
-    }
-    const interval = window.setInterval(applyWhenSafe, SAFE_RETRY_MS)
-    return () => window.clearInterval(interval)
-  }, [availableVersion, reloadFor])
-
   if (!availableVersion) return null
 
   return (
@@ -114,7 +105,7 @@ export function AutoUpdate() {
       className="fixed inset-x-3 bottom-20 z-[60] mx-auto flex max-w-lg items-center gap-3 rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm shadow-xl dark:border-brand-800 dark:bg-slate-900 lg:bottom-4"
     >
       <p className="min-w-0 flex-1 text-slate-700 dark:text-slate-200">
-        새 버전이 준비됐습니다. 작성하거나 풀던 내용은 그대로 두고 안전할 때 자동으로 반영합니다.
+        새 버전이 준비됐습니다. 작성 중인 내용은 그대로 유지되며, 직접 새로고침할 때 반영됩니다.
       </p>
       <button
         type="button"

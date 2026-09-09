@@ -71,8 +71,11 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
     if (!questionId) return
     let active = true
     void fetchQuestionById(questionId)
-      .then((found) => {
-        if (active) setQuestion(found ?? 'missing')
+      .then(async (found) => {
+        // 완전히 동일한 판본을 본문에 골라도 실제 카드인 기준 문제를 중심으로
+        // 그려야 대표가 빠지지 않고 전체 묶음이 보인다.
+        const card = found?.sameAs ? (await fetchQuestionById(found.sameAs) ?? found) : found
+        if (active) setQuestion(card ?? 'missing')
       })
       .catch(() => {
         if (active) setQuestion('missing')
@@ -204,7 +207,7 @@ function YamaBody({
   return (
     <div
       className={cn(
-        'rounded-lg border-l-2 border-emerald-500 bg-emerald-50/40 px-3 py-2.5 dark:bg-emerald-950/20',
+        'rounded-lg border-l-2 border-sky-500 bg-sky-100/80 px-3 py-2.5 dark:border-sky-600 dark:bg-sky-950/35',
         selected && 'ring-2 ring-brand-500',
       )}
     >
@@ -212,7 +215,7 @@ function YamaBody({
         <span
           data-drag-handle={editing ? '' : undefined}
           className={cn(
-            'rounded bg-emerald-600 px-1.5 py-0.5 font-semibold text-white',
+            'rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white',
             editing && 'cursor-grab active:cursor-grabbing',
           )}
         >
@@ -322,23 +325,24 @@ function YamaBody({
             examLabelOf={examLabel}
             confirmLabel="이 문제로 확정"
             onCancel={() => setAdding(null)}
-            onPick={(found) => {
-              void attach(found.id, adding.variant, adding.anchorId)
-                .then(() => setAdding(null))
-                .catch(async (caught: unknown) => {
-                  const message = messageOf(caught, '문제 묶기에 실패했습니다. 잠시 후 다시 시도해 주세요.')
-                  await recordClusterAttachFailure({
-                    anchorId: adding.anchorId,
-                    targetId: found.id,
-                    variant: adding.variant,
-                    errorMessage: message,
-                    errorCode: codeOf(caught),
-                  }).catch((logError: unknown) => {
-                    // 진단 기록 자체가 실패해도 원래 실패 원인은 반드시 사용자에게 보인다.
-                    console.error('야마 묶기 실패 기록을 남기지 못했습니다.', logError)
-                  })
-                  window.alert(message)
+            onPick={async (found) => {
+              try {
+                await attach(found.id, adding.variant, adding.anchorId)
+                setAdding(null)
+              } catch (caught) {
+                const message = messageOf(caught, '문제 묶기에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+                await recordClusterAttachFailure({
+                  anchorId: adding.anchorId,
+                  targetId: found.id,
+                  variant: adding.variant,
+                  errorMessage: message,
+                  errorCode: codeOf(caught),
+                }).catch((logError: unknown) => {
+                  // 진단 기록 자체가 실패해도 원래 실패 원인은 반드시 사용자에게 보인다.
+                  console.error('야마 묶기 실패 기록을 남기지 못했습니다.', logError)
                 })
+                window.alert(message)
+              }
             }}
           />
         </div>
@@ -452,8 +456,8 @@ function QuestionCard({
       className={cn(
         'rounded-lg border bg-white p-3 dark:bg-slate-900',
         kind === 'anchor'
-          ? 'border-slate-300 shadow-sm dark:border-slate-600'
-          : 'border-slate-300 dark:border-slate-600',
+          ? 'border-sky-300 shadow-sm dark:border-sky-700'
+          : 'border-sky-200 dark:border-sky-800',
         className,
       )}
     >
@@ -462,7 +466,7 @@ function QuestionCard({
           className={cn(
             'rounded px-1.5 py-0.5 font-bold',
             kind === 'anchor'
-              ? 'bg-emerald-600 text-white'
+              ? 'bg-sky-600 text-white'
               : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
           )}
         >
@@ -528,6 +532,7 @@ function QuestionCard({
             onChange={setSelectedChoices}
             revealed={showSolution ? answer : null}
             disabled={showSolution}
+            compact
           />
         </div>
       ) : (
@@ -561,14 +566,14 @@ function QuestionCard({
             type="button"
             onClick={() => void grade()}
             disabled={selectedChoices.length === 0 || grading}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {grading ? '채점 중…' : '채점하기'}
           </button>
           <button
             type="button"
             onClick={() => setShowSolution(true)}
-            className="px-1 py-1.5 text-xs text-slate-500 hover:text-emerald-700 dark:text-slate-400 dark:hover:text-emerald-300"
+            className="px-1 py-1.5 text-xs text-slate-500 hover:text-sky-700 dark:text-slate-400 dark:hover:text-sky-300"
           >
             풀이 바로 보기
           </button>

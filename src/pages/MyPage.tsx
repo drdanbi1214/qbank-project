@@ -24,7 +24,7 @@ import { uploadAvatar } from '@/lib/uploads'
 /** 마이페이지. 프로필 편집과 학습 통계를 함께 보여준다. */
 export function MyPage() {
   const { profile, updateProfile } = useAuth()
-  const { fontScale, setFontScale, theme, setTheme } = useTheme()
+  const { fontScale, setFontScale, fontFamily, setFontFamily, theme, setTheme } = useTheme()
 
   const [nickname, setNickname] = useState(profile?.display_name ?? '')
   const [busy, setBusy] = useState(false)
@@ -242,6 +242,30 @@ export function MyPage() {
           <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">
             미리보기, 이 문장의 크기로 문제와 풀이가 표시됩니다.
           </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium">글씨체</span>
+            <div className="flex flex-wrap rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+              {([
+                ['hamchorom', '함초롬체 (기본)'],
+                ['hamchorom-batang', '함초롬바탕'],
+                ['ibm-plex-sans', '기존 글씨체 (IBM)'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFontFamily(value)}
+                  className={
+                    fontFamily === value
+                      ? 'rounded-md bg-white px-3 py-1 text-sm font-medium shadow-sm dark:bg-slate-700'
+                      : 'rounded-md px-3 py-1 text-sm text-slate-500 dark:text-slate-400'
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">화면 모드</span>

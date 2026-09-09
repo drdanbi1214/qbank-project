@@ -39,6 +39,7 @@ export type ProfilePatch = Partial<
     | 'avatar_url'
     | 'theme'
     | 'font_scale'
+    | 'font_family'
     | 'default_solution_permission'
     | 'one_liner'
   >

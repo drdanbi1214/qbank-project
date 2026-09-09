@@ -79,13 +79,28 @@ const HIGHLIGHT_COLORS = [
 ] as const
 const PEN_WIDTHS = [0.0025, 0.004, 0.007] as const
 const HIGHLIGHT_WIDTHS = [0.018, 0.03, 0.05] as const
-const PENCIL_WIDTHS = [0.003, 0.0065, 0.012] as const
+const ERASER_RADII = [8, 14, 24] as const
+/** 화면 폭 1,000px 기준 약 1.2px부터 채점용 28px까지의 색연필 굵기. */
+const PENCIL_WIDTHS = [
+  0.0012,
+  0.002,
+  0.003,
+  0.0045,
+  0.0065,
+  0.009,
+  0.012,
+  0.016,
+  0.021,
+  0.028,
+] as const
 
 type AnnotationSettings = {
   penColor: string
   highlightColor: string
   pencilColor: string
   size: number
+  pencilSize: number
+  eraserSize: number
 }
 
 function isAnnotationColor(value: unknown): value is string {
@@ -98,6 +113,8 @@ function initialAnnotationSettings(): AnnotationSettings {
     highlightColor: '#facc15',
     pencilColor: '#e11d48',
     size: 1,
+    pencilSize: 4,
+    eraserSize: 1,
   }
   if (typeof window === 'undefined') return fallback
   try {
@@ -111,6 +128,14 @@ function initialAnnotationSettings(): AnnotationSettings {
       size: Number.isInteger(parsed.size) && parsed.size! >= 0 && parsed.size! <= 2
         ? parsed.size!
         : fallback.size,
+      pencilSize:
+        Number.isInteger(parsed.pencilSize) && parsed.pencilSize! >= 0 && parsed.pencilSize! < PENCIL_WIDTHS.length
+          ? parsed.pencilSize!
+          : fallback.pencilSize,
+      eraserSize:
+        Number.isInteger(parsed.eraserSize) && parsed.eraserSize! >= 0 && parsed.eraserSize! < ERASER_RADII.length
+          ? parsed.eraserSize!
+          : fallback.eraserSize,
     }
   } catch {
     return fallback
@@ -195,9 +220,11 @@ function PdfPage({
   annotationTool = null,
   annotationColor,
   annotationWidth,
+  eraserRadius,
   allowTouchDrawing = false,
   onMarksChange,
   onAnnotationInteract,
+  onViewportPage,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
@@ -213,9 +240,11 @@ function PdfPage({
   annotationTool?: AnnotationTool
   annotationColor?: string
   annotationWidth?: number
+  eraserRadius?: number
   allowTouchDrawing?: boolean
   onMarksChange?: (marks: PageMark[]) => void
   onAnnotationInteract?: () => void
+  onViewportPage?: (pageNumber: number) => void
 }) {
   const holder = useRef<HTMLDivElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
@@ -256,6 +285,19 @@ function PdfPage({
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    const node = holder.current
+    if (!node || !onViewportPage) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) onViewportPage(pageNumber)
+      },
+      { rootMargin: '-22% 0px -68% 0px', threshold: 0 },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [onViewportPage, pageNumber])
 
   useEffect(() => {
     if (!visible) {
@@ -415,7 +457,7 @@ function PdfPage({
         }
       />
       <div ref={textLayer} className="lecture-pdf-text-layer" />
-      {(marks.length > 0 || onMarksChange) && (
+      {visible && (marks.length > 0 || onMarksChange) && (
         <PageMarkLayer
           key={annotationTool ?? 'view'}
           marks={marks}
@@ -424,6 +466,7 @@ function PdfPage({
           tool={annotationTool}
           color={annotationColor}
           strokeWidth={annotationWidth}
+          eraserRadius={eraserRadius}
           allowTouchDrawing={allowTouchDrawing}
           onInteract={onAnnotationInteract}
           // 페이지 안의 다른 요소는 필기 중 pointer-events가 꺼지므로 z-2면 충분하다.
@@ -501,14 +544,26 @@ export function LecturePdfViewer({
   const [annotationSettings, setAnnotationSettings] = useState(initialAnnotationSettings)
   const [allowTouchDrawing, setAllowTouchDrawing] = useState(initialTouchDrawing)
   const [lastAnnotationPage, setLastAnnotationPage] = useState<number | null>(null)
+  const [activeAnnotationPage, setActiveAnnotationPage] = useState<number | null>(initialPage ?? null)
+  const [pageInput, setPageInput] = useState('')
+  const [zoom, setZoom] = useState(100)
+  const [showBrushSettings, setShowBrushSettings] = useState(false)
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
+  const root = useRef<HTMLDivElement | null>(null)
   const column = useRef<HTMLDivElement | null>(null)
   const searchBox = useRef<HTMLInputElement | null>(null)
 
   const selectedSet = useMemo(() => new Set(selectedPages ?? []), [selectedPages])
   const annotationEnabled = Boolean(lectureId && !selectable)
   const annotations = useLecturePdfAnnotations(lectureId, annotationVariantId, annotationEnabled)
-  const { penColor, highlightColor, pencilColor, size: annotationSize } = annotationSettings
+  const {
+    penColor,
+    highlightColor,
+    pencilColor,
+    size: annotationSize,
+    pencilSize,
+    eraserSize,
+  } = annotationSettings
   const annotationColor =
     annotationTool === 'highlight'
       ? highlightColor
@@ -525,16 +580,17 @@ export function LecturePdfViewer({
     annotationTool === 'highlight'
       ? HIGHLIGHT_WIDTHS[annotationSize]
       : annotationTool === 'pencil'
-        ? PENCIL_WIDTHS[annotationSize]
-      : PEN_WIDTHS[annotationSize]
-  const lastAnnotationMarks = lastAnnotationPage
-    ? (annotations.pages[lastAnnotationPage] ?? [])
+        ? PENCIL_WIDTHS[pencilSize]
+        : PEN_WIDTHS[annotationSize]
+  const targetAnnotationPage = activeAnnotationPage ?? lastAnnotationPage
+  const targetAnnotationMarks = targetAnnotationPage
+    ? (annotations.pages[targetAnnotationPage] ?? [])
     : []
-  const canUndoLastPage = lastAnnotationPage
-    ? annotations.canUndoPage(lastAnnotationPage)
+  const canUndoTargetPage = targetAnnotationPage
+    ? annotations.canUndoPage(targetAnnotationPage)
     : false
-  const canRedoLastPage = lastAnnotationPage
-    ? annotations.canRedoPage(lastAnnotationPage)
+  const canRedoTargetPage = targetAnnotationPage
+    ? annotations.canRedoPage(targetAnnotationPage)
     : false
   const annotatedPageCount = useMemo(
     () => Object.values(annotations.pages).filter((marks) => marks.length > 0).length,
@@ -709,9 +765,22 @@ export function LecturePdfViewer({
   )
 
   const scrollToPage = useCallback((pageNumber: number) => {
-    const target = window.document.querySelector(`[data-page="${pageNumber}"]`)
+    const target = root.current?.querySelector(`[data-page="${pageNumber}"]`)
     target?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [])
+
+  const noteViewportPage = useCallback((pageNumber: number) => {
+    setActiveAnnotationPage(pageNumber)
+  }, [])
+
+  const goToPage = useCallback(() => {
+    if (!document) return
+    const pageNumber = Number(pageInput)
+    if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > document.numPages) return
+    setActiveAnnotationPage(pageNumber)
+    scrollToPage(pageNumber)
+    setPageInput('')
+  }, [document, pageInput, scrollToPage])
 
   // 새 검색어는 현재 스크롤 위치와 무관하게 문서의 첫 번째 일치 항목부터
   // 시작한다. 이전에는 URL의 초기 쪽을 기준으로 잡아 끝에서 위로 돌아가는 것처럼
@@ -736,7 +805,7 @@ export function LecturePdfViewer({
 
   useEffect(() => {
     const handleFind = (event: KeyboardEvent) => {
-      if (viewMode !== 'compatible') return
+      if (effectiveMode !== 'compatible') return
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') {
         event.preventDefault()
         searchBox.current?.focus()
@@ -748,7 +817,7 @@ export function LecturePdfViewer({
     }
     window.addEventListener('keydown', handleFind)
     return () => window.removeEventListener('keydown', handleFind)
-  }, [moveSearch, viewMode])
+  }, [effectiveMode, moveSearch])
 
   // 풀이에서 "127쪽" 처럼 가리켜 들어온 경우 그 자리로 옮겨 준다. 아직 안 그린
   // 쪽도 자리는 잡혀 있어 스크롤이 제대로 닿는다.
@@ -761,6 +830,33 @@ export function LecturePdfViewer({
     return () => clearTimeout(timer)
   }, [document, initialPage])
 
+  useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (!annotationTool || !targetAnnotationPage || (!event.metaKey && !event.ctrlKey)) return
+      if (event.key.toLocaleLowerCase() !== 'z') return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return
+      }
+      const redo = event.shiftKey
+      if (redo ? !canRedoTargetPage : !canUndoTargetPage) return
+      event.preventDefault()
+      if (redo) annotations.redoPage(targetAnnotationPage)
+      else annotations.undoPage(targetAnnotationPage)
+    }
+    window.addEventListener('keydown', handleHistoryShortcut)
+    return () => window.removeEventListener('keydown', handleHistoryShortcut)
+  }, [
+    annotationTool,
+    annotations,
+    canRedoTargetPage,
+    canUndoTargetPage,
+    targetAnnotationPage,
+  ])
+
   function selectAnnotationTool(tool: AnnotationTool) {
     if (!annotations.available || annotations.status === 'loading' || annotations.loadFailed) return
     if (tool) {
@@ -771,13 +867,11 @@ export function LecturePdfViewer({
   }
 
   function changeAnnotationColor(color: string) {
-    setAnnotationSettings((current) =>
-      annotationTool === 'highlight'
-        ? { ...current, highlightColor: color }
-        : annotationTool === 'pencil'
-          ? { ...current, pencilColor: color }
-        : { ...current, penColor: color },
-    )
+    setAnnotationSettings((current) => {
+      if (annotationTool === 'highlight') return { ...current, highlightColor: color }
+      if (annotationTool === 'pencil') return { ...current, pencilColor: color }
+      return { ...current, penColor: color }
+    })
   }
 
   function toggleTouchDrawing() {
@@ -788,13 +882,14 @@ export function LecturePdfViewer({
 
   function updatePageMarks(pageNumber: number, marks: PageMark[]) {
     setLastAnnotationPage(pageNumber)
+    setActiveAnnotationPage(pageNumber)
     annotations.updatePage(pageNumber, marks)
   }
 
-  function clearLastAnnotationPage() {
-    if (!lastAnnotationPage || lastAnnotationMarks.length === 0) return
-    if (!window.confirm(`${lastAnnotationPage}쪽의 필기를 모두 지울까요?`)) return
-    updatePageMarks(lastAnnotationPage, [])
+  function clearTargetAnnotationPage() {
+    if (!targetAnnotationPage || targetAnnotationMarks.length === 0) return
+    if (!window.confirm(`${targetAnnotationPage}쪽의 필기를 모두 지울까요?`)) return
+    updatePageMarks(targetAnnotationPage, [])
   }
 
   function resolveAnnotationConflict(choice: 'server' | 'mine' | 'combine') {
@@ -886,6 +981,7 @@ export function LecturePdfViewer({
 
   return (
     <div
+      ref={root}
       className="flex flex-col gap-3"
       data-auto-update-blocker={annotationTool || annotations.hasUnsavedChanges ? '' : undefined}
     >
@@ -901,6 +997,33 @@ export function LecturePdfViewer({
         )}
         {document && (
           <span className="text-sm text-slate-500 dark:text-slate-400">총 {document.numPages}쪽</span>
+        )}
+        {document && effectiveMode === 'compatible' && (
+          <form
+            className="inline-flex items-center gap-1"
+            onSubmit={(event) => {
+              event.preventDefault()
+              goToPage()
+            }}
+          >
+            <input
+              type="number"
+              min={1}
+              max={document.numPages}
+              inputMode="numeric"
+              value={pageInput}
+              onChange={(event) => setPageInput(event.target.value)}
+              placeholder={String(activeAnnotationPage ?? 1)}
+              aria-label="이동할 쪽 번호"
+              className="h-8 w-14 rounded-md border border-slate-300 bg-white px-1.5 text-center text-xs outline-none focus:border-brand-500 dark:border-slate-600 dark:bg-slate-800"
+            />
+            <button
+              type="submit"
+              className="h-8 rounded-md border border-slate-300 px-2 text-xs font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+            >
+              이동
+            </button>
+          </form>
         )}
         <span className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
           <button
@@ -929,7 +1052,7 @@ export function LecturePdfViewer({
             페이지 전체 보기
           </button>
         </span>
-        {viewMode === 'compatible' && (
+        {effectiveMode === 'compatible' && (
           <>
             <div className="relative min-w-[220px] flex-1 sm:max-w-md">
               <input
@@ -969,6 +1092,19 @@ export function LecturePdfViewer({
             >
               ↓
             </button>
+            <label className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 px-2 text-xs dark:border-slate-600">
+              확대
+              <select
+                value={zoom}
+                onChange={(event) => setZoom(Number(event.target.value))}
+                aria-label="PDF 확대 비율"
+                className="bg-transparent font-semibold outline-none"
+              >
+                {[75, 90, 100, 110, 125, 150, 175, 200].map((value) => (
+                  <option key={value} value={value}>{value}%</option>
+                ))}
+              </select>
+            </label>
           </>
         )}
         {!annotationEnabled && sourceActions && <span className="ml-auto">{sourceActions}</span>}
@@ -1022,9 +1158,41 @@ export function LecturePdfViewer({
                 둘러서 선택한 뒤 선택 상자를 끌어 이동
               </span>
             )}
+            {annotationTool === 'erase' && (
+              <span
+                className="ml-1 inline-flex rounded-md bg-slate-100 p-0.5 dark:bg-slate-800"
+                role="group"
+                aria-label="부분 지우개 크기"
+              >
+                {['작게', '보통', '크게'].map((label, index) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setAnnotationSettings((current) => ({ ...current, eraserSize: index }))}
+                    aria-pressed={eraserSize === index}
+                    className={`min-h-8 rounded px-2 py-1 text-[11px] ${
+                      eraserSize === index
+                        ? 'bg-white font-semibold text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </span>
+            )}
 
             {(annotationTool === 'pen' || annotationTool === 'highlight' || annotationTool === 'pencil') && (
               <>
+                <button
+                  type="button"
+                  onClick={() => setShowBrushSettings((current) => !current)}
+                  aria-expanded={showBrushSettings}
+                  className="min-h-8 rounded-md border border-slate-300 px-2 py-1 text-[11px] font-medium sm:hidden dark:border-slate-600"
+                >
+                  색·굵기 {showBrushSettings ? '접기' : '열기'}
+                </button>
+                <div className={`${showBrushSettings ? 'flex' : 'hidden'} w-full flex-wrap items-center gap-1 sm:contents`}>
                 <span
                   className="ml-1 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/70"
                   role="group"
@@ -1085,8 +1253,33 @@ export function LecturePdfViewer({
                     </span>
                   </label>
                 </span>
-                <span className="ml-1 inline-flex rounded-md bg-slate-100 p-0.5 dark:bg-slate-800">
-                  {['얇게', '보통', '굵게'].map((label, index) => (
+                {annotationTool === 'pencil' ? (
+                  <span
+                    className="ml-1 inline-flex flex-wrap rounded-md bg-slate-100 p-0.5 dark:bg-slate-800"
+                    role="group"
+                    aria-label="색연필 굵기 1부터 10"
+                  >
+                    {PENCIL_WIDTHS.map((value, index) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setAnnotationSettings((current) => ({ ...current, pencilSize: index }))}
+                        aria-pressed={pencilSize === index}
+                        aria-label={`색연필 굵기 ${index + 1}`}
+                        title={`굵기 ${index + 1} · 약 ${(value * 1000).toFixed(2)}px`}
+                        className={`grid min-h-8 min-w-7 place-items-center rounded px-1 py-1 text-[11px] ${
+                          pencilSize === index
+                            ? 'bg-white font-semibold text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="ml-1 inline-flex rounded-md bg-slate-100 p-0.5 dark:bg-slate-800">
+                    {['얇게', '보통', '굵게'].map((label, index) => (
                     <button
                       key={label}
                       type="button"
@@ -1101,7 +1294,9 @@ export function LecturePdfViewer({
                       {label}
                     </button>
                   ))}
-                </span>
+                  </span>
+                )}
+                </div>
               </>
             )}
 
@@ -1121,34 +1316,34 @@ export function LecturePdfViewer({
               </button>
             )}
 
-            {lastAnnotationPage &&
-              (lastAnnotationMarks.length > 0 || canUndoLastPage || canRedoLastPage) && (
+            {targetAnnotationPage &&
+              (targetAnnotationMarks.length > 0 || canUndoTargetPage || canRedoTargetPage) && (
               <span className="ml-1 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                {lastAnnotationPage}쪽
+                {targetAnnotationPage}쪽
                 <button
                   type="button"
-                  onClick={() => annotations.undoPage(lastAnnotationPage)}
-                  disabled={!canUndoLastPage}
+                  onClick={() => annotations.undoPage(targetAnnotationPage)}
+                  disabled={!canUndoTargetPage}
                   className="rounded-md border border-slate-300 px-2 py-1 font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35 dark:border-slate-600 dark:hover:bg-slate-800"
                 >
                   되돌리기
                 </button>
-                {canRedoLastPage && (
+                {canRedoTargetPage && (
                   <button
                     type="button"
-                    onClick={() => annotations.redoPage(lastAnnotationPage)}
+                    onClick={() => annotations.redoPage(targetAnnotationPage)}
                     className="rounded-md border border-slate-300 px-2 py-1 font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
                   >
                     다시실행
                   </button>
                 )}
-                {lastAnnotationMarks.length > 0 && (
+                {targetAnnotationMarks.length > 0 && (
                   <button
                     type="button"
-                    onClick={clearLastAnnotationPage}
+                    onClick={clearTargetAnnotationPage}
                     className="rounded-md border border-rose-300 px-2 py-1 font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
                   >
-                    모두 지우기
+                    이 쪽 필기 모두 지우기
                   </button>
                 )}
               </span>
@@ -1164,6 +1359,8 @@ export function LecturePdfViewer({
                   ? `다른 기기 수정 감지${annotations.conflictCount > 1 ? ` ${annotations.conflictCount}건` : ''}`
                 : annotations.remoteUpdate
                   ? `${annotations.remoteUpdate.pageNumber}쪽 실시간 반영 ✓`
+                : annotations.realtimeStatus === 'disconnected'
+                  ? '실시간 연결 끊김'
                 : annotations.status === 'saving'
                   ? '저장 중…'
                   : annotations.status === 'saved'
@@ -1180,6 +1377,15 @@ export function LecturePdfViewer({
                 className="rounded-md bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-rose-700"
               >
                 다시 시도
+              </button>
+            )}
+            {annotations.realtimeStatus === 'disconnected' && (
+              <button
+                type="button"
+                onClick={annotations.retryRealtime}
+                className="rounded-md border border-amber-400 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40"
+              >
+                실시간 다시 연결
               </button>
             )}
             {sourceActions}
@@ -1234,7 +1440,16 @@ export function LecturePdfViewer({
         </div>
       )}
 
-      <div ref={column} className="flex flex-col gap-3">
+      <div className={effectiveMode === 'compatible' ? 'overflow-x-auto pb-2' : undefined}>
+      <div
+        ref={column}
+        className="mx-auto flex flex-col gap-3 transition-[width] duration-150"
+        style={
+          effectiveMode === 'compatible' && document
+            ? { width: `${zoom}%` }
+            : undefined
+        }
+      >
         {error ? (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
             {error}
@@ -1267,13 +1482,18 @@ export function LecturePdfViewer({
               annotationTool={annotationTool}
               annotationColor={annotationColor}
               annotationWidth={annotationWidth}
+              eraserRadius={ERASER_RADII[eraserSize]}
               allowTouchDrawing={allowTouchDrawing}
               onMarksChange={
                 annotations.available && !annotations.loadFailed
                   ? (marks) => updatePageMarks(pageNumber, marks)
                   : undefined
               }
-              onAnnotationInteract={() => setLastAnnotationPage(pageNumber)}
+              onAnnotationInteract={() => {
+                setLastAnnotationPage(pageNumber)
+                setActiveAnnotationPage(pageNumber)
+              }}
+              onViewportPage={noteViewportPage}
               // 여러 낱말 중 일부만 있는 쪽은 결과가 아니므로 부분 강조도 하지 않는다.
               searchQuery={searchPageNumbers.has(pageNumber) ? searchQuery : ''}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
@@ -1285,6 +1505,7 @@ export function LecturePdfViewer({
             />
           ))
         )}
+      </div>
       </div>
     </div>
   )

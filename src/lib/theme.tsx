@@ -10,9 +10,11 @@ import {
 import { useAuth } from '@/lib/auth'
 
 export type Theme = 'light' | 'dark' | 'system'
+export type FontFamily = 'hamchorom' | 'hamchorom-batang' | 'ibm-plex-sans'
 
 const THEME_CACHE_KEY = 'qbank.theme.cache'
 const FONT_CACHE_KEY = 'qbank.font.cache'
+const FONT_FAMILY_CACHE_KEY = 'qbank.font-family.cache'
 
 /** 글자 크기 배율의 허용 범위와 단계. DB check 제약과 맞춰둔다. */
 export const FONT_SCALE_MIN = 0.85
@@ -29,6 +31,9 @@ type ThemeState = {
   /** 본문 글자 크기 배율 */
   fontScale: number
   setFontScale: (next: number) => void
+  /** 사이트와 DB 본문에 적용하는 글꼴 */
+  fontFamily: FontFamily
+  setFontFamily: (next: FontFamily) => void
 }
 
 const ThemeContext = createContext<ThemeState | null>(null)
@@ -36,6 +41,12 @@ const ThemeContext = createContext<ThemeState | null>(null)
 /** DB 컬럼은 text 이므로 알려진 값만 통과시킨다. */
 function asTheme(value: string | null | undefined): Theme | null {
   return value === 'light' || value === 'dark' || value === 'system' ? value : null
+}
+
+function asFontFamily(value: string | null | undefined): FontFamily | null {
+  return value === 'hamchorom' || value === 'hamchorom-batang' || value === 'ibm-plex-sans'
+    ? value
+    : null
 }
 
 function readCache(): Theme {
@@ -51,6 +62,10 @@ function readFontCache(): number {
   return clampScale(Number(localStorage.getItem(FONT_CACHE_KEY) ?? '1'))
 }
 
+function readFontFamilyCache(): FontFamily {
+  return asFontFamily(localStorage.getItem(FONT_FAMILY_CACHE_KEY)) ?? 'hamchorom'
+}
+
 function systemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
@@ -63,10 +78,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const { profile, session, updateProfile } = useAuth()
   const [localTheme, setLocalTheme] = useState<Theme>(() => readCache())
   const [localScale, setLocalScale] = useState<number>(() => readFontCache())
+  const [localFontFamily, setLocalFontFamily] = useState<FontFamily>(() => readFontFamilyCache())
   const [prefersDark, setPrefersDark] = useState(() => systemPrefersDark())
 
   const theme: Theme = asTheme(profile?.theme) ?? localTheme
   const fontScale = clampScale(profile?.font_scale ?? localScale)
+  const fontFamily = asFontFamily(profile?.font_family) ?? localFontFamily
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -89,6 +106,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.style.fontSize = `${(fontScale * 100).toFixed(0)}%`
     localStorage.setItem(FONT_CACHE_KEY, String(fontScale))
   }, [fontScale])
+
+  useEffect(() => {
+    document.documentElement.dataset.fontFamily = fontFamily
+    localStorage.setItem(FONT_FAMILY_CACHE_KEY, fontFamily)
+  }, [fontFamily])
 
   const setTheme = useCallback(
     (next: Theme) => {
@@ -122,9 +144,31 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [session, updateProfile],
   )
 
+  const setFontFamily = useCallback(
+    (next: FontFamily) => {
+      setLocalFontFamily(next)
+      localStorage.setItem(FONT_FAMILY_CACHE_KEY, next)
+      if (session) {
+        void updateProfile({ font_family: next }).catch((error: unknown) => {
+          console.error('글꼴 설정을 저장하지 못했습니다.', error)
+        })
+      }
+    },
+    [session, updateProfile],
+  )
+
   const value = useMemo<ThemeState>(
-    () => ({ theme, resolved, setTheme, toggle, fontScale, setFontScale }),
-    [theme, resolved, setTheme, toggle, fontScale, setFontScale],
+    () => ({
+      theme,
+      resolved,
+      setTheme,
+      toggle,
+      fontScale,
+      setFontScale,
+      fontFamily,
+      setFontFamily,
+    }),
+    [theme, resolved, setTheme, toggle, fontScale, setFontScale, fontFamily, setFontFamily],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

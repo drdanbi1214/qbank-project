@@ -532,6 +532,7 @@ export function QuestionView({
           <ClusterPanel
             questionId={question.id}
             initialGroupId={question.groupId}
+            currentSameAs={question.sameAs}
             examLabelOf={examLabelOf}
           />
 

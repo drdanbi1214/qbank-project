@@ -730,7 +730,7 @@ function YamaDisplayModeControl({
 }) {
   return (
     <div
-      className="inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm dark:border-slate-600 dark:bg-slate-900"
+      className="inline-flex rounded-md border border-sky-300 bg-sky-50 p-0.5 shadow-sm dark:border-sky-700 dark:bg-sky-950/30"
       aria-label="유사 문제 표시 방식"
     >
         <button
@@ -740,8 +740,8 @@ function YamaDisplayModeControl({
           className={cn(
             'rounded px-2 py-1 text-[11px] font-medium transition-colors',
             mode === 'solve'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-sky-800 dark:text-slate-400 dark:hover:text-sky-200',
           )}
         >
           문제 먼저 풀기
@@ -753,8 +753,8 @@ function YamaDisplayModeControl({
           className={cn(
             'rounded px-2 py-1 text-[11px] font-medium transition-colors',
             mode === 'all'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-sky-800 dark:text-slate-400 dark:hover:text-sky-200',
           )}
         >
           풀이 한번에 보기

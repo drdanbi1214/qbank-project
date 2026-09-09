@@ -1,12 +1,34 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Hamchorom';
+  src: url('https://cdn.jsdelivr.net/gh/woffz/b1@4cfaaccb575bd4ce4cacc470a4f6d6ba9f4873d3/Hamchorom/Hamchorom.woff') format('woff');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HANBatang';
+  src: url('@noonnu/han-batang/fonts/hanbatang-normal.woff') format('woff');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 /* 다크모드는 <html class="dark"> 토글 방식. 상태는 profiles.theme 에 저장한다. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans:
+  --font-hamchorom:
+    'Hamchorom', 'HCR Dotum', '함초롬돋움', 'Malgun Gothic', sans-serif;
+  --font-hamchorom-batang:
+    'HANBatang', 'HCR Batang', '함초롬바탕', 'Batang', 'AppleMyungjo', serif;
+  --font-legacy:
     'IBM Plex Sans KR', -apple-system, BlinkMacSystemFont, system-ui,
     'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-sans:
+    var(--font-hamchorom);
 
   /* 서비스 이름 전용. 본문에는 쓰지 않는다. */
   --font-brand: 'Jua', var(--font-sans);
@@ -24,6 +46,16 @@
   --color-brand-700: oklch(0.47 0.17 254);
   --color-brand-800: oklch(0.4 0.14 254);
   --color-brand-900: oklch(0.34 0.11 254);
+}
+
+/* 계정 설정에서 다른 글꼴을 고르면 Tailwind의 font-sans까지 한꺼번에 바뀐다.
+ * 속성이 없거나 알 수 없는 값이면 고딕 계열 함초롬체가 기본이다. */
+:root[data-font-family='hamchorom-batang'] {
+  --font-sans: var(--font-hamchorom-batang);
+}
+
+:root[data-font-family='ibm-plex-sans'] {
+  --font-sans: var(--font-legacy);
 }
 
 /*
@@ -185,6 +217,21 @@
 
   .rich-text.topic-solution-rich-text > * + * {
     @apply mt-0.5;
+  }
+
+  /* 알렌 우측 메모는 폭이 좁다. 이미지도 문단과 같은 문서 흐름에 두되,
+     읽기/편집 화면의 간격과 크기를 동일하게 맞춘다. */
+  .rich-text.memo-rich-text {
+    @apply text-[11px] leading-[1.4];
+  }
+
+  .rich-text.memo-rich-text > * + * {
+    @apply mt-1.5;
+  }
+
+  .rich-text.memo-rich-text img {
+    max-height: 18rem;
+    object-fit: contain;
   }
 
   /* 풀이 이미지 중 작성자가 크기를 직접 조절하지 않은 것(고정 width가 없는

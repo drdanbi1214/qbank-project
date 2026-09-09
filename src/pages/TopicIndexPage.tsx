@@ -83,13 +83,13 @@ export function TopicIndexPage() {
 
       <Link
         to="/topics/notices"
-        className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 transition-colors hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/30"
+        className="mb-5 flex items-center gap-3 rounded-xl border border-sky-300 bg-sky-100/80 p-4 transition-colors hover:border-sky-400 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:hover:border-sky-700"
       >
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-600 text-white">
           <Icon name="megaphone" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
             공지사항
             {isNewNotice && (
               <span

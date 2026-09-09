@@ -1,4 +1,5 @@
 import {
+  createPageMarkId,
   isPageShape,
   isPageText,
   simplifyStroke,
@@ -151,39 +152,82 @@ function pointToSegmentDistance(
   return Math.hypot(px - (x1 + progress * dx), py - (y1 + progress * dy))
 }
 
-function wholeMarkHit(
-  mark: PageMark,
-  at: NormalizedPoint,
-  scaleX: number,
-  scaleY: number,
-  radiusPx: number,
-): boolean {
-  const px = at[0] * scaleX
-  const py = at[1] * scaleY
-  if (isPageText(mark)) {
-    return Math.hypot(px - mark.points[0] * scaleX, py - mark.points[1] * scaleY) <= radiusPx * 1.4
-  }
-  if (!isPageShape(mark)) return false
-  const x1 = mark.points[0] * scaleX
-  const y1 = mark.points[1] * scaleY
-  const x2 = mark.points[2] * scaleX
-  const y2 = mark.points[3] * scaleY
+function segmentToSegmentDistance(
+  a: NormalizedPoint,
+  b: NormalizedPoint,
+  c: NormalizedPoint,
+  d: NormalizedPoint,
+): number {
+  if (segmentsIntersect(a, b, c, d)) return 0
+  return Math.min(
+    pointToSegmentDistance(a[0], a[1], c[0], c[1], d[0], d[1]),
+    pointToSegmentDistance(b[0], b[1], c[0], c[1], d[0], d[1]),
+    pointToSegmentDistance(c[0], c[1], a[0], a[1], b[0], b[1]),
+    pointToSegmentDistance(d[0], d[1], a[0], a[1], b[0], b[1]),
+  )
+}
+
+function shapeSegments(mark: Extract<PageMark, { tool: 'rectangle' | 'star' }>): Array<[NormalizedPoint, NormalizedPoint]> {
+  const [x1, y1, x2, y2] = mark.points
   const left = Math.min(x1, x2)
   const right = Math.max(x1, x2)
   const top = Math.min(y1, y2)
   const bottom = Math.max(y1, y2)
+  let points: NormalizedPoint[]
+  if (mark.tool === 'rectangle') {
+    points = [[left, top], [right, top], [right, bottom], [left, bottom]]
+  } else {
+    const centerX = (left + right) / 2
+    const centerY = (top + bottom) / 2
+    points = Array.from({ length: 10 }, (_, index): NormalizedPoint => {
+      const angle = -Math.PI / 2 + (index * Math.PI) / 5
+      const radius = index % 2 === 0 ? 1 : 0.42
+      return [
+        centerX + Math.cos(angle) * ((right - left) / 2) * radius,
+        centerY + Math.sin(angle) * ((bottom - top) / 2) * radius,
+      ]
+    })
+  }
+  return points.map((point, index) => [point, points[(index + 1) % points.length]])
+}
+
+function wholeMarkHitAlong(
+  mark: PageMark,
+  from: NormalizedPoint,
+  to: NormalizedPoint,
+  scaleX: number,
+  scaleY: number,
+  radiusPx: number,
+): boolean {
+  const cursorFrom: NormalizedPoint = [from[0] * scaleX, from[1] * scaleY]
+  const cursorTo: NormalizedPoint = [to[0] * scaleX, to[1] * scaleY]
+  if (isPageText(mark)) {
+    const anchor: NormalizedPoint = [mark.points[0] * scaleX, mark.points[1] * scaleY]
+    return pointToSegmentDistance(
+      anchor[0],
+      anchor[1],
+      cursorFrom[0],
+      cursorFrom[1],
+      cursorTo[0],
+      cursorTo[1],
+    ) <= radiusPx * 1.4
+  }
+  if (!isPageShape(mark)) return false
   const threshold = radiusPx + (mark.width * scaleX) / 2
-  return (
-    pointToSegmentDistance(px, py, left, top, right, top) <= threshold ||
-    pointToSegmentDistance(px, py, right, top, right, bottom) <= threshold ||
-    pointToSegmentDistance(px, py, right, bottom, left, bottom) <= threshold ||
-    pointToSegmentDistance(px, py, left, bottom, left, top) <= threshold
+  return shapeSegments(mark).some(([shapeFrom, shapeTo]) =>
+    segmentToSegmentDistance(
+      cursorFrom,
+      cursorTo,
+      [shapeFrom[0] * scaleX, shapeFrom[1] * scaleY],
+      [shapeTo[0] * scaleX, shapeTo[1] * scaleY],
+    ) <= threshold,
   )
 }
 
-function eraseStrokeAt(
+function eraseStrokeAlong(
   mark: Stroke,
-  at: NormalizedPoint,
+  from: NormalizedPoint,
+  to: NormalizedPoint,
   scaleX: number,
   scaleY: number,
   radiusPx: number,
@@ -191,20 +235,25 @@ function eraseStrokeAt(
   const source = pointPairs(mark)
   if (source.length === 0) return { pieces: [], changed: true }
   const hasPressure = mark.pressures?.length === source.length
-  const pressureExpansion = mark.tool === 'pen' && hasPressure ? 1.45 : 1
+  const pressureExpansion = mark.tool !== 'highlight' && hasPressure ? 1.45 : 1
   const threshold = radiusPx + (mark.width * scaleX * pressureExpansion) / 2
-  const px = at[0] * scaleX
-  const py = at[1] * scaleY
+  const cursorFrom: NormalizedPoint = [from[0] * scaleX, from[1] * scaleY]
+  const cursorTo: NormalizedPoint = [to[0] * scaleX, to[1] * scaleY]
   const hit = source.length === 1
-    ? Math.hypot(px - source[0][0] * scaleX, py - source[0][1] * scaleY) <= threshold
+    ? pointToSegmentDistance(
+        source[0][0] * scaleX,
+        source[0][1] * scaleY,
+        cursorFrom[0],
+        cursorFrom[1],
+        cursorTo[0],
+        cursorTo[1],
+      ) <= threshold
     : source.slice(1).some((point, index) =>
-        pointToSegmentDistance(
-          px,
-          py,
-          source[index][0] * scaleX,
-          source[index][1] * scaleY,
-          point[0] * scaleX,
-          point[1] * scaleY,
+        segmentToSegmentDistance(
+          cursorFrom,
+          cursorTo,
+          [source[index][0] * scaleX, source[index][1] * scaleY],
+          [point[0] * scaleX, point[1] * scaleY],
         ) <= threshold,
       )
   if (!hit) return { pieces: [mark], changed: false }
@@ -237,7 +286,14 @@ function eraseStrokeAt(
   }
 
   const erased = dense.map(({ point }) =>
-    Math.hypot((point[0] - at[0]) * scaleX, (point[1] - at[1]) * scaleY) <= threshold,
+    pointToSegmentDistance(
+      point[0] * scaleX,
+      point[1] * scaleY,
+      cursorFrom[0],
+      cursorFrom[1],
+      cursorTo[0],
+      cursorTo[1],
+    ) <= threshold,
   )
   if (!erased.some(Boolean)) return { pieces: [mark], changed: false }
 
@@ -255,9 +311,10 @@ function eraseStrokeAt(
 
   return {
     changed: true,
-    pieces: runs.map((samples) =>
+    pieces: runs.map((samples, index) =>
       simplifyStroke({
         ...mark,
+        id: index === 0 && mark.id ? mark.id : createPageMarkId(),
         points: samples.flatMap(({ point }) => point),
         ...(hasPressure ? { pressures: samples.map(({ pressure }) => pressure ?? 0.5) } : {}),
       }, 0.0008),
@@ -272,14 +329,26 @@ export function erasePageMarksAt(
   scaleY: number,
   radiusPx: number,
 ): { marks: PageMark[]; changed: boolean } {
+  return erasePageMarksAlong(marks, at, at, scaleX, scaleY, radiusPx)
+}
+
+/** 포인터 이동 구간 전체를 한 번에 판정해 빠르게 움직여도 필기 사이를 건너뛰지 않는다. */
+export function erasePageMarksAlong(
+  marks: PageMark[],
+  from: NormalizedPoint,
+  to: NormalizedPoint,
+  scaleX: number,
+  scaleY: number,
+  radiusPx: number,
+): { marks: PageMark[]; changed: boolean } {
   let changed = false
   const next = marks.flatMap((mark): PageMark[] => {
     if (isPageText(mark) || isPageShape(mark)) {
-      if (!wholeMarkHit(mark, at, scaleX, scaleY, radiusPx)) return [mark]
+      if (!wholeMarkHitAlong(mark, from, to, scaleX, scaleY, radiusPx)) return [mark]
       changed = true
       return []
     }
-    const result = eraseStrokeAt(mark, at, scaleX, scaleY, radiusPx)
+    const result = eraseStrokeAlong(mark, from, to, scaleX, scaleY, radiusPx)
     changed ||= result.changed
     return result.pieces
   })

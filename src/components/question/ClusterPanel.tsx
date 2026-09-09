@@ -6,6 +6,7 @@ import { useCluster } from '@/components/question/useCluster'
 type Props = {
   questionId: string
   initialGroupId: string | null
+  currentSameAs: string | null
   examLabelOf: (examId: string) => string
 }
 
@@ -16,10 +17,21 @@ type Props = {
  * 문제를 모아 함께 설명하는 것은 이론을 쓰면서 하는 일이지 문제를 풀다가 하는
  * 일이 아니다.
  */
-export function ClusterPanel({ questionId, initialGroupId, examLabelOf }: Props) {
+export function ClusterPanel({ questionId, initialGroupId, currentSameAs, examLabelOf }: Props) {
   const { siblings, cards, identicalOf } = useCluster(questionId, initialGroupId)
-  // 이 문제 자신과 글자까지 같은 판본. 배너 한 줄로만 알린다.
-  const identical = identicalOf.get(questionId) ?? []
+  // 동일 판본 자체에서 들어온 경우에는 그것이 가리키는 카드도 동일 출제 배너에
+  // 포함한다. 카드 전문을 다시 펼치면 같은 문제를 중복 표시하게 된다.
+  const sameCard = currentSameAs
+    ? (siblings ?? []).find((row) => row.id === currentSameAs) ?? null
+    : null
+  const identical = currentSameAs
+    ? [sameCard, ...(siblings ?? []).filter((row) => row.sameAs === currentSameAs)]
+        .flatMap((row) => {
+          if (!row || row.id === questionId) return []
+          return [row]
+        })
+    : (identicalOf.get(questionId) ?? [])
+  const relatedCards = sameCard ? cards.filter((row) => row.id !== sameCard.id) : cards
 
   if (siblings === null || siblings.length === 0) return null
 
@@ -37,7 +49,7 @@ export function ClusterPanel({ questionId, initialGroupId, examLabelOf }: Props)
         </p>
       )}
 
-      {cards.map((row) => (
+      {relatedCards.map((row) => (
         <details
           key={row.id}
           className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50"

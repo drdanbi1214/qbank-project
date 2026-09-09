@@ -18,7 +18,7 @@ type Props = {
   rejectGrouped?: boolean
   examLabelOf: (examId: string) => string
   confirmLabel: string
-  onPick: (found: LookupResult) => void
+  onPick: (found: LookupResult) => void | Promise<void>
   onCancel: () => void
 }
 
@@ -150,6 +150,17 @@ export function QuestionLookup({
     [rejectGrouped],
   )
 
+  const confirm = useCallback(() => {
+    if (!found || busy) return
+    setBusy(true)
+    setError(null)
+    void Promise.resolve(onPick(found))
+      .catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : '선택을 반영하지 못했습니다.')
+      })
+      .finally(() => setBusy(false))
+  }, [found, busy, onPick])
+
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -276,7 +287,7 @@ export function QuestionLookup({
             <Button variant="ghost" size="sm" onClick={() => setFound(null)}>
               다시 찾기
             </Button>
-            <Button size="sm" onClick={() => onPick(found)} disabled={busy}>
+            <Button size="sm" onClick={confirm} disabled={busy}>
               {confirmLabel}
             </Button>
           </div>

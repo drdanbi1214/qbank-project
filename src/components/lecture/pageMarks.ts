@@ -11,13 +11,15 @@
  *
  * 자국과 글자를 한 배열에 섞어 담는다. 따로 두면 넣은 순서를 잃어 되돌리기가
  * 엉뚱한 것을 지운다. tool 을 보고 선·도형·글자를 갈라내며, 이미 저장된
- * pen/highlight 표시도 같은 방식으로 그대로 읽힌다.
+ * pen/highlight/pencil 표시도 같은 방식으로 그대로 읽힌다.
  */
 export type StrokeTool = 'pen' | 'highlight' | 'pencil'
 export type ShapeTool = 'rectangle' | 'star'
 export type MarkTool = StrokeTool | ShapeTool | 'text'
 
 export type Stroke = {
+  /** 새 필기는 고유 id로 여러 기기 변경을 안전하게 합친다. 예전 필기에는 없을 수 있다. */
+  id?: string
   tool: StrokeTool
   color: string
   /** 이미지 가로폭 대비 굵기. 0.004 면 폭의 0.4%. */
@@ -28,6 +30,7 @@ export type Stroke = {
 }
 
 export type PageShape = {
+  id?: string
   tool: ShapeTool
   color: string
   /** 테두리 굵기. points는 시작점과 끝점 [x1, y1, x2, y2]다. */
@@ -36,6 +39,7 @@ export type PageShape = {
 }
 
 export type PageText = {
+  id?: string
   tool: 'text'
   color: string
   /** 글자 상자의 배경과 테두리. transparent 면 그리지 않는다. */
@@ -103,8 +107,52 @@ export const TOOL_OPACITY: Record<StrokeTool | ShapeTool, number> = {
 /** 고를 수 있는 글자 크기(pt). */
 export const TEXT_SIZES = [10, 12, 14, 18, 24, 32, 44] as const
 export const DEFAULT_TEXT_SIZE = 18
-const MAX_MARKS_PER_PAGE = 2_000
-const MAX_POINT_VALUES_PER_MARK = 40_000
+export const MAX_MARKS_PER_PAGE = 2_000
+export const MAX_POINT_VALUES_PER_MARK = 40_000
+export const MAX_ANNOTATION_JSON_BYTES = 4 * 1024 * 1024
+const TARGET_POINT_VALUES_PER_STROKE = 8_000
+
+export function createPageMarkId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
+  return `mark-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+/** 아주 긴 한 획은 겹치는 끝점으로 나누어 다음에 열 때 통째로 버려지지 않게 한다. */
+export function splitStrokeForStorage(stroke: Stroke): Stroke[] {
+  if (stroke.points.length <= TARGET_POINT_VALUES_PER_STROKE) return [stroke]
+  const pieces: Stroke[] = []
+  const hasPressure = stroke.pressures?.length === stroke.points.length / 2
+  let start = 0
+  while (start < stroke.points.length) {
+    const end = Math.min(start + TARGET_POINT_VALUES_PER_STROKE, stroke.points.length)
+    const pointStart = start === 0 ? 0 : start - 2
+    const pressureStart = pointStart / 2
+    const pressureEnd = end / 2
+    pieces.push({
+      ...stroke,
+      id: pieces.length === 0 && stroke.id ? stroke.id : createPageMarkId(),
+      points: stroke.points.slice(pointStart, end),
+      ...(hasPressure ? { pressures: stroke.pressures!.slice(pressureStart, pressureEnd) } : {}),
+    })
+    start = end
+  }
+  return pieces
+}
+
+/** 저장소와 화면 파서가 같은 제한을 쓰며, 초과 시 조용히 잘라내지 않고 알린다. */
+export function pageMarksStorageError(marks: PageMark[]): string | null {
+  if (marks.length > MAX_MARKS_PER_PAGE) {
+    return `한 쪽에는 필기를 ${MAX_MARKS_PER_PAGE.toLocaleString()}개까지 저장할 수 있습니다.`
+  }
+  if (marks.some((mark) => mark.points.length > MAX_POINT_VALUES_PER_MARK)) {
+    return '너무 긴 필기 획이 있습니다. 획을 나누어 다시 그려 주세요.'
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(marks)).byteLength
+  if (bytes > MAX_ANNOTATION_JSON_BYTES) {
+    return '이 쪽의 필기 용량이 4MB를 넘었습니다. 일부 필기를 지운 뒤 다시 시도해 주세요.'
+  }
+  return null
+}
 
 /**
  * pt 를 좌표계 단위로 옮길 때 기준 삼는 쪽 폭.
@@ -208,14 +256,14 @@ export function toPressurePenPath(mark: Stroke, scaleX: number, scaleY: number):
   })
   if (outline.length === 0) return ''
   if (outline.length === 1) return `M ${outline[0][0]} ${outline[0][1]} Z`
-  if (outline.length < 4) return ''
 
+  if (outline.length < 4) return ''
   const first = outline[0]
   const second = outline[1]
   const third = outline[2]
   let path = `M ${first[0]} ${first[1]} Q ${second[0]} ${second[1]} ${(second[0] + third[0]) / 2} ${(second[1] + third[1]) / 2} T`
-  // 외곽점 자체를 제어점으로 계속 쓰면 급한 굴곡에서 선이 교차해 하얀 틈이
-  // 생긴다. 중간점을 잇는 곡선은 같은 모양을 유지하면서 교차를 피한다.
+  // perfect-freehand가 권장하는 중간점 곡선으로 바꾼다. 외곽점 하나하나를 Q의
+  // 제어점으로 삼으면 급격한 굴곡에서 외곽선이 교차해 흰 나비 모양 틈이 생긴다.
   for (let index = 2; index < outline.length - 1; index += 1) {
     const point = outline[index]
     const next = outline[index + 1]
@@ -245,6 +293,10 @@ export function parsePageMarks(value: unknown): PageMark[] {
       typeof record.color === 'string' && record.color.length <= 64
         ? record.color
         : STROKE_COLORS[0]
+    const id =
+      typeof record.id === 'string' && record.id.length > 0 && record.id.length <= 80
+        ? record.id
+        : undefined
 
     if (record.tool === 'text') {
       const text = typeof record.text === 'string' ? record.text.trim() : ''
@@ -263,6 +315,7 @@ export function parsePageMarks(value: unknown): PageMark[] {
       return [
         {
           tool: 'text' as const,
+          ...(id ? { id } : {}),
           color,
           background,
           borderColor,
@@ -279,6 +332,7 @@ export function parsePageMarks(value: unknown): PageMark[] {
       return [
         {
           tool,
+          ...(id ? { id } : {}),
           color,
           width: validMarkWidth(record.width, TOOL_WIDTH[tool]),
           points: points.slice(0, 4),
@@ -297,6 +351,7 @@ export function parsePageMarks(value: unknown): PageMark[] {
     return [
       {
         tool,
+        ...(id ? { id } : {}),
         color,
         width: validMarkWidth(record.width, TOOL_WIDTH[tool]),
         points,
@@ -307,7 +362,7 @@ export function parsePageMarks(value: unknown): PageMark[] {
 }
 
 function validMarkWidth(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0.0005 && value <= 0.2
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0.0002 && value <= 0.2
     ? value
     : fallback
 }

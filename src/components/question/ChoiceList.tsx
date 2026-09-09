@@ -9,6 +9,8 @@ type Props = {
   /** 정답 확인 전에는 null. 이 값이 없으면 정답 힌트가 화면에 존재하지 않는다. */
   revealed: AnswerPayload | null
   disabled?: boolean
+  /** 테마 안의 작은 문제 카드처럼 세로 공간이 빠듯한 자리에서 쓴다. */
+  compact?: boolean
 }
 
 /**
@@ -20,7 +22,14 @@ type Props = {
  * 만큼 고를 수 있게 하고 채점은 언제나 정답 집합과 정확히 일치하는지로
  * 가린다. 편집자가 답을 정할 때도 같은 규칙을 쓴다.
  */
-export function ChoiceList({ choices, selected, onChange, revealed, disabled = false }: Props) {
+export function ChoiceList({
+  choices,
+  selected,
+  onChange,
+  revealed,
+  disabled = false,
+  compact = false,
+}: Props) {
   const locked = disabled || revealed !== null
   // 편집자답이 없으면 야마답이 곧 정답이다.
   const answer = revealed ? effectiveAnswer(revealed) : []
@@ -35,7 +44,10 @@ export function ChoiceList({ choices, selected, onChange, revealed, disabled = f
   }
 
   return (
-    <ul role="group">
+    <ul
+      role="group"
+      className={cn(compact && '!list-none !space-y-0 !pl-0')}
+    >
       {choices.map((choice) => {
         const isSelected = selected.includes(choice.no)
         const isAnswer = answer.includes(choice.no)
@@ -52,7 +64,8 @@ export function ChoiceList({ choices, selected, onChange, revealed, disabled = f
               disabled={locked}
               aria-pressed={isSelected}
               className={cn(
-                'flex w-full items-start gap-3 rounded-lg px-1 py-2 text-left transition-colors',
+                'flex w-full items-start gap-3 rounded-lg px-1 text-left transition-colors',
+                compact ? 'py-1' : 'py-2',
                 locked ? 'cursor-default' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
               )}
             >
