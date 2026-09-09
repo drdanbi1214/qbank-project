@@ -6,7 +6,8 @@ import { YamaCard } from '@/components/question/YamaCard'
 import type { CSSProperties } from 'react'
 import { safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { LecturePageCard } from '@/components/lecture/LecturePageCard'
-import { parsePageMarks } from '@/components/lecture/pageMarks'
+import { PageMarkLayer } from '@/components/lecture/PageMarkLayer'
+import { parsePageMarks, type PageMark } from '@/components/lecture/pageMarks'
 import { pageCropOf } from '@/components/lecture/pageCrop'
 import { TheoryCard } from '@/components/question/TheoryCard'
 import { safeFontSize } from '@/components/editor/extensions/fontSize'
@@ -319,12 +320,20 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
       const width = imageWidthOf(node.attrs?.width)
       const layout = imageLayoutOf(node.attrs?.layout)
       const crop = pageCropOf(node.attrs?.crop)
+      const imageMarks = parsePageMarks(node.attrs?.strokes)
       return src ? (
         <div
           className="stored-image-view"
           data-image-layout={layout ?? 'full'}
         >
-          <ViewerImage path={src} alt={alt} width={width} crop={crop} onZoom={context.onZoom} />
+          <ViewerImage
+            path={src}
+            alt={alt}
+            width={width}
+            crop={crop}
+            marks={imageMarks}
+            onZoom={context.onZoom}
+          />
         </div>
       ) : null
     }
@@ -400,6 +409,7 @@ function ViewerImage({
   alt,
   width,
   crop,
+  marks,
   onZoom,
 }: {
   path: string
@@ -407,6 +417,7 @@ function ViewerImage({
   /** 작성자가 편집기에서 정한 폭(px). 없으면 예전처럼 높이로 가둔다. */
   width: number | null
   crop: ReturnType<typeof pageCropOf>
+  marks: PageMark[]
   onZoom: (src: string) => void
 }) {
   const external = /^https?:\/\//i.test(path)
@@ -427,7 +438,7 @@ function ViewerImage({
       type="button"
       onClick={() => onZoom(src)}
       style={displayWidth ? { width: displayWidth } : undefined}
-      className="block max-w-full cursor-zoom-in"
+      className="block w-fit max-w-full cursor-zoom-in"
     >
       <span
         style={
@@ -437,18 +448,7 @@ function ViewerImage({
         }
         className="relative block overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
       >
-        <img
-          src={src}
-          alt={alt ?? '본문 이미지'}
-          loading="lazy"
-          onLoad={(event) => {
-            const image = event.currentTarget
-            if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
-            setNaturalSize({
-              width: image.naturalWidth,
-              aspect: image.naturalHeight / image.naturalWidth,
-            })
-          }}
+        <span
           style={
             cropReady
               ? {
@@ -456,15 +456,28 @@ function ViewerImage({
                   left: `${-(cropReady.x / cropReady.width) * 100}%`,
                   top: `${-(cropReady.y / cropReady.height) * 100}%`,
                   width: `${100 / cropReady.width}%`,
-                  maxWidth: 'none',
                 }
-              : displayWidth
-                ? { width: '100%' }
-                : undefined
+              : undefined
           }
-          // 폭 미지정이면 원본 크기로 둔다. 넘치면 max-w-full 이 줄인다.
-          className="block h-auto max-w-full"
-        />
+          className="relative block"
+        >
+          <img
+            src={src}
+            alt={alt ?? '본문 이미지'}
+            loading="lazy"
+            onLoad={(event) => {
+              const image = event.currentTarget
+              if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+              setNaturalSize({
+                width: image.naturalWidth,
+                aspect: image.naturalHeight / image.naturalWidth,
+              })
+            }}
+            style={displayWidth ? { width: '100%' } : undefined}
+            className="block h-auto max-w-full"
+          />
+          <PageMarkLayer marks={marks} aspect={naturalSize?.aspect ?? 1} />
+        </span>
       </span>
     </button>
   )

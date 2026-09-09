@@ -7,7 +7,15 @@ import {
   type NodeViewProps,
 } from '@tiptap/react'
 import { LecturePageCropDialog } from '@/components/lecture/LecturePageCropDialog'
+import { PageMarkLayer } from '@/components/lecture/PageMarkLayer'
 import { pageCropOf } from '@/components/lecture/pageCrop'
+import {
+  DEFAULT_TEXT_SIZE,
+  parsePageMarks,
+  STROKE_COLORS,
+  TEXT_SIZES,
+  type MarkTool,
+} from '@/components/lecture/pageMarks'
 import { Spinner } from '@/components/ui/Spinner'
 import { useSignedUrl } from '@/lib/storage'
 import {
@@ -41,6 +49,9 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
   const [draggedWidth, setDraggedWidth] = useState<number | null>(null)
   const [cropping, setCropping] = useState(false)
   const [naturalSize, setNaturalSize] = useState<{ width: number; aspect: number } | null>(null)
+  const [markTool, setMarkTool] = useState<MarkTool | 'erase' | null>(null)
+  const [markColor, setMarkColor] = useState<string>(STROKE_COLORS[0])
+  const [textSize, setTextSize] = useState<number>(DEFAULT_TEXT_SIZE)
 
   const savedWidth = imageWidthOf(node.attrs.width)
   const width = draggedWidth ?? savedWidth
@@ -51,6 +62,7 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
       ? activeCrop.width / (activeCrop.height * naturalSize.aspect)
       : null
   const cropReady = cropAspectRatio !== null ? activeCrop : null
+  const marks = parsePageMarks(node.attrs.strokes)
   // 폭이 따로 없는 예전 이미지도 자른 뒤 0px로 접히지 않도록 원본 폭을 쓴다.
   const displayWidth = width ?? (activeCrop ? imageWidthOf(naturalSize?.width) : null)
   const canResize = editor.isEditable && Boolean(src)
@@ -144,11 +156,14 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
               // Tiptap의 React NodeView는 이 표시가 있는 영역에서 mousedown이
               // 시작되어야 노드 이동으로 전환한다. 바깥 노드가 draggable이어도
               // 이 표시가 없으면 dragstart를 막아 이미지가 전혀 움직이지 않는다.
-              data-drag-handle
-              draggable={canResize ? true : undefined}
-              title="이미지를 끌어서 이동"
+              data-drag-handle={canResize && !markTool ? '' : undefined}
+              draggable={canResize && !markTool ? true : undefined}
+              title={canResize && !markTool ? '이미지를 끌어서 이동' : undefined}
               style={displayWidth ? { width: displayWidth } : undefined}
-              className="relative inline-block max-w-full touch-none select-none cursor-grab align-top active:cursor-grabbing"
+              className={cn(
+                'relative inline-block max-w-full align-top',
+                canResize && !markTool && 'touch-none select-none cursor-grab active:cursor-grabbing',
+              )}
             >
               <div
                 style={
@@ -163,19 +178,7 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
                     : 'border border-slate-200 dark:border-slate-700',
                 )}
               >
-                <img
-                  ref={imageRef}
-                  src={url}
-                  alt={caption ?? ''}
-                  draggable={false}
-                  onLoad={(event) => {
-                    const image = event.currentTarget
-                    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
-                    setNaturalSize({
-                      width: image.naturalWidth,
-                      aspect: image.naturalHeight / image.naturalWidth,
-                    })
-                  }}
+                <div
                   style={
                     cropReady
                       ? {
@@ -183,14 +186,36 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
                           left: `${-(cropReady.x / cropReady.width) * 100}%`,
                           top: `${-(cropReady.y / cropReady.height) * 100}%`,
                           width: `${100 / cropReady.width}%`,
-                          maxWidth: 'none',
                         }
-                      : displayWidth
-                        ? { width: '100%' }
-                        : undefined
+                      : undefined
                   }
-                  className="block h-auto max-w-full"
-                />
+                  className="relative"
+                >
+                  <img
+                    ref={imageRef}
+                    src={url}
+                    alt={caption ?? ''}
+                    draggable={false}
+                    onLoad={(event) => {
+                      const image = event.currentTarget
+                      if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+                      setNaturalSize({
+                        width: image.naturalWidth,
+                        aspect: image.naturalHeight / image.naturalWidth,
+                      })
+                    }}
+                    style={displayWidth ? { width: '100%' } : undefined}
+                    className="block h-auto max-w-full"
+                  />
+                  <PageMarkLayer
+                    marks={marks}
+                    aspect={naturalSize?.aspect ?? 1}
+                    onChange={canResize ? (next) => updateAttributes({ strokes: next }) : undefined}
+                    tool={markTool}
+                    color={markColor}
+                    textSize={textSize}
+                  />
+                </div>
               </div>
 
               {canResize && (
@@ -237,6 +262,96 @@ function StoredImageView({ node, selected, updateAttributes, editor, getPos }: N
                   끌어서 이동
                 </span>
               )}
+
+              {canResize && (selected || markTool) && (
+                <div
+                  contentEditable={false}
+                  data-page-tools=""
+                  className="absolute inset-x-1 bottom-1 flex items-center gap-1 overflow-x-auto whitespace-nowrap rounded-md bg-slate-900/85 px-1 py-1 text-[11px] text-white shadow-sm backdrop-blur-sm"
+                >
+                  <MarkToolButton
+                    active={markTool === 'pen'}
+                    onClick={() => setMarkTool(markTool === 'pen' ? null : 'pen')}
+                  >
+                    펜
+                  </MarkToolButton>
+                  <MarkToolButton
+                    active={markTool === 'highlight'}
+                    onClick={() => setMarkTool(markTool === 'highlight' ? null : 'highlight')}
+                  >
+                    형광펜
+                  </MarkToolButton>
+                  <MarkToolButton
+                    active={markTool === 'text'}
+                    onClick={() => setMarkTool(markTool === 'text' ? null : 'text')}
+                  >
+                    글자
+                  </MarkToolButton>
+                  <MarkToolButton
+                    active={markTool === 'rectangle'}
+                    onClick={() => setMarkTool(markTool === 'rectangle' ? null : 'rectangle')}
+                  >
+                    네모
+                  </MarkToolButton>
+                  <MarkToolButton
+                    active={markTool === 'star'}
+                    onClick={() => setMarkTool(markTool === 'star' ? null : 'star')}
+                  >
+                    별표
+                  </MarkToolButton>
+                  <MarkToolButton
+                    active={markTool === 'erase'}
+                    onClick={() => setMarkTool(markTool === 'erase' ? null : 'erase')}
+                  >
+                    지우개
+                  </MarkToolButton>
+
+                  {markTool && markTool !== 'erase' && (
+                    <span className="flex shrink-0 items-center gap-0.5 pl-1">
+                      {STROKE_COLORS.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-label={`색 ${value}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => setMarkColor(value)}
+                          style={{ background: value }}
+                          className={cn(
+                            'h-3.5 w-3.5 rounded-full',
+                            markColor === value ? 'ring-2 ring-white' : 'opacity-70',
+                          )}
+                        />
+                      ))}
+                    </span>
+                  )}
+
+                  {markTool === 'text' && (
+                    <select
+                      value={textSize}
+                      onChange={(event) => setTextSize(Number(event.target.value))}
+                      aria-label="글자 크기"
+                      className="rounded bg-white/20 px-0.5 py-0.5 text-[11px] text-white outline-none"
+                    >
+                      {TEXT_SIZES.map((value) => (
+                        <option key={value} value={value} className="text-slate-900">
+                          {value}pt
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {marks.length > 0 && (
+                    <>
+                      <MarkToolButton onClick={() => updateAttributes({ strokes: marks.slice(0, -1) })}>
+                        되돌리기
+                      </MarkToolButton>
+                      <MarkToolButton onClick={() => updateAttributes({ strokes: [] })}>
+                        모두 지우기
+                      </MarkToolButton>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {cropping && (
@@ -268,6 +383,30 @@ function SizeButton({ onClick, children }: { onClick: () => void; children: stri
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       className="rounded px-1 py-0.5 hover:bg-white/20"
+    >
+      {children}
+    </button>
+  )
+}
+
+function MarkToolButton({
+  active = false,
+  onClick,
+  children,
+}: {
+  active?: boolean
+  onClick: () => void
+  children: string
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        'shrink-0 rounded px-1 py-0.5',
+        active ? 'bg-white text-slate-900' : 'hover:bg-white/20',
+      )}
     >
       {children}
     </button>
@@ -325,6 +464,24 @@ export const StoredImage = Image.extend({
           const crop = pageCropOf(attributes.crop)
           return crop ? { 'data-image-crop': JSON.stringify(crop) } : {}
         },
+      },
+      // 일반 사진에도 강의록 쪽과 같은 좌표 기반 필기를 남긴다. 이미지 파일은
+      // 건드리지 않고 본문 JSON에만 저장해 크기·자르기 변경에도 맞춰 따라간다.
+      strokes: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute('data-strokes')
+          if (!raw) return null
+          try {
+            return JSON.parse(raw)
+          } catch {
+            return null
+          }
+        },
+        renderHTML: (attributes) =>
+          Array.isArray(attributes.strokes) && attributes.strokes.length > 0
+            ? { 'data-strokes': JSON.stringify(attributes.strokes) }
+            : {},
       },
     }
   },
