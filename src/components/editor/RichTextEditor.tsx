@@ -22,6 +22,7 @@ import { LecturePageEmbed } from '@/components/editor/extensions/lecturePageEmbe
 import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { Footnote } from '@/components/editor/extensions/footnote'
+import { TextShortcuts } from '@/components/editor/extensions/textShortcuts'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { LINE_HEIGHTS, LineHeight, safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { BlockIndent } from '@/components/editor/extensions/indent'
@@ -136,7 +137,14 @@ export function RichTextEditor({
     uploadImageRef.current = uploadImageFile
     uploadVideoRef.current = uploadVideoFile
     onChangeRef.current = onChange
-  }, [userId, onUploadError, onPendingUploadsChange, uploadImageFile, uploadVideoFile, onChange])
+  }, [
+    userId,
+    onUploadError,
+    onPendingUploadsChange,
+    uploadImageFile,
+    uploadVideoFile,
+    onChange,
+  ])
 
   const changePendingUploads = useCallback((change: number) => {
     pendingUploadsRef.current = Math.max(0, pendingUploadsRef.current + change)
@@ -273,9 +281,17 @@ export function RichTextEditor({
       Footnote,
       MathInline,
       MathBlock,
+      TextShortcuts.configure({
+        onRequestTheory: onRequestTheory
+          ? (editor) => requestAndInsertTheory(editor, onRequestTheory)
+          : null,
+        onRequestLecture: onRequestLecture
+          ? (editor) => requestAndInsertLecture(editor, onRequestLecture)
+          : null,
+      }),
       Placeholder.configure({ placeholder }),
     ],
-    [placeholder],
+    [onRequestLecture, onRequestTheory, placeholder],
   )
 
   const editorProps = useMemo<EditorProps>(
@@ -758,6 +774,26 @@ function findPlaceholder(
 // 도구 모음
 // -----------------------------------------------------------------------------
 
+function requestAndInsertTheory(
+  editor: Editor,
+  request: () => Promise<string | null>,
+) {
+  void request().then((documentId) => {
+    if (documentId) editor.chain().focus().insertTheory(documentId).run()
+  })
+}
+
+function requestAndInsertLecture(
+  editor: Editor,
+  request: () => Promise<LecturePageAttrs[] | null>,
+) {
+  void request().then((picks) => {
+    if (!picks?.length) return
+    // 고른 순서가 아니라 쪽 번호 순으로 이미 정렬되어 온다.
+    editor.chain().focus().insertLecturePage(picks).run()
+  })
+}
+
 function Toolbar({
   editor,
   compact,
@@ -830,11 +866,7 @@ function Toolbar({
         <ToolButton
           label="알렌 넣기"
           active={false}
-          onClick={() => {
-            void onRequestTheory().then((documentId) => {
-              if (documentId) editor.chain().focus().insertTheory(documentId).run()
-            })
-          }}
+          onClick={() => requestAndInsertTheory(editor, onRequestTheory)}
         >
           <span className="px-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">알렌</span>
         </ToolButton>
@@ -843,13 +875,7 @@ function Toolbar({
         <ToolButton
           label="강의록 넣기"
           active={false}
-          onClick={() => {
-            void onRequestLecture().then((picks) => {
-              if (!picks?.length) return
-              // 고른 순서가 아니라 쪽 번호 순으로 이미 정렬되어 온다.
-              editor.chain().focus().insertLecturePage(picks).run()
-            })
-          }}
+          onClick={() => requestAndInsertLecture(editor, onRequestLecture)}
         >
           <span className="px-0.5 text-xs font-bold text-amber-700 dark:text-amber-300">강의록</span>
         </ToolButton>
