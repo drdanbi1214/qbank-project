@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ResetProgressMenu } from '@/components/ResetProgressMenu'
 import { DailyChallengeStatsModal } from '@/components/study/DailyChallengeStatsModal'
+import { Icon } from '@/components/ui/Icon'
 import { ProgressBar } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { accuracy, useData } from '@/lib/data'
+import { subjectVisual } from '@/lib/subjectVisual'
 import {
   ensureDailySession,
   fetchDailyChallengeStats,
@@ -14,6 +16,7 @@ import {
   type StudySession,
 } from '@/lib/queries/study'
 import { examShortLabel, type Taxonomy } from '@/lib/queries/taxonomy'
+import { cn } from '@/utils/cn'
 
 const SESSION_LABEL: Record<string, string> = {
   sequential: '순서대로 풀기',
@@ -46,14 +49,6 @@ function sessionScopeLabel(session: StudySession, taxonomy: Taxonomy | null): st
   }
   return null
 }
-
-const TILE_COLORS = [
-  'bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200',
-  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200',
-  'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200',
-  'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-200',
-  'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200',
-]
 
 export function StudyHomePage() {
   const { taxonomy, loading, subjectProgress } = useData()
@@ -185,10 +180,11 @@ export function StudyHomePage() {
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {subjects.map((subject, index) => {
+          {subjects.map((subject) => {
             const progress = subjectProgress(subject.id)
             const rate = accuracy(progress)
             const unitCount = taxonomy?.units.filter((u) => u.subjectId === subject.id).length ?? 0
+            const visual = subjectVisual(subject)
 
             return (
               <li key={subject.id}>
@@ -198,11 +194,12 @@ export function StudyHomePage() {
                 >
                   <div className="flex items-start gap-3">
                     <span
-                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-lg font-bold ${
-                        TILE_COLORS[index % TILE_COLORS.length]
-                      }`}
+                      className={cn(
+                        'grid h-11 w-11 shrink-0 place-items-center rounded-xl',
+                        visual.tint,
+                      )}
                     >
-                      {subject.name.slice(0, 1)}
+                      <Icon name={visual.icon} size={24} />
                     </span>
 
                     <div className="min-w-0 flex-1">

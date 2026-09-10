@@ -23,10 +23,13 @@ export const TextShortcuts = Extension.create<TextShortcutOptions>({
 
   addInputRules() {
     const rules: InputRule[] = [
-      textInputRule({
-        find: /->$/,
-        replace: '→',
-      }),
+      textShortcut(/->$/, '→'),
+      // 채팅/마크다운에서 기호 앞에 역슬래시를 붙여 적는 경우도 같은 명령으로 받는다.
+      textShortcut(/\\=>$/, '⇒'),
+      textShortcut(/=>$/, '⇒'),
+      textShortcut(/\/>$/, '↗'),
+      textShortcut(/\\\\>$/, '↙'),
+      textShortcut(/\\>$/, '↙'),
     ]
 
     if (this.options.onRequestTheory) {
@@ -39,6 +42,10 @@ export const TextShortcuts = Extension.create<TextShortcutOptions>({
     return rules
   },
 })
+
+function textShortcut(find: RegExp, replace: string) {
+  return textInputRule({ find, replace })
+}
 
 /**
  * 문단 처음이나 공백 뒤에서만 슬래시 명령을 인식한다. URL이나 본문 중간의

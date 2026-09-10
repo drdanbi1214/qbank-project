@@ -86,8 +86,13 @@ export const BlockIndent = Extension.create({
 
   addKeyboardShortcuts() {
     return {
-      Tab: () => this.editor.commands.indentBlock(),
-      'Shift-Tab': () => this.editor.commands.outdentBlock(),
+      // 표 안의 Tab/Shift+Tab은 다음·이전 셀 이동이라는 표 기본 동작에 맡긴다.
+      Tab: () => (
+        this.editor.isActive('table') ? false : this.editor.commands.indentBlock()
+      ),
+      'Shift-Tab': () => (
+        this.editor.isActive('table') ? false : this.editor.commands.outdentBlock()
+      ),
     }
   },
 })

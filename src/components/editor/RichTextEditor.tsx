@@ -894,6 +894,13 @@ function Toolbar({
       >
         <span className="font-serif italic">I</span>
       </ToolButton>
+      <ToolButton
+        label="밑줄"
+        active={editor.isActive('underline')}
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+      >
+        <span className="font-serif underline underline-offset-2">U</span>
+      </ToolButton>
       {!memo && NOTE_HIGHLIGHTS.map(({ label, color, className }) => (
         <ToolButton
           key={color}
