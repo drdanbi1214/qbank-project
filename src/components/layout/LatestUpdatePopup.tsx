@@ -9,23 +9,21 @@ import {
 } from '@/lib/queries/updateNotices'
 
 /** 다음 업데이트 안내를 띄울 때 이 키와 아래 문구를 함께 바꾼다. */
-const NOTICE_KEY = '2026-09-09-legendob-updates-since-0908-edit-safety'
+const NOTICE_KEY = '2026-09-10-editor-slash-commands-and-callouts'
 const SESSION_KEY_PREFIX = 'qbank:update-notice-seen:'
 const UPDATES = [
-  '게시물 본문에서 원하는 구간을 선택해 나만의 메모를 붙일 수 있습니다. 표시와 연결선은 고른 메모지 색으로 함께 보입니다.',
-  '게시물에 들어간 야마와 유사 문제를 그 자리에서 바로 풀고 채점할 수 있습니다. 상단에서 ‘문제 먼저 풀기’와 ‘풀이 한번에 보기’를 바꿀 수 있습니다.',
-  '글을 편집할 때 각 문제의 Y답을 바로 확인할 수 있고, 동일·유사 문제 연결과 묶기 해제 동작을 더 안정적으로 다듬었습니다.',
-  '게시물 편집 중 다른 글로 이동하면 먼저 확인하고 현재 글에 임시저장합니다. 다른 멤버가 먼저 수정한 글도 그대로 덮어쓰지 않도록 보호합니다.',
-  '야마 카드와 전환 버튼·공지·목차 단원을 하늘색 테마로 통일하고, 선지 간격과 노트북 목차 스크롤을 정리했습니다.',
+  '글 작성 중 /를 입력하면 야마·알렌·강의록 삽입 명령을 작은 팝업에서 고르고 Enter로 바로 실행할 수 있습니다.',
+  '/callout 또는 /콜아웃을 입력하면 중요한 내용을 담는 💡 콜아웃 상자를 넣을 수 있습니다.',
+  '/따라서·/왜냐면은 ∴·∵로, =/=·<=·\\>= 같은 입력은 ≠·≤·≥ 기호로 빠르게 바뀝니다.',
+  'alpha·beta·gamma를 입력하면 후보 팝업이 뜨고, Enter를 눌러 α·β·γ를 넣을 수 있습니다.',
 ]
 
 /**
- * 레전드옵세스터디 회원이 로그인한 뒤 첫 화면에서 띄우는 계정별 업데이트 안내.
+ * 모든 승인 회원이 로그인한 뒤 첫 화면에서 띄우는 계정별 업데이트 안내.
  * 같은 로그인 중에는 한 번만, 영구 숨김을 선택하면 다른 기기에서도 다시 띄우지 않는다.
  */
 export function LatestUpdatePopup() {
-  const { session, hasPermission } = useAuth()
-  const canViewNotice = hasPermission('study_legendob')
+  const { session } = useAuth()
   const userId = session?.user.id ?? ''
   const signedInAt = session?.user.last_sign_in_at ?? 'current'
   const sessionKey = `${SESSION_KEY_PREFIX}${userId}:${signedInAt}:${NOTICE_KEY}`
@@ -34,7 +32,7 @@ export function LatestUpdatePopup() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!userId || !canViewNotice || window.sessionStorage.getItem(sessionKey) === '1') return
+    if (!userId || window.sessionStorage.getItem(sessionKey) === '1') return
     let active = true
 
     void isUpdateNoticeDismissed(userId, NOTICE_KEY)
@@ -50,7 +48,7 @@ export function LatestUpdatePopup() {
     return () => {
       active = false
     }
-  }, [canViewNotice, sessionKey, userId])
+  }, [sessionKey, userId])
 
   const close = useCallback(() => {
     window.sessionStorage.setItem(sessionKey, '1')
@@ -71,11 +69,11 @@ export function LatestUpdatePopup() {
     }
   }, [busy, close, userId])
 
-  if (!canViewNotice || visibleFor !== sessionKey) return null
+  if (visibleFor !== sessionKey) return null
 
   return (
     <Modal
-      title="레옵스 업데이트 (9/8–9/9)"
+      title="새로운 글쓰기 기능 (9/10)"
       onClose={() => {
         if (!busy) close()
       }}
