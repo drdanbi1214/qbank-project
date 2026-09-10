@@ -573,6 +573,27 @@ export function RichTextEditor({
         run: () => editor.chain().focus().insertContent('∵').run(),
       },
       {
+        id: 'degree-celsius',
+        label: '도',
+        displayLabel: '°C',
+        className: 'text-rose-700 dark:text-rose-300',
+        run: () => editor.chain().focus().insertContent('°C').run(),
+      },
+      {
+        id: 'decrease',
+        label: '감소',
+        displayLabel: '↓',
+        className: 'text-blue-700 dark:text-blue-300',
+        run: () => editor.chain().focus().insertContent('↓').run(),
+      },
+      {
+        id: 'increase',
+        label: '증가',
+        displayLabel: '↑',
+        className: 'text-red-700 dark:text-red-300',
+        run: () => editor.chain().focus().insertContent('↑').run(),
+      },
+      {
         id: 'alpha',
         label: 'alpha',
         displayLabel: 'α',
