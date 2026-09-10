@@ -316,10 +316,10 @@
 
   /* 노션형 콜아웃보다 배경과 경계를 한 톤 또렷하게 잡아 본문에서 쉽게 찾는다. */
   .rich-text .callout-block {
-    @apply flex gap-3 rounded-2xl border border-slate-200 bg-slate-100 p-3.5 text-slate-800 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100;
+    @apply flex gap-3 rounded-2xl border border-slate-200 bg-slate-100 p-3 leading-6 text-slate-800 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100;
   }
   .rich-text .callout-block [data-callout-icon] {
-    @apply mt-0.5 shrink-0 text-xl leading-7;
+    @apply mt-0.5 shrink-0 text-xl leading-6;
   }
   .rich-text .callout-block [data-callout-content] {
     @apply min-w-0 flex-1;
@@ -328,7 +328,7 @@
     @apply m-0;
   }
   .rich-text .callout-block [data-callout-content] > * + * {
-    @apply mt-2;
+    @apply mt-1.5;
   }
 
   .rich-text code {
