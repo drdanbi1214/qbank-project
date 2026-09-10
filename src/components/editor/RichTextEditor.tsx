@@ -23,6 +23,11 @@ import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { Footnote } from '@/components/editor/extensions/footnote'
 import { TextShortcuts } from '@/components/editor/extensions/textShortcuts'
+import {
+  SlashCommandMenu,
+  type SlashCommand,
+  type SlashCommandKeyHandler,
+} from '@/components/editor/SlashCommandMenu'
 import { FONT_SIZES, FontSize, safeFontSize } from '@/components/editor/extensions/fontSize'
 import { LINE_HEIGHTS, LineHeight, safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { BlockIndent } from '@/components/editor/extensions/indent'
@@ -116,6 +121,7 @@ export function RichTextEditor({
   const uploadVideoRef = useRef(uploadVideoFile)
   const onChangeRef = useRef(onChange)
   const composingRef = useRef(false)
+  const slashCommandKeyHandlerRef = useRef<SlashCommandKeyHandler>(() => false)
   // 드롭 시점의 selection은 드롭 커서나 React 노드뷰 갱신으로 달라질 수 있다.
   // 실제로 잡은 미디어 위치를 dragstart 때 따로 기억해야 풀이 작성 중에도
   // 사진/강의록 좌우 이동이 안정적으로 동작한다.
@@ -281,17 +287,10 @@ export function RichTextEditor({
       Footnote,
       MathInline,
       MathBlock,
-      TextShortcuts.configure({
-        onRequestTheory: onRequestTheory
-          ? (editor) => requestAndInsertTheory(editor, onRequestTheory)
-          : null,
-        onRequestLecture: onRequestLecture
-          ? (editor) => requestAndInsertLecture(editor, onRequestLecture)
-          : null,
-      }),
+      TextShortcuts,
       Placeholder.configure({ placeholder }),
     ],
-    [onRequestLecture, onRequestTheory, placeholder],
+    [placeholder],
   )
 
   const editorProps = useMemo<EditorProps>(
@@ -366,6 +365,10 @@ export function RichTextEditor({
           })
           return false
         },
+      },
+      handleKeyDown(view, event) {
+        if (composingRef.current || event.isComposing || event.keyCode === 229) return false
+        return slashCommandKeyHandlerRef.current(view, event)
       },
       handlePaste(view, event) {
         const lecturePage = readLecturePageClipboard(event.clipboardData)
@@ -517,6 +520,36 @@ export function RichTextEditor({
     },
   })
 
+  const slashCommands = useMemo<SlashCommand[]>(() => {
+    if (!editor) return []
+    const commands: SlashCommand[] = []
+    if (onRequestYama) {
+      commands.push({
+        id: 'yama',
+        label: '야마',
+        className: 'text-emerald-700 dark:text-emerald-300',
+        run: () => requestAndInsertYama(editor, onRequestYama),
+      })
+    }
+    if (onRequestTheory) {
+      commands.push({
+        id: 'theory',
+        label: '알렌',
+        className: 'text-sky-700 dark:text-sky-300',
+        run: () => requestAndInsertTheory(editor, onRequestTheory),
+      })
+    }
+    if (onRequestLecture) {
+      commands.push({
+        id: 'lecture',
+        label: '강의록',
+        className: 'text-amber-700 dark:text-amber-300',
+        run: () => requestAndInsertLecture(editor, onRequestLecture),
+      })
+    }
+    return commands
+  }, [editor, onRequestLecture, onRequestTheory, onRequestYama])
+
   if (!editor) return null
 
   return (
@@ -541,6 +574,11 @@ export function RichTextEditor({
       <div className="px-3 py-2">
         <EditorContent editor={editor} />
       </div>
+      <SlashCommandMenu
+        editor={editor}
+        commands={slashCommands}
+        keyHandlerRef={slashCommandKeyHandlerRef}
+      />
     </div>
   )
 }
@@ -783,6 +821,15 @@ function requestAndInsertTheory(
   })
 }
 
+function requestAndInsertYama(
+  editor: Editor,
+  request: () => Promise<string | null>,
+) {
+  void request().then((questionId) => {
+    if (questionId) editor.chain().focus().insertYama(questionId).run()
+  })
+}
+
 function requestAndInsertLecture(
   editor: Editor,
   request: () => Promise<LecturePageAttrs[] | null>,
@@ -853,11 +900,7 @@ function Toolbar({
         <ToolButton
           label="야마 넣기"
           active={false}
-          onClick={() => {
-            void onRequestYama().then((questionId) => {
-              if (questionId) editor.chain().focus().insertYama(questionId).run()
-            })
-          }}
+          onClick={() => requestAndInsertYama(editor, onRequestYama)}
         >
           <span className="px-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">야마</span>
         </ToolButton>
