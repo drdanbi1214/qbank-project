@@ -5,8 +5,11 @@ import type { EditorView } from '@tiptap/pm/view'
 import { cn } from '@/utils/cn'
 
 export type SlashCommand = {
-  id: 'yama' | 'theory' | 'lecture'
+  id: 'yama' | 'theory' | 'lecture' | 'therefore' | 'because'
+  /** 슬래시 뒤에 입력해 후보를 좁히는 명령 이름 */
   label: string
+  /** 버튼에는 명령 이름 대신 결과 기호를 바로 보여 줄 수 있다. */
+  displayLabel?: string
   className: string
   run: () => void
 }
@@ -174,7 +177,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
     <div
       role="listbox"
       aria-label="삽입 명령"
-      className="fixed z-[70] flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+      className="fixed z-[70] flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
       style={{ left: menu.left, top: menu.top }}
     >
       {matchingCommands.map((command, index) => (
@@ -182,6 +185,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
           key={command.id}
           type="button"
           role="option"
+          aria-label={command.label}
           aria-selected={index === selectedIndex}
           className={cn(
             'rounded-md px-2 py-1 text-xs font-bold transition-colors',
@@ -194,7 +198,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
           onMouseEnter={() => selectIndex(index)}
           onClick={() => execute(command, menu)}
         >
-          {command.label}
+          {command.displayLabel ?? command.label}
         </button>
       ))}
       <span className="pl-1 pr-0.5 text-[10px] text-slate-400" aria-hidden="true">↵</span>

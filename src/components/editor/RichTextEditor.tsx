@@ -547,6 +547,22 @@ export function RichTextEditor({
         run: () => requestAndInsertLecture(editor, onRequestLecture),
       })
     }
+    commands.push(
+      {
+        id: 'therefore',
+        label: '따라서',
+        displayLabel: '∴',
+        className: 'text-violet-700 dark:text-violet-300',
+        run: () => editor.chain().focus().insertContent('∴').run(),
+      },
+      {
+        id: 'because',
+        label: '왜냐면',
+        displayLabel: '∵',
+        className: 'text-indigo-700 dark:text-indigo-300',
+        run: () => editor.chain().focus().insertContent('∵').run(),
+      },
+    )
     return commands
   }, [editor, onRequestLecture, onRequestTheory, onRequestYama])
 
