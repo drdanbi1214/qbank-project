@@ -12,9 +12,14 @@ export const TextShortcuts = Extension.create({
       // 더 긴 규칙을 먼저 검사해야 `<->`의 뒤쪽 `->`만 화살표로 바뀌지 않는다.
       textShortcut(/<->$/, '↔'),
       textShortcut(/->$/, '→'),
+      textShortcut(/<=$/, '≤'),
       // 채팅/마크다운에서 기호 앞에 역슬래시를 붙여 적는 경우도 같은 명령으로 받는다.
       textShortcut(/\\=>$/, '⇒'),
       textShortcut(/=>$/, '⇒'),
+      // `\\=`가 먼저 ≥로 바뀐 뒤 >를 이어 쳐도 기존 `\\=>` 단축키를 유지한다.
+      textShortcut(/≥>$/, '⇒'),
+      textShortcut(/\\\\=$/, '≥'),
+      textShortcut(/\\=$/, '≥'),
       textShortcut(/\/>$/, '↗'),
       textShortcut(/\\\\>$/, '↘'),
       textShortcut(/\\>$/, '↘'),
