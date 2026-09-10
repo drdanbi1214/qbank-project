@@ -161,6 +161,13 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
       return <li>{children}</li>
     case 'blockquote':
       return <blockquote>{children}</blockquote>
+    case 'callout':
+      return (
+        <aside data-callout="" className="callout-block">
+          <span data-callout-icon="" aria-hidden="true">💡</span>
+          <div data-callout-content="">{children}</div>
+        </aside>
+      )
     case 'codeBlock':
       return (
         <pre>

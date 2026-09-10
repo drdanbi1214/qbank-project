@@ -314,6 +314,23 @@
     @apply border-l-4 border-slate-300 pl-3 text-slate-600 dark:border-slate-600 dark:text-slate-300;
   }
 
+  /* 노션형 콜아웃보다 배경과 경계를 한 톤 또렷하게 잡아 본문에서 쉽게 찾는다. */
+  .rich-text .callout-block {
+    @apply flex gap-3 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-4 text-slate-800 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100;
+  }
+  .rich-text .callout-block [data-callout-icon] {
+    @apply mt-0.5 shrink-0 text-xl leading-7;
+  }
+  .rich-text .callout-block [data-callout-content] {
+    @apply min-w-0 flex-1;
+  }
+  .rich-text .callout-block [data-callout-content] > * {
+    @apply m-0;
+  }
+  .rich-text .callout-block [data-callout-content] > * + * {
+    @apply mt-2;
+  }
+
   .rich-text code {
     @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[13px] dark:bg-slate-800;
   }

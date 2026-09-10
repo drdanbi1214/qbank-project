@@ -23,6 +23,7 @@ import { TheoryEmbed } from '@/components/editor/extensions/theoryEmbed'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { Footnote } from '@/components/editor/extensions/footnote'
 import { TextShortcuts } from '@/components/editor/extensions/textShortcuts'
+import { Callout } from '@/components/editor/extensions/callout'
 import {
   SlashCommandMenu,
   type SlashCommand,
@@ -287,6 +288,7 @@ export function RichTextEditor({
       Footnote,
       MathInline,
       MathBlock,
+      Callout,
       TextShortcuts,
       Placeholder.configure({ placeholder }),
     ],
@@ -549,6 +551,14 @@ export function RichTextEditor({
     }
     commands.push(
       {
+        id: 'callout',
+        label: 'callout',
+        aliases: ['콜아웃'],
+        displayLabel: '💡 콜아웃',
+        className: 'text-slate-700 dark:text-slate-200',
+        run: () => editor.chain().focus().insertCallout().run(),
+      },
+      {
         id: 'therefore',
         label: '따라서',
         displayLabel: '∴',
@@ -561,6 +571,33 @@ export function RichTextEditor({
         displayLabel: '∵',
         className: 'text-indigo-700 dark:text-indigo-300',
         run: () => editor.chain().focus().insertContent('∵').run(),
+      },
+      {
+        id: 'alpha',
+        label: 'alpha',
+        displayLabel: 'α',
+        slash: false,
+        plain: true,
+        className: 'text-cyan-700 dark:text-cyan-300',
+        run: () => editor.chain().focus().insertContent('α').run(),
+      },
+      {
+        id: 'beta',
+        label: 'beta',
+        displayLabel: 'β',
+        slash: false,
+        plain: true,
+        className: 'text-cyan-700 dark:text-cyan-300',
+        run: () => editor.chain().focus().insertContent('β').run(),
+      },
+      {
+        id: 'gamma',
+        label: 'gamma',
+        displayLabel: 'γ',
+        slash: false,
+        plain: true,
+        className: 'text-cyan-700 dark:text-cyan-300',
+        run: () => editor.chain().focus().insertContent('γ').run(),
       },
     )
     return commands

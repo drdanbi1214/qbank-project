@@ -5,9 +5,14 @@ import type { EditorView } from '@tiptap/pm/view'
 import { cn } from '@/utils/cn'
 
 export type SlashCommand = {
-  id: 'yama' | 'theory' | 'lecture' | 'therefore' | 'because'
+  id: string
   /** 슬래시 뒤에 입력해 후보를 좁히는 명령 이름 */
   label: string
+  aliases?: string[]
+  /** false면 슬래시 메뉴에는 숨기고 완성된 일반 단어로만 부른다. */
+  slash?: boolean
+  /** 공백 뒤에서 label을 그대로 입력했을 때도 후보를 띄운다. */
+  plain?: boolean
   /** 버튼에는 명령 이름 대신 결과 기호를 바로 보여 줄 수 있다. */
   displayLabel?: string
   className: string
@@ -20,6 +25,7 @@ type MenuState = {
   from: number
   to: number
   query: string
+  kind: 'slash' | 'plain'
   left: number
   top: number
 }
@@ -43,9 +49,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
   const dismissedRef = useRef<string | null>(null)
   const lastSignatureRef = useRef<string | null>(null)
 
-  const matchingCommands = menu
-    ? commands.filter((command) => command.label.startsWith(menu.query))
-    : []
+  const matchingCommands = menu ? matchingCommandsFor(commands, menu) : []
 
   const selectIndex = useCallback((index: number) => {
     selectedIndexRef.current = index
@@ -59,7 +63,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
       return
     }
 
-    const match = findSlashCommand(editor)
+    const match = findCommand(editor, commands)
     if (!match) {
       dismissedRef.current = null
       lastSignatureRef.current = null
@@ -67,7 +71,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
       return
     }
 
-    const matches = commands.filter((command) => command.label.startsWith(match.query))
+    const matches = matchingCommandsFor(commands, match)
     if (matches.length === 0) {
       lastSignatureRef.current = null
       setMenu(null)
@@ -127,10 +131,8 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
 
   useEffect(() => {
     keyHandlerRef.current = (_view, event) => {
-      const current = editor ? findSlashCommand(editor) : null
-      const matches = current
-        ? commands.filter((command) => command.label.startsWith(current.query))
-        : []
+      const current = editor ? findCommand(editor, commands) : null
+      const matches = current ? matchingCommandsFor(commands, current) : []
       const signature = current ? `${current.from}:${current.to}:${current.query}` : null
       if (
         !current ||
@@ -207,18 +209,50 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
   )
 }
 
-function findSlashCommand(editor: Editor): Pick<MenuState, 'from' | 'to' | 'query'> | null {
+type CommandMatch = Pick<MenuState, 'from' | 'to' | 'query' | 'kind'>
+
+function matchingCommandsFor(commands: SlashCommand[], match: CommandMatch) {
+  if (match.kind === 'plain') {
+    return commands.filter((command) => command.plain && command.label === match.query)
+  }
+  const query = match.query.toLocaleLowerCase()
+  return commands.filter((command) => (
+    command.slash !== false &&
+    [command.label, ...(command.aliases ?? [])].some((keyword) => (
+      keyword.toLocaleLowerCase().startsWith(query)
+    ))
+  ))
+}
+
+function findCommand(editor: Editor, commands: SlashCommand[]): CommandMatch | null {
   const { selection } = editor.state
   if (!selection.empty || !selection.$from.parent.isTextblock) return null
 
   const textBefore = selection.$from.parent.textBetween(0, selection.$from.parentOffset, '\0', '\0')
   const match = textBefore.match(/(?:^|\s)\/([^\s/]*)$/u)
   const query = match?.[1]
-  if (query === undefined) return null
+  if (query !== undefined) {
+    return {
+      from: selection.from - query.length - 1,
+      to: selection.from,
+      query,
+      kind: 'slash',
+    }
+  }
+
+  const plainCommand = commands.find((command) => (
+    command.plain && new RegExp(`(?:^|\\s)${escapeRegExp(command.label)}$`, 'i').test(textBefore)
+  ))
+  if (!plainCommand) return null
 
   return {
-    from: selection.from - query.length - 1,
+    from: selection.from - plainCommand.label.length,
     to: selection.from,
-    query,
+    query: plainCommand.label,
+    kind: 'plain',
   }
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
