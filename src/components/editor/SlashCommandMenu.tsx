@@ -144,12 +144,16 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
         return false
       }
 
-      if (event.key === 'ArrowDown') {
+      // 메뉴는 가로로 한 줄씩 늘어선다. 보이는 대로 좌우로 옮길 수 있어야 하고,
+      // 위아래도 그대로 둔다 — 명령이 많으면 줄바꿈되어 여러 줄이 된다.
+      // 여는 동안 좌우 키를 가져가므로, 글자 사이로 커서를 옮기려면 Esc 로 메뉴를
+      // 먼저 닫는다.
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
         event.preventDefault()
         selectIndex((selectedIndexRef.current + 1) % matches.length)
         return true
       }
-      if (event.key === 'ArrowUp') {
+      if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
         event.preventDefault()
         selectIndex((selectedIndexRef.current - 1 + matches.length) % matches.length)
         return true
@@ -179,6 +183,7 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
     <div
       role="listbox"
       aria-label="삽입 명령"
+      aria-orientation="horizontal"
       className="fixed z-[70] flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
       style={{ left: menu.left, top: menu.top }}
     >
@@ -203,7 +208,9 @@ export function SlashCommandMenu({ editor, commands, keyHandlerRef }: Props) {
           {command.displayLabel ?? command.label}
         </button>
       ))}
-      <span className="pl-1 pr-0.5 text-[10px] text-slate-400" aria-hidden="true">↵</span>
+      {/* 화살표를 넣는 명령(↓·↑)과 헷갈리지 않게 꺾쇠로 쓰고, 선택 표시와 같은
+          회색으로 낮춰 명령 버튼과 구분한다. */}
+      <span className="pl-1 pr-0.5 text-[10px] text-slate-400" aria-hidden="true">‹ › ↵</span>
     </div>,
     document.body,
   )
