@@ -136,11 +136,14 @@ function usePrintReadiness(
     let firstFrame = 0
     let secondFrame = 0
     let settleTimer = 0
+    let decodeTimer = 0
+    let lastSnapshot: PrintReadinessSnapshot | null = null
 
     const cancelSettle = () => {
       window.cancelAnimationFrame(firstFrame)
       window.cancelAnimationFrame(secondFrame)
       window.clearTimeout(settleTimer)
+      window.clearTimeout(decodeTimer)
     }
 
     const publish = (next: PrintReadinessSnapshot, settled: boolean) => {
@@ -156,8 +159,19 @@ function usePrintReadiness(
 
     const scan = () => {
       if (disposed) return
-      cancelSettle()
       const snapshot = assetCounts(root)
+      // 이미지와 대기 표식이 그대로인데 자식 DOM만 조금 바뀐 경우(필기 SVG 등)
+      // 진행 중인 최종 확인을 처음부터 다시 시작하지 않는다. 이런 변화가 계속
+      // 생기면 모든 자료를 받았어도 영원히 '지면 배치 확인 중'에 머물 수 있다.
+      if (
+        lastSnapshot &&
+        samePrintReadiness(lastSnapshot, snapshot) &&
+        canSettlePrintLayout(snapshot)
+      ) {
+        return
+      }
+      cancelSettle()
+      lastSnapshot = snapshot
       publish(snapshot, false)
       if (!canSettlePrintLayout(snapshot)) return
 
@@ -165,11 +179,20 @@ function usePrintReadiness(
         secondFrame = window.requestAnimationFrame(() => {
           settleTimer = window.setTimeout(() => {
             const finalImages = [...root.querySelectorAll<HTMLImageElement>('img')]
-            void Promise.all(
-              finalImages.map((image) =>
-                typeof image.decode === 'function' ? image.decode().catch(() => undefined) : undefined,
-              ),
-            ).then(() => {
+            const decoded = Promise.all(
+              finalImages.map((image) => {
+                // complete + naturalWidth로 이미 표시 가능한 것은 확인했다. decode는
+                // 인쇄 직전 화소 준비를 한 번 더 보장하지만, 일부 Chrome 판본과
+                // 특정 이미지 형식은 이 Promise를 끝내지 않는 경우가 있다.
+                if (typeof image.decode !== 'function') return Promise.resolve()
+                return image.decode().catch(() => undefined)
+              }),
+            )
+            const decodeDeadline = new Promise<void>((resolve) => {
+              decodeTimer = window.setTimeout(resolve, 1_500)
+            })
+            void Promise.race([decoded, decodeDeadline]).then(() => {
+              window.clearTimeout(decodeTimer)
               const finalSnapshot = assetCounts(root)
               publish(finalSnapshot, canSettlePrintLayout(finalSnapshot))
             })
