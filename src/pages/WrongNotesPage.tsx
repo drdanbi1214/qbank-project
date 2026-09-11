@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { withReturnTo } from '@/lib/learningNavigation'
+import { useListScrollRestoration } from '@/lib/useListScrollRestoration'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
@@ -31,12 +33,24 @@ export function WrongNotesPage() {
   const { taxonomy } = useData()
   const userId = session?.user.id ?? ''
 
-  const [tab, setTab] = useState<Tab>('wrong')
-  const [sort, setSort] = useState<Sort>('recent')
-  const [subjectId, setSubjectId] = useState<string | null>(null)
-  const [unitId, setUnitId] = useState<string | null>(null)
-  const [cohort, setCohort] = useState<string | null>(null)
-  const [examId, setExamId] = useState<string | null>(null)
+  const location = useLocation()
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = params.get('tab') === 'bookmark' ? 'bookmark' : 'wrong'
+  const sort: Sort = params.get('sort') === 'repeated' ? 'repeated' : 'recent'
+  const subjectId = params.get('subject')
+  const unitId = params.get('unit')
+  const cohort = params.get('cohort')
+  const examId = params.get('exam')
+  const returnTo = location.pathname + location.search
+  function updateFilters(patch: Record<string, string | null>) {
+    const next = new URLSearchParams(params)
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) next.set(key, value)
+      else next.delete(key)
+    }
+    setParams(next, { replace: true })
+  }
+  const [loadNonce, setLoadNonce] = useState(0)
 
   type ClusterRoleMap = Map<string, { groupId: string | null; variantType: ClusterRole }>
   const [loaded, setLoaded] = useState<{
@@ -49,7 +63,7 @@ export function WrongNotesPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const requestKey = [subjectId ?? '', unitId ?? '', examId ?? '', cohort ?? ''].join('|')
+  const requestKey = [userId, loadNonce, subjectId ?? '', unitId ?? '', examId ?? '', cohort ?? ''].join('|')
 
   useEffect(() => {
     let active = true
@@ -96,6 +110,7 @@ export function WrongNotesPage() {
   )
 
   const ready = loaded?.key === requestKey
+  useListScrollRestoration(ready)
   const cohorts = useMemo(
     () => [...new Set((taxonomy?.exams ?? []).map((exam) => exam.cohort))].sort(),
     [taxonomy],
@@ -151,10 +166,10 @@ export function WrongNotesPage() {
       const id = await startSession({
         userId,
         mode,
-        scope: { subject_id: subjectId, unit_id: unitId, exam_id: examId, cohort },
+        scope: { subject_id: subjectId, unit_id: unitId, exam_id: examId, cohort, return_to: returnTo },
         questionIds,
       })
-      navigate(`/solve?session=${id}`)
+      navigate(withReturnTo(`/solve?session=${id}`, returnTo))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '세션을 시작하지 못했습니다.')
     } finally {
@@ -217,10 +232,10 @@ export function WrongNotesPage() {
       </header>
 
       <div className="mb-3 flex gap-1 print:hidden">
-        <TabButton active={tab === 'wrong'} onClick={() => setTab('wrong')}>
+        <TabButton active={tab === 'wrong'} onClick={() => updateFilters({ tab: 'wrong' })}>
           {`오답 ${wrongNotes.length}`}
         </TabButton>
-        <TabButton active={tab === 'bookmark'} onClick={() => setTab('bookmark')}>
+        <TabButton active={tab === 'bookmark'} onClick={() => updateFilters({ tab: 'bookmark' })}>
           {`북마크 ${bookmarks.length}`}
         </TabButton>
       </div>
@@ -231,9 +246,7 @@ export function WrongNotesPage() {
             <select
               value={subjectId ?? ''}
               onChange={(event) => {
-                setSubjectId(event.target.value || null)
-                setUnitId(null)
-                setExamId(null)
+                updateFilters({ subject: event.target.value || null, unit: null, exam: null })
               }}
               className={selectClass}
               aria-label="과목"
@@ -248,7 +261,7 @@ export function WrongNotesPage() {
 
             <select
               value={unitId ?? ''}
-              onChange={(event) => setUnitId(event.target.value || null)}
+              onChange={(event) => updateFilters({ unit: event.target.value || null })}
               className={selectClass}
               aria-label="단원"
             >
@@ -263,8 +276,7 @@ export function WrongNotesPage() {
             <select
               value={cohort ?? ''}
               onChange={(event) => {
-                setCohort(event.target.value || null)
-                setExamId(null)
+                updateFilters({ cohort: event.target.value || null, exam: null })
               }}
               className={selectClass}
               aria-label="학번"
@@ -279,7 +291,7 @@ export function WrongNotesPage() {
 
             <select
               value={examId ?? ''}
-              onChange={(event) => setExamId(event.target.value || null)}
+              onChange={(event) => updateFilters({ exam: event.target.value || null })}
               className={selectClass}
               aria-label="시험"
             >
@@ -293,7 +305,7 @@ export function WrongNotesPage() {
 
             <select
               value={sort}
-              onChange={(event) => setSort(event.target.value as Sort)}
+              onChange={(event) => updateFilters({ sort: event.target.value })}
               className={selectClass}
               aria-label="정렬"
             >
@@ -331,22 +343,23 @@ export function WrongNotesPage() {
       {error && (
         <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
           {error}
+          <button type="button" className="ml-3 underline" onClick={() => { setError(null); setLoadNonce((n) => n + 1) }}>다시 불러오기</button>
         </p>
       )}
 
-      {!ready ? (
+      {!ready && !error ? (
         <div className="flex justify-center py-10">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : tab === 'wrong' ? (
+      ) : !ready ? null : tab === 'wrong' ? (
         wrongNotes.length === 0 ? (
-          <Empty text="아직 오답으로 기록된 문제가 없습니다." />
+          <Empty text="선택한 조건에 해당하는 오답이 없습니다. 다른 조건으로 확인해보세요." />
         ) : (
           <ul className="space-y-2">
             {wrongNotes.map((row) => (
               <li key={row.questionId}>
                 <Link
-                  to={`/solve?question=${row.questionId}`}
+                  to={withReturnTo(`/solve?question=${row.questionId}`, returnTo)}
                   className={cn(
                     'block rounded-xl border p-3 transition-colors hover:border-brand-400',
                     row.recentAllWrong
@@ -392,7 +405,7 @@ export function WrongNotesPage() {
           {bookmarks.map((row) => (
             <li key={row.questionId}>
               <Link
-                to={`/solve?question=${row.questionId}`}
+                to={withReturnTo(`/solve?question=${row.questionId}`, returnTo)}
                 className="block rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
               >
                 <div className="flex flex-wrap items-center gap-2 text-xs">

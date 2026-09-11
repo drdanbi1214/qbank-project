@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { withReturnTo } from '@/lib/learningNavigation'
 import { ResetProgressMenu } from '@/components/ResetProgressMenu'
 import { DailyChallengeStatsModal } from '@/components/study/DailyChallengeStatsModal'
 import { Icon } from '@/components/ui/Icon'
@@ -114,6 +115,7 @@ export function StudyHomePage() {
     )
   }
 
+
   const subjects = taxonomy?.subjects ?? []
 
   return (
@@ -127,7 +129,7 @@ export function StudyHomePage() {
 
       {openSession && openSession.questionIds.length > 0 && (
         <Link
-          to={`/solve?session=${openSession.id}`}
+          to={openSession.mode === 'block_test' && typeof openSession.scope.exam_id === 'string' ? `/block-test?exam=${openSession.scope.exam_id}` : withReturnTo(`/solve?session=${openSession.id}`, '/study')}
           className="mb-4 flex items-center gap-3 rounded-xl border border-brand-300 bg-brand-50 p-3 transition-colors hover:border-brand-500 dark:border-brand-800 dark:bg-brand-900/30"
         >
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
@@ -146,7 +148,7 @@ export function StudyHomePage() {
       {dailySession && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
           <Link
-            to={`/solve?session=${dailySession.sessionId}`}
+            to={withReturnTo(`/solve?session=${dailySession.sessionId}`, '/study')}
             className="flex min-w-0 flex-1 items-center gap-3"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">

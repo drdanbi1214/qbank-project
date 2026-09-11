@@ -291,8 +291,8 @@ export function MyAssignmentsPage() {
                         // 같은 풀이를 중복 등록할 수 있다.
                         to={
                           row.hasMySolution
-                            ? `/solve?question=${row.questionId}&reveal=1`
-                            : `/solve?question=${row.questionId}&reveal=1&write=1`
+                            ? `/solve?question=${row.questionId}&reveal=1&returnTo=%2Fassignments`
+                            : `/solve?question=${row.questionId}&reveal=1&write=1&returnTo=%2Fassignments`
                         }
                         className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
                       >

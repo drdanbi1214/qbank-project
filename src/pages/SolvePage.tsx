@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { QuestionView } from '@/components/question/QuestionView'
+import { safeReturnTo, sessionReturnTo } from '@/lib/learningNavigation'
 import { Spinner } from '@/components/ui/Spinner'
 import {
   fetchBookmarked,
@@ -29,6 +30,14 @@ import { useData } from '@/lib/data'
  * 현재 위치는 &i=<index> 로 URL 에 남겨 새로고침과 뒤로가기에서 유지된다.
  */
 export function SolvePage() {
+  const [params] = useSearchParams()
+  const { session } = useAuth()
+  const scope = new URLSearchParams(params)
+  scope.delete('i')
+  return <SolveWorkspace key={`${session?.user.id}:${scope.toString()}`} />
+}
+
+function SolveWorkspace() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const { taxonomy, refreshProgress } = useData()
@@ -44,6 +53,7 @@ export function SolvePage() {
   const questionIds = params.get('questions')
   const sessionId = params.get('session')
   const unlabeled = params.get('unlabeled') === '1'
+  const explicitReturnTo = safeReturnTo(params.get('returnTo'))
   // 배정 화면에서 넘어온 경우 정답을 바로 열고 풀이 작성창까지 펼친다.
   const autoReveal = params.get('reveal') === '1'
   const autoWrite = params.get('write') === '1'
@@ -56,8 +66,10 @@ export function SolvePage() {
     questions: SolveQuestion[]
     /** 세션으로 들어온 경우 이어서 볼 위치 */
     startIndex: number
+    returnTo?: string
   } | null>(null)
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null)
+  const [loadNonce, setLoadNonce] = useState(0)
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set())
   const [setCache, setSetCache] = useState<{ id: string; value: QuestionSet | null } | null>(null)
   /** 범위 진입으로 새로 만든 세션. 진행 위치를 여기에 기록한다. */
@@ -76,11 +88,14 @@ export function SolvePage() {
         if (sessionId) {
           const found = await fetchSession(sessionId)
           if (!found) throw new Error('세션을 찾을 수 없습니다.')
+          if (found.mode === 'block_test' && typeof found.scope.exam_id === 'string') {
+            navigate(`/block-test?exam=${found.scope.exam_id}`, { replace: true }); return
+          }
 
           const ordered = await fetchQuestionsByIds(found.questionIds)
           const marked = await fetchBookmarked(ordered.map((row) => row.id))
           if (!active) return
-          setLoaded({ key: requestKey, questions: ordered, startIndex: found.currentIndex })
+          setLoaded({ key: requestKey, questions: ordered, startIndex: found.currentIndex, returnTo: sessionReturnTo(found.mode, found.scope) })
           setBookmarks(marked)
           return
         }
@@ -127,7 +142,7 @@ export function SolvePage() {
           const created = await startSession({
             userId,
             mode: 'sequential',
-            scope: { unit_id: unitId, exam_id: examId, subject_id: subjectId },
+            scope: { unit_id: unitId, exam_id: examId, subject_id: subjectId, return_to: explicitReturnTo },
             questionIds: finalRows.map((row) => row.id),
           })
           if (active) trackedSession.current = created
@@ -145,12 +160,13 @@ export function SolvePage() {
     return () => {
       active = false
     }
-  }, [unitId, examId, subjectId, questionId, questionIds, sessionId, unlabeled, requestKey, userId])
+  }, [unitId, examId, subjectId, questionId, questionIds, sessionId, unlabeled, requestKey, userId, loadNonce, navigate, explicitReturnTo])
 
   // 세션으로 들어왔고 URL 에 위치가 없으면 저장된 위치에서 이어간다.
   const savedIndex = loaded?.key === requestKey ? loaded.startIndex : 0
   const urlIndex = params.get('i')
-  const index = urlIndex !== null ? Math.max(0, Number(urlIndex) || 0) : savedIndex
+  const requestedIndex = urlIndex !== null ? Math.max(0, Math.floor(Number(urlIndex) || 0)) : savedIndex
+  const index = Math.min(requestedIndex, Math.max(0, questions.length - 1))
 
   const current = questions[Math.min(index, Math.max(0, questions.length - 1))] ?? null
 
@@ -215,7 +231,8 @@ export function SolvePage() {
   )
 
   const exitTo = useMemo(() => {
-    if (sessionId) return '/wrong-notes'
+    if (explicitReturnTo) return explicitReturnTo
+    if (loaded?.returnTo) return loaded.returnTo
     if (unitId && taxonomy) {
       const unit = taxonomy.unitById.get(unitId)
       return unit ? `/study/${unit.subjectId}/${unit.id}` : '/study'
@@ -223,7 +240,7 @@ export function SolvePage() {
     if (examId) return `/exams/${examId}`
     if (subjectId) return `/study/${subjectId}`
     return '/study'
-  }, [sessionId, unitId, examId, subjectId, taxonomy])
+  }, [explicitReturnTo, loaded?.returnTo, unitId, examId, subjectId, taxonomy])
 
   const handleAnswered = useCallback(() => {
     refreshProgress()
@@ -241,6 +258,7 @@ export function SolvePage() {
         ) : error ? (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
             {error}
+            <button type="button" className="ml-3 underline" onClick={() => { setFailed(null); setLoadNonce((n) => n + 1) }}>다시 불러오기</button>
           </p>
         ) : !current ? (
           <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">

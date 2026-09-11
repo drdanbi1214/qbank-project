@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useBlocker, useNavigate, useSearchParams } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { ChoiceList } from '@/components/question/ChoiceList'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { Modal } from '@/components/ui/Modal'
+import { blockDraftKey, parseBlockDraft, remainingSeconds, type BlockTestDraft } from '@/lib/blockTestDraft'
+import { withReturnTo } from '@/lib/learningNavigation'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
-import { fetchQuestions, submitAttempt, type SolveQuestion } from '@/lib/queries/questions'
+import { fetchQuestions, fetchQuestionsByIds, submitAttempt, type SolveQuestion } from '@/lib/queries/questions'
 import { collapseIdentical, fetchCollapseSetting } from '@/lib/queries/clusters'
 import { finishSession, startSession } from '@/lib/queries/study'
 import { examShortLabel } from '@/lib/queries/taxonomy'
@@ -20,6 +23,8 @@ import { cn } from '@/utils/cn'
  * 그래서 QuestionView 를 쓰지 않고 본문과 보기만 따로 그린다.
  */
 type Phase = 'intro' | 'running' | 'result'
+const EMPTY_ANSWERS: Record<string, number[]> = {}
+const EMPTY_QUESTIONS: SolveQuestion[] = []
 
 type Graded = {
   question: SolveQuestion
@@ -32,139 +37,163 @@ type UnitScore = { name: string; correct: number; total: number }
 
 export function BlockTestPage() {
   const [params] = useSearchParams()
-  const navigate = useNavigate()
   const { session } = useAuth()
-  const { taxonomy, refreshProgress } = useData()
   const userId = session?.user.id ?? ''
 
   const examId = params.get('exam')
+  return <BlockTestWorkspace key={`${userId}:${examId}`} userId={userId} examId={examId} />
+}
+
+function BlockTestWorkspace({ userId, examId }: { userId: string; examId: string | null }) {
+  const navigate = useNavigate()
+  const { taxonomy, refreshProgress } = useData()
+  const storageKey = blockDraftKey(userId, examId ?? '')
+  const [draft, setDraft] = useState<BlockTestDraft | null>(() => {
+    try { return parseBlockDraft(localStorage.getItem(storageKey)) } catch { return null }
+  })
+  const draftRef = useRef(draft)
+  const [saveError, setSaveError] = useState(false)
+  const persist = useCallback((next: BlockTestDraft | null) => {
+    draftRef.current = next
+    setDraft(next)
+    try {
+      if (next) localStorage.setItem(storageKey, JSON.stringify(next))
+      else localStorage.removeItem(storageKey)
+      setSaveError(false)
+    } catch { setSaveError(true) }
+  }, [storageKey])
   const exam = examId ? taxonomy?.examById.get(examId) : undefined
-  const examLabel = examShortLabel(
-    exam,
-    exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined,
-  )
-
-  const [phase, setPhase] = useState<Phase>('intro')
-  const [loaded, setLoaded] = useState<{ key: string; questions: SolveQuestion[] } | null>(null)
+  const examLabel = examShortLabel(exam, exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined)
+  const phase: Phase = draft?.phase ?? 'intro'
+  const index = draft?.index ?? 0
+  const answers = draft?.answers ?? EMPTY_ANSWERS
+  const [now, setNow] = useState(Date.now)
+  const remainingSec = remainingSeconds(draft?.deadline ?? null, now)
+  const [loaded, setLoaded] = useState<SolveQuestion[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const [index, setIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, number[]>>({})
-  const [remainingSec, setRemainingSec] = useState<number | null>(null)
-  const [results, setResults] = useState<Graded[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadNonce, setLoadNonce] = useState(0)
   const [busy, setBusy] = useState(false)
-  const sessionId = useRef<string | null>(null)
+  const grading = useRef(false)
+  const questions = loaded ?? EMPTY_QUESTIONS
+  const current = questions[index] ?? null
+  const results: Graded[] | null = draft?.phase === 'result'
+    ? questions.map((question) => ({ question, ...draft.grades[question.id] })) : null
+  const elapsedSec = draft ? Math.max(0, Math.round(((draft.submittedAt ?? now) - draft.startedAt) / 1000)) : 0
 
   useEffect(() => {
     if (!examId) return
     let active = true
-
-    void Promise.all([fetchQuestions({ examId }), fetchCollapseSetting()])
-      .then(([rows, collapse]) => {
-        if (!active) return
-        // 서술형은 자동 채점이 안 되므로 블록테스트에서는 제외한다.
-        const usable = rows.filter((row) => row.questionType !== 'essay')
-        // 블록테스트는 시험 하나만 담으므로 접히는 문제는 사실상 없다. 판본 중복은
-        // 학번을 가로질러 생기기 때문이다. 설정을 일관되게 적용하려고 걸어둔다.
-        setLoaded({ key: examId, questions: collapse ? collapseIdentical(usable) : usable })
-        setError(null)
-      })
-      .catch((caught: unknown) => {
-        if (active) {
-          setError(caught instanceof Error ? caught.message : '문제를 불러오지 못했습니다.')
+    async function load() {
+      try {
+        const saved = draftRef.current
+        let rows: SolveQuestion[]
+        if (saved) {
+          rows = await fetchQuestionsByIds(saved.questionIds)
+          if (rows.length !== saved.questionIds.length) throw new Error('저장된 시험의 일부 문제를 불러오지 못했습니다. 답안은 보관되어 있습니다.')
+        } else {
+          const [all, collapse] = await Promise.all([fetchQuestions({ examId: examId ?? undefined }), fetchCollapseSetting()])
+          const usable = all.filter((row) => row.questionType !== 'essay')
+          rows = collapse ? collapseIdentical(usable) : usable
         }
-      })
-
-    return () => {
-      active = false
+        if (active) { setLoaded(rows); setLoadError(null) }
+      } catch (caught) {
+        if (active) setLoadError(caught instanceof Error ? caught.message : '문제를 불러오지 못했습니다.')
+      }
     }
-  }, [examId])
-
-  // 매 렌더마다 새 배열이 되면 아래 useCallback 과 useMemo 가 계속 다시 만들어진다.
-  const questions = useMemo(
-    () => (loaded?.key === examId ? loaded.questions : []),
-    [loaded, examId],
-  )
-  const current = questions[index] ?? null
-
-  // 소요 시간은 제한시간이 없는 시험에서도 재야 해서 따로 남긴다.
-  const startedAt = useRef<number | null>(null)
-  const [elapsedSec, setElapsedSec] = useState(0)
+    void load()
+    return () => { active = false }
+  }, [examId, loadNonce])
 
   const grade = useCallback(async () => {
-    if (busy) return
+    const saved = draftRef.current
+    if (grading.current || !saved || saved.phase !== 'running' || questions.length === 0) return
+    grading.current = true
     setBusy(true)
+    setError(null)
+    // Freeze answers and submission time on the first attempt. Successful grades are
+    // checkpointed individually so a retry does not resubmit confirmed records.
+    let next = { ...saved, submittedAt: saved.submittedAt ?? Math.min(Date.now(), saved.deadline ?? Infinity) }
+    persist(next)
     try {
-      const graded: Graded[] = []
       for (const question of questions) {
-        const selected = answers[question.id] ?? []
-        if (selected.length === 0) {
-          // 답을 고르지 않은 문항은 기록을 남기지 않고 오답으로만 센다.
-          graded.push({ question, selected, isCorrect: false })
-          continue
-        }
-        const result = await submitAttempt({
-          questionId: question.id,
-          selected,
-          timeSpentSec: null,
-        })
-        graded.push({ question, selected, isCorrect: result.isCorrect })
+        if (next.grades[question.id]) continue
+        const selected = next.answers[question.id] ?? []
+        const isCorrect = selected.length === 0 ? false : (await submitAttempt({
+          questionId: question.id, selected, timeSpentSec: null,
+        })).isCorrect
+        next = { ...next, grades: { ...next.grades, [question.id]: { selected, isCorrect } } }
+        persist(next)
       }
-
-      if (sessionId.current) await finishSession(sessionId.current)
-      setElapsedSec(
-        startedAt.current ? Math.round((Date.now() - startedAt.current) / 1000) : 0,
-      )
-      setResults(graded)
-      setPhase('result')
+      await finishSession(next.sessionId)
+      persist({ ...next, phase: 'result' })
       refreshProgress()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '채점하지 못했습니다.')
+      setError(caught instanceof Error ? caught.message : '채점하지 못했습니다. 답안을 보관했습니다. 다시 시도해 주세요.')
     } finally {
+      grading.current = false
       setBusy(false)
     }
-  }, [busy, questions, answers, refreshProgress])
+  }, [questions, persist, refreshProgress])
 
-  // 제한시간 카운트다운. 0 이 되면 자동 제출한다.
-  // 채점은 렌더 흐름 밖으로 미뤄서 효과 안에서 상태를 연쇄로 바꾸지 않는다.
   useEffect(() => {
-    if (phase !== 'running' || remainingSec === null) return
+    if (phase !== 'running') return
+    const timer = window.setInterval(() => setNow(Date.now()), 500)
+    return () => window.clearInterval(timer)
+  }, [phase])
 
-    const delay = remainingSec <= 0 ? 0 : 1000
-    const timer = window.setTimeout(() => {
-      if (remainingSec <= 0) void grade()
-      else setRemainingSec((value) => (value ?? 0) - 1)
-    }, delay)
-
+  useEffect(() => {
+    if (phase !== 'running' || remainingSec !== 0 || draft?.submittedAt !== null || !questions.length) return
+    // One automatic submission; on failure the user explicitly retries.
+    const timer = window.setTimeout(() => void grade(), 0)
     return () => window.clearTimeout(timer)
-  }, [phase, remainingSec, grade])
+  }, [phase, remainingSec, draft?.submittedAt, questions.length, grade])
+
+  const blocker = useBlocker(phase === 'running')
+  useEffect(() => {
+    if (phase !== 'running') return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [phase])
 
   async function start() {
-    if (questions.length === 0 || busy) return
+    if (!questions.length || busy) return
     setBusy(true)
+    setError(null)
     try {
       const limit = exam?.durationMin ? exam.durationMin * 60 : null
-      sessionId.current = await startSession({
-        userId,
-        mode: 'block_test',
-        scope: { exam_id: examId },
-        questionIds: questions.map((row) => row.id),
-        timeLimitSec: limit,
-      })
-      setRemainingSec(limit)
-      startedAt.current = Date.now()
-      setPhase('running')
+      const sessionId = await startSession({ userId, mode: 'block_test', scope: { exam_id: examId },
+        questionIds: questions.map((row) => row.id), timeLimitSec: limit })
+      const startedAt = Date.now()
+      persist({ version: 1, sessionId, questionIds: questions.map((row) => row.id), startedAt,
+        deadline: limit === null ? null : startedAt + limit * 1000, submittedAt: null,
+        phase: 'running', index: 0, answers: {}, grades: {} })
+      setNow(startedAt)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '시작하지 못했습니다.')
-    } finally {
-      setBusy(false)
-    }
+    } finally { setBusy(false) }
   }
 
-  const answeredCount = useMemo(
-    () => questions.filter((question) => (answers[question.id] ?? []).length > 0).length,
-    [questions, answers],
-  )
+  function move(nextIndex: number) {
+    const saved = draftRef.current
+    if (saved) persist({ ...saved, index: Math.max(0, Math.min(questions.length - 1, nextIndex)) })
+    window.scrollTo({ top: 0 })
+  }
+
+  function select(next: number[]) {
+    const saved = draftRef.current
+    if (!saved || !current || saved.submittedAt !== null || remainingSeconds(saved.deadline, Date.now()) === 0) return
+    persist({ ...saved, answers: { ...saved.answers, [current.id]: next } })
+  }
+
+  function submit() {
+    if (answeredCount < questions.length && draft?.submittedAt === null &&
+      !window.confirm(`아직 답하지 않은 문항이 ${questions.length - answeredCount}개 있습니다. 제출할까요?`)) return
+    void grade()
+  }
+
+  const answeredCount = questions.filter((question) => (answers[question.id] ?? []).length > 0).length
 
   return (
     <div className="min-h-dvh bg-slate-50 dark:bg-slate-950">
@@ -177,9 +206,14 @@ export function BlockTestPage() {
           </p>
         )}
 
+        {saveError && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">이 브라우저에 답안을 저장하지 못했습니다. 새로고침하거나 나가면 복원할 수 없으니 시험을 마칠 때까지 이 화면을 유지해주세요.</p>}
+        {phase === 'running' && !saveError && <p role="status" className="mb-3 text-xs text-slate-500">답안을 이 브라우저에 자동 저장합니다. 다시 들어오면 이어서 풀 수 있으며, 나가 있는 동안에도 제한시간은 흐릅니다.</p>}
+        {phase === 'running' && draft?.submittedAt !== null && <Button className="mb-3" onClick={() => void grade()} disabled={busy}>{busy ? '채점 중…' : '채점 다시 시도'}</Button>}
         {!examId ? (
           <Notice text="시험을 선택해주세요." />
-        ) : loaded?.key !== examId && error === null ? (
+        ) : loadError ? (
+          <div role="alert"><p>{loadError}</p><Button onClick={() => { setLoadError(null); setLoadNonce((n) => n + 1) }}>다시 불러오기</Button></div>
+        ) : !loaded ? (
           <div className="flex justify-center py-20">
             <Spinner className="h-7 w-7" />
           </div>
@@ -234,7 +268,8 @@ export function BlockTestPage() {
               <ChoiceList
                 choices={current.choices}
                 selected={answers[current.id] ?? []}
-                onChange={(next) => setAnswers((prev) => ({ ...prev, [current.id]: next }))}
+                onChange={select}
+                disabled={busy || draft?.submittedAt !== null || remainingSec === 0}
                 revealed={null}
               />
             </div>
@@ -245,7 +280,7 @@ export function BlockTestPage() {
                 <button
                   key={question.id}
                   type="button"
-                  onClick={() => setIndex(position)}
+                  onClick={() => move(position)}
                   className={cn(
                     'h-8 w-8 rounded-lg text-xs font-medium transition-colors',
                     position === index
@@ -267,17 +302,17 @@ export function BlockTestPage() {
               <div className="mx-auto flex max-w-3xl items-center gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => setIndex((value) => Math.max(0, value - 1))}
+                  onClick={() => move(index - 1)}
                   disabled={index === 0}
                 >
                   이전
                 </Button>
                 {index < questions.length - 1 ? (
-                  <Button block size="lg" onClick={() => setIndex((value) => value + 1)}>
+                  <Button block size="lg" onClick={() => move(index + 1)}>
                     다음
                   </Button>
                 ) : (
-                  <Button block size="lg" onClick={() => void grade()} disabled={busy}>
+                  <Button block size="lg" onClick={submit} disabled={busy}>
                     {busy && <Spinner className="h-4 w-4 border-white/40 border-t-white" />}
                     제출하고 채점하기
                   </Button>
@@ -291,11 +326,15 @@ export function BlockTestPage() {
             examId={examId}
             elapsedSec={elapsedSec}
             onExit={() => navigate(`/exams/${examId}`)}
+            onRestart={() => { persist(null); setError(null); setLoaded(null); setLoadNonce((n) => n + 1) }}
           />
         ) : (
           <Notice text="이 시험에는 풀 문제가 없습니다." />
         )}
       </main>
+      {blocker.state === 'blocked' && <Modal title="시험에서 나갈까요?" onClose={() => blocker.reset()} footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => blocker.reset()}>계속 풀기</Button><Button disabled={busy} onClick={() => blocker.proceed()}>나가기</Button></div>}>
+        <p className="text-sm">{busy ? '채점이 끝날 때까지 기다려주세요.' : saveError ? '답안을 저장하지 못했습니다. 나가면 작성한 답안을 잃을 수 있습니다.' : '답안은 이 브라우저에 저장되어 있습니다. 같은 시험에 다시 들어오면 이어서 풀 수 있습니다. 제한시간은 계속 흐릅니다.'}</p>
+      </Modal>}
     </div>
   )
 }
@@ -311,11 +350,13 @@ function ResultView({
   examId,
   elapsedSec,
   onExit,
+  onRestart,
 }: {
   results: Graded[]
   examId: string
   elapsedSec: number
   onExit: () => void
+  onRestart: () => void
 }) {
   const { taxonomy } = useData()
   const [filter, setFilter] = useState<'all' | 'wrong' | 'blank'>('all')
@@ -422,7 +463,7 @@ function ResultView({
             {shown.map((row) => (
               <li key={row.question.id}>
                 <Link
-                  to={`/solve?question=${row.question.id}`}
+                  to={withReturnTo(`/solve?question=${row.question.id}`, `/block-test?exam=${examId}`)}
                   className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
                 >
                   <span
@@ -457,19 +498,15 @@ function ResultView({
         <Button onClick={onExit}>시험 화면으로</Button>
         {wrongIds.length > 0 && (
           <Link
-            to={`/solve?questions=${wrongIds.join(',')}`}
+            to={withReturnTo(`/solve?questions=${wrongIds.join(',')}`, `/block-test?exam=${examId}`)}
             className="inline-flex h-10 items-center rounded-lg bg-pink-600 px-4 text-sm font-medium text-white hover:bg-pink-700"
           >
             틀린 문항만 다시 풀기
           </Link>
         )}
-        <Link
-          to={`/block-test?exam=${examId}`}
-          reloadDocument
-          className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-medium dark:border-slate-600"
-        >
+        <Button variant="secondary" onClick={onRestart}>
           다시 풀기
-        </Link>
+        </Button>
       </div>
     </section>
   )

@@ -67,7 +67,7 @@ export function ExamDetailPage() {
         scope: { exam_id: examId },
         questionIds: wrongIds,
       })
-      navigate(`/solve?session=${id}`)
+      navigate(`/solve?session=${id}&returnTo=${encodeURIComponent(`/exams/${examId}`)}`)
     } catch (caught) {
       setActionFailure({
         key: actionKey,

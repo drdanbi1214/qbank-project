@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { withReturnTo } from '@/lib/learningNavigation'
+import { useListScrollRestoration } from '@/lib/useListScrollRestoration'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
@@ -193,6 +195,7 @@ export function SearchPage() {
       : null,
   ].filter((label): label is string => label !== null)
   const searching = query.trim() !== '' && pendingSearchLabels.length > 0
+  useListScrollRestoration(!searching)
   const hits = includeQuestionSearch && loaded?.key === requestKey ? loaded.hits : []
   const theoryHits = includeTheory && theoryLoaded?.key === requestKey ? theoryLoaded.rows : []
   // 검색어나 조건이 바뀌면 이전 강의록 결과가 잠깐 남지 않게 열쇠로 잠근다.
@@ -476,7 +479,7 @@ export function SearchPage() {
             {hits.map((hit) => (
               <li key={hit.questionId}>
                 <Link
-                  to={`/solve?question=${hit.questionId}`}
+                  to={withReturnTo(`/solve?question=${hit.questionId}`, `/search?${params.toString()}`)}
                   className="block rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs">
