@@ -16,7 +16,7 @@ export const MAIN_NAV: NavItem[] = [
   // 테마는 이론과 완전히 별개다. 이론은 Notion 에서 임포트한 교과 정리이고,
   // 테마는 스터디원이 주제 단위로 쓰고 야마를 붙이는 글이다.
   // 강의록은 활성 회원 전원이 본다. 이론과 달리 스터디 권한을 걸지 않는다.
-  { to: '/lectures', label: '강의록', icon: 'theory' },
+  { to: '/lectures', label: '강의록', icon: 'lecture' },
   { to: '/topics', label: '레옵스', icon: 'topic', permission: 'study_legendob' },
   { to: '/exams', label: '시험별', icon: 'exam' },
   { to: '/assignments', label: '풀이 배정', icon: 'clipboard' },
@@ -27,12 +27,10 @@ export const MAIN_NAV: NavItem[] = [
   { to: '/admin', label: '관리자', icon: 'shield', adminOnly: true },
 ]
 
-/** 모바일 하단 탭바 */
+/** 모바일: 자주 쓰는 학습 기능 네 개와 컴포넌트의 전체 메뉴 버튼. */
 export const MOBILE_NAV: NavItem[] = [
   { to: '/study', label: '학습', icon: 'study' },
-  { to: '/theory', label: '이론', icon: 'theory' },
+  { to: '/search', label: '검색', icon: 'search' },
+  { to: '/wrong-notes', label: '오답노트', icon: 'wrong-note' },
   { to: '/lectures', label: '강의록', icon: 'lecture' },
-  { to: '/discussions', label: '게시판', icon: 'board' },
-  { to: '/notifications', label: '알림', icon: 'bell' },
-  { to: '/me', label: '내정보', icon: 'user' },
 ]
