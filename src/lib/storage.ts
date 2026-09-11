@@ -46,29 +46,51 @@ async function getSupabaseSignedUrl(storagePath: string): Promise<{ url: string;
   }
 }
 
+/** 다시 해 볼 만한 실패. 권한이 없어 막힌 것과 갈라야 헛되이 조르지 않는다. */
+const RETRY: unique symbol = Symbol('retry')
+type SignResult = { url: string; expiresAt: number } | null | typeof RETRY
+
 async function getR2SignedUrl(
   storagePath: string,
   accessToken: string,
-): Promise<{ url: string; expiresAt: number } | null> {
+): Promise<SignResult> {
   if (!R2_GATEWAY_URL) return null
 
-  const response = await fetch(`${R2_GATEWAY_URL}/v1/sign`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ storagePath }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${R2_GATEWAY_URL}/v1/sign`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ storagePath }),
+    })
+  } catch {
+    // 그물이 끊겼거나 한꺼번에 너무 많이 보냈다. 다시 해 볼 값어치가 있다.
+    return RETRY
+  }
   if (!response.ok) {
     console.error('R2 이미지 URL을 만들지 못했습니다.', storagePath, response.status)
-    return null
+    // 408·429·5xx 는 잠시 뒤면 되는 것들이다. 403 처럼 막힌 것은 졸라도 같다.
+    return response.status === 408 || response.status === 429 || response.status >= 500
+      ? RETRY
+      : null
   }
 
   const result = await response.json() as { url?: unknown; expiresAt?: unknown }
   if (typeof result.url !== 'string' || typeof result.expiresAt !== 'number') return null
   return { url: result.url, expiresAt: Math.max(Date.now(), result.expiresAt - 30_000) }
 }
+
+/**
+ * 지금 받아오는 중인 서명. 한 쪽에 같은 그림이 여러 번 나오거나 카드가 수십 장
+ * 깔리면, 예전에는 저마다 따로 요청을 보내 문지기에게 한꺼번에 몰렸다. 몰리면
+ * 일부가 밀려나 "어떤 그림만 랜덤하게 안 뜨는" 것처럼 보인다.
+ */
+const inflight = new Map<string, Promise<string | null>>()
+
+const SIGN_ATTEMPTS = 3
 
 export async function getSignedUrl(storagePath: string): Promise<string | null> {
   if (/^https?:\/\//.test(storagePath)) return storagePath
@@ -84,19 +106,44 @@ export async function getSignedUrl(storagePath: string): Promise<string | null> 
   const cached = cache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.url
 
+  const pending = inflight.get(cacheKey)
+  if (pending) return pending
+
+  const task = signOnce(storagePath, session.access_token, cacheKey).finally(() => {
+    inflight.delete(cacheKey)
+  })
+  inflight.set(cacheKey, task)
+  return task
+}
+
+async function signOnce(
+  storagePath: string,
+  accessToken: string,
+  cacheKey: string,
+): Promise<string | null> {
   const parsed = parseStoragePath(storagePath)
   if (!parsed) return null
   const useR2 = usesR2(parsed.bucket)
-  let signed = useR2
-    ? await getR2SignedUrl(storagePath, session.access_token)
-    : await getSupabaseSignedUrl(storagePath)
-  if (!signed && useR2 && READ_FALLBACK) {
-    signed = await getSupabaseSignedUrl(storagePath)
-  }
-  if (!signed) return null
 
-  cache.set(cacheKey, signed)
-  return signed.url
+  for (let attempt = 0; attempt < SIGN_ATTEMPTS; attempt += 1) {
+    let signed: SignResult = useR2
+      ? await getR2SignedUrl(storagePath, accessToken)
+      : await getSupabaseSignedUrl(storagePath)
+
+    if (signed === RETRY) {
+      // 한꺼번에 몰려 밀린 것이라면 조금 기다렸다 다시 간다.
+      if (attempt < SIGN_ATTEMPTS - 1) await wait(250 * 2 ** attempt)
+      continue
+    }
+    if (!signed && useR2 && READ_FALLBACK) {
+      signed = await getSupabaseSignedUrl(storagePath)
+    }
+    if (!signed) return null
+
+    cache.set(cacheKey, signed)
+    return signed.url
+  }
+  return null
 }
 
 async function uploadToSupabase(

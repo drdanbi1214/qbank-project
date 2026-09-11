@@ -753,10 +753,16 @@
     print-color-adjust: exact;
   }
 
-  /* 위의 a 규칙이 본문 링크 색까지 검게 덮지 않도록, 이 문서 안에서는 둘레 색을
-     따르게 둔다. */
+  /*
+   * PDF 로 저장하면 <a> 가 클릭할 수 있는 링크로 함께 구워진다. 상대 경로도
+   * 사이트 주소로 바뀌어 들어가므로, '강의록 보기'·'전체 보기' 를 눌러 원본으로
+   * 갈 수 있다. 다만 위의 a 규칙이 색과 밑줄을 지워 링크인지 알 수 없었다.
+   * 이 문서 안에서는 둘레 색을 따르되 밑줄은 남겨 눌러 볼 수 있음을 알린다.
+   */
   [data-print-doc] a {
     color: inherit !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px;
   }
 
   .rich-text pre {
