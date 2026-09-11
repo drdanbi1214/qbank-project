@@ -1,5 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom'
-import { withReturnTo } from '@/lib/learningNavigation'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { useData } from '@/lib/data'
 
@@ -17,7 +16,6 @@ export function LinkedQuestionCard({
   stem: string | null
 }) {
   const navigate = useNavigate()
-  const { pathname, search } = useLocation()
   const { taxonomy } = useData()
   const unitName = unitId ? (taxonomy?.unitById.get(unitId)?.name ?? null) : null
 
@@ -34,7 +32,7 @@ export function LinkedQuestionCard({
         size="sm"
         variant="secondary"
         className="shrink-0"
-        onClick={() => navigate(withReturnTo(`/solve?question=${questionId}`, `${pathname}${search}`))}
+        onClick={() => navigate(`/solve?question=${questionId}`)}
       >
         문제보기
       </Button>
