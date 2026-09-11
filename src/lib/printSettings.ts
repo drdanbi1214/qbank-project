@@ -43,7 +43,7 @@ export const PRINT_SETTINGS_RANGE = {
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   layout: 'stack',
   landscape: false,
-  margin: 15,
+  margin: 11,
   scale: 1,
   leading: 1,
   splitRatio: 50,
