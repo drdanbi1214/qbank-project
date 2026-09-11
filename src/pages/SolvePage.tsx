@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { QuestionView } from '@/components/question/QuestionView'
-import { safeReturnTo, sessionReturnTo } from '@/lib/learningNavigation'
+import { safeReturnTo, sessionReturnTo, withReturnTo } from '@/lib/learningNavigation'
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import {
   fetchBookmarked,
@@ -14,7 +15,7 @@ import {
   type SolveQuestion,
 } from '@/lib/queries/questions'
 import { collapseIdentical, fetchCollapseSetting } from '@/lib/queries/clusters'
-import { fetchSession, startSession, updateSessionOrder, updateSessionProgress } from '@/lib/queries/study'
+import { fetchSession, finishSession, startSession, updateSessionOrder, updateSessionProgress } from '@/lib/queries/study'
 import { examShortLabel } from '@/lib/queries/taxonomy'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
@@ -70,6 +71,11 @@ function SolveWorkspace() {
   } | null>(null)
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null)
   const [loadNonce, setLoadNonce] = useState(0)
+  const [outcomes, setOutcomes] = useState<Record<string, boolean | null>>({})
+  const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  const [completed, setCompleted] = useState(false)
+  const [completing, setCompleting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set())
   const [setCache, setSetCache] = useState<{ id: string; value: QuestionSet | null } | null>(null)
   /** 범위 진입으로 새로 만든 세션. 진행 위치를 여기에 기록한다. */
@@ -242,16 +248,72 @@ function SolveWorkspace() {
     return '/study'
   }, [explicitReturnTo, loaded?.returnTo, unitId, examId, subjectId, taxonomy])
 
-  const handleAnswered = useCallback(() => {
+  const handleAnswered = useCallback((id: string, isCorrect: boolean | null) => {
+    setOutcomes((prev) => ({ ...prev, [id]: isCorrect }))
+    setSkipped((prev) => { const next = new Set(prev); next.delete(id); return next })
     refreshProgress()
   }, [refreshProgress])
+
+  async function complete() {
+    if (completing) return
+    setCompleting(true)
+    setActionError(null)
+    try {
+      const tracking = sessionId ?? trackedSession.current
+      if (tracking) await finishSession(tracking)
+      setCompleted(true)
+      window.scrollTo({ top: 0 })
+    } catch {
+      setActionError('학습 완료 상태를 저장하지 못했습니다. 다시 시도해주세요.')
+    } finally { setCompleting(false) }
+  }
+
+  function skip() {
+    if (!current) return
+    setSkipped((prev) => new Set(prev).add(current.id))
+    if (index < questions.length - 1) goTo(index + 1)
+    else void complete()
+  }
+
+  async function review(ids: string[]) {
+    if (!ids.length || completing) return
+    setCompleting(true)
+    setActionError(null)
+    try {
+      const id = await startSession({ userId, mode: 'sequential', scope: { return_to: exitTo }, questionIds: ids })
+      navigate(withReturnTo(`/solve?session=${id}`, exitTo))
+    } catch { setActionError('복습을 시작하지 못했습니다. 다시 시도해주세요.') }
+    finally { setCompleting(false) }
+  }
+  const wrongIds = questions.filter((q) => outcomes[q.id] === false).map((q) => q.id)
+  const skippedIds = questions.filter((q) => skipped.has(q.id)).map((q) => q.id)
+  const correctCount = Object.values(outcomes).filter((value) => value === true).length
+  const ungradedCount = Object.values(outcomes).filter((value) => value === null).length
+
 
   return (
     <div className="min-h-dvh bg-slate-50 dark:bg-slate-950">
       <Header />
 
       <main className="mx-auto max-w-3xl px-3 pt-4 sm:px-4">
-        {loading ? (
+        {actionError && <p role="alert" className="mb-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{actionError}</p>}
+        {completed ? (
+          <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+            <h1 className="text-xl font-bold">학습을 마쳤습니다</h1>
+            <p className="mt-2 text-sm text-slate-500">이번에 이 화면에서 채점한 결과입니다. 정답만 본 문제는 채점에 포함하지 않습니다.</p>
+            <dl className="my-5 grid grid-cols-3 gap-3 text-center">
+              <div><dt>정답</dt><dd className="text-2xl font-bold text-sky-600">{correctCount}</dd></div>
+              <div><dt>오답</dt><dd className="text-2xl font-bold text-rose-600">{wrongIds.length}</dd></div>
+              <div><dt>건너뜀</dt><dd className="text-2xl font-bold">{skippedIds.length}</dd></div>
+            </dl>
+            <p className="mb-4 text-sm text-slate-500">전체 {questions.length}문제 · 채점 {Object.keys(outcomes).length}문제{ungradedCount > 0 && ` (정답 미확정 ${ungradedCount}문제 포함)`}</p>
+            <div className="flex flex-wrap gap-2">
+              {wrongIds.length > 0 && <Button disabled={completing} onClick={() => void review(wrongIds)}>오답 {wrongIds.length}문제 다시 풀기</Button>}
+              {skippedIds.length > 0 && <Button variant="secondary" disabled={completing} onClick={() => void review(skippedIds)}>건너뛴 {skippedIds.length}문제 풀기</Button>}
+              <Button variant="secondary" onClick={() => navigate(exitTo)}>목록으로 돌아가기</Button>
+            </div>
+          </section>
+        ) : loading ? (
           <div className="flex justify-center py-20">
             <Spinner className="h-7 w-7" />
           </div>
@@ -267,6 +329,8 @@ function SolveWorkspace() {
             </p>
           </div>
         ) : (
+          <>
+          {skippedIds.length > 0 && <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><span>건너뛴 문제 {skippedIds.length}개</span><Button size="sm" variant="secondary" disabled={completing} onClick={() => goTo(questions.findIndex((q) => q.id === skippedIds[0]))}>돌아가서 풀기</Button></div>}
           <QuestionView
             key={current.id}
             question={current}
@@ -287,12 +351,16 @@ function SolveWorkspace() {
             onPrev={index > 0 ? () => goTo(index - 1) : undefined}
             onNext={index < questions.length - 1 ? () => goTo(index + 1) : undefined}
             onShuffle={questions.length > 1 ? shuffle : undefined}
+            onSkip={skip}
+            onComplete={() => void complete()}
+            completing={completing}
             onJumpTo={questions.length > 1 ? goTo : undefined}
             autoReveal={autoReveal}
             autoWrite={autoWrite}
             onExit={() => navigate(exitTo)}
             onAnswered={handleAnswered}
           />
+          </>
         )}
       </main>
     </div>

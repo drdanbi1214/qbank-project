@@ -58,6 +58,9 @@ type Props = {
   onBookmarkChange: (next: boolean) => void
   onPrev?: () => void
   onNext?: () => void
+  onSkip?: () => void
+  onComplete?: () => void
+  completing?: boolean
   /** 남은 문제 순서를 무작위로 섞는다. 여러 문제를 순서대로 푸는 세션에서만 넘긴다. */
   onShuffle?: () => void
   /** 번호(1-based)를 직접 입력해 이동한다. 0-based index 로 넘겨준다. */
@@ -84,6 +87,9 @@ export function QuestionView({
   onBookmarkChange,
   onPrev,
   onNext,
+  onSkip,
+  onComplete,
+  completing = false,
   onShuffle,
   onJumpTo,
   onExit,
@@ -249,8 +255,8 @@ export function QuestionView({
     }
   }, [selected, busy, elapsedSec, question.id, onAnswered, findPreferredSolutionTab])
 
-  /** 스킵은 기록을 남기지 않고 정답만 공개한다. */
-  const handleSkip = useCallback(async () => {
+  /** 정답만 보기는 채점 기록을 남기지 않는다. */
+  const handleReveal = useCallback(async () => {
     if (busy) return
     setBusy(true)
     setError(null)
@@ -273,7 +279,7 @@ export function QuestionView({
   /**
    * 배정 화면에서 들어온 경우 정답을 자동으로 연다.
    *
-   * handleSkip 을 타이머로 부르지 않는 이유가 있다. StrictMode 는 개발 중에
+   * handleReveal 을 타이머로 부르지 않는 이유가 있다. StrictMode 는 개발 중에
    * 효과를 마운트-정리-마운트 로 두 번 돌리는데, 정리 단계에서 타이머가 취소되고
    * 재실행 때는 중복 방지 플래그에 막혀 영영 실행되지 않았다.
    * 여기서 직접 조회하면 두 번 실행돼도 같은 결과라 안전하다.
@@ -356,7 +362,7 @@ export function QuestionView({
   }, [revealed, isCorrect, answer])
 
   return (
-    <article className="pb-28 lg:pb-8">
+    <article className="pb-40 lg:pb-8">
       {/* 상단 바 */}
       <header className="mb-4 border-b border-slate-200 pb-3 dark:border-slate-800">
         <div className="flex items-start justify-between gap-3">
@@ -385,8 +391,8 @@ export function QuestionView({
                 className="mr-1 hidden text-sm tabular-nums text-slate-500 sm:inline dark:text-slate-400"
               />
             )}
-            <IconButton label="이전 문제" icon="chevron-right" onClick={onPrev} flip disabled={!onPrev} />
-            <IconButton label="다음 문제" icon="chevron-right" onClick={onNext} disabled={!onNext} />
+            <IconButton label="이전 문제" icon="chevron-right" onClick={onPrev} flip disabled={!onPrev || busy || completing} />
+            <IconButton label="다음 문제" icon="chevron-right" onClick={onNext} disabled={!onNext || busy || completing} />
             {onShuffle && <IconButton label="순서 섞기" icon="shuffle" onClick={onShuffle} />}
             <IconButton
               label={bookmarked ? '북마크 해제' : '북마크'}
@@ -471,7 +477,7 @@ export function QuestionView({
             answer={answer}
             graded={graded}
             busy={busy}
-            onReveal={() => void handleSkip()}
+            onReveal={() => void handleReveal()}
             onGrade={(grade) => void handleSelfGrade(grade)}
           />
         ) : (
@@ -590,13 +596,15 @@ export function QuestionView({
         className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur lg:static lg:mt-6 lg:border-0 lg:bg-transparent lg:px-0 lg:backdrop-blur-none dark:border-slate-800 dark:bg-slate-950/95 lg:dark:bg-transparent"
         style={{ paddingBottom: 'calc(0.5rem + var(--safe-bottom))' }}
       >
-        <div className="mx-auto flex max-w-3xl items-center gap-2">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2">
+          {!revealed && isEssay && onSkip && <Button variant="secondary" onClick={onSkip} disabled={busy || completing}>건너뛰기</Button>}
           {!revealed && !isEssay && (
             <>
-              <Button variant="secondary" onClick={() => void handleSkip()} disabled={busy}>
-                스킵
+              {onSkip && <Button variant="secondary" onClick={onSkip} disabled={busy || completing}>건너뛰기</Button>}
+              <Button variant="secondary" onClick={() => void handleReveal()} disabled={busy || completing}>
+                정답만 보기
               </Button>
-              <Button block size="lg" onClick={() => void handleSubmit()} disabled={!canSubmit || busy}>
+              <Button block size="lg" onClick={() => void handleSubmit()} disabled={!canSubmit || busy || completing}>
                 {busy && <Spinner className="h-4 w-4 border-white/40 border-t-white" />}
                 정답 확인
               </Button>
@@ -604,8 +612,8 @@ export function QuestionView({
           )}
 
           {revealed && (
-            <Button block size="lg" onClick={onNext} disabled={!onNext}>
-              {onNext ? '다음 문제' : '마지막 문제입니다'}
+            <Button block size="lg" onClick={onNext ?? onComplete ?? onExit} disabled={busy || completing}>
+              {completing ? '저장 중…' : onNext ? '다음 문제' : '학습 완료'}
             </Button>
           )}
         </div>
