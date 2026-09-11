@@ -645,6 +645,45 @@
 }
 
 /*
+ * 문단 사이 여백.
+ *
+ * 줄 간격을 줄여도 풀이 부피가 잘 안 줄던 까닭이다. 줄 간격은 글자를 따라
+ * 줄었지만 문단과 문단 사이는 rem 으로 굳어 있었다. 풀이는 짧은 문단이 여러 개
+ * 이어지는 일이 많아, 그 여백이 부피의 대부분을 차지한다.
+ *
+ * em 으로 바꿔 글자 크기를 따라가게 하고, 줄 간격 손잡이도 같이 받게 한다.
+ * 아래 값들은 배율 100% 에서 지금까지와 똑같은 여백이 되도록 맞췄다.
+ */
+[data-print-doc] .rich-text > * + * {
+  margin-top: calc(0.8em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text.solution-rich-text > * + * {
+  margin-top: calc(0.53em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text.topic-solution-rich-text > * + * {
+  margin-top: calc(0.15em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text :is(h1, h3) {
+  margin-top: calc(1em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text h2 {
+  margin-top: calc(1em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text h4 {
+  margin-top: calc(1.07em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text :is(ul, ol) > li + li {
+  margin-top: calc(0.27em * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text .footnote-list {
+  margin-top: calc(1.07em * var(--print-leading, 1));
+}
+/* 지문도 같은 규칙을 탄다. 문제 쪽만 촘촘해지면 두 단의 높이가 어긋난다. */
+[data-print-doc] .space-y-1 > * + * {
+  margin-top: calc(0.27em * var(--print-leading, 1));
+}
+
+/*
  * 문제에 넣은 사진은 본문 폭을 꽉 채운다. 화면에서는 그래야 잘 보이지만,
  * 종이에서는 사진 하나가 한 쪽을 다 먹어 문제와 풀이가 갈라진다. 내보내기
  * 문서 안에서만 너비를 줄인다. 높이는 비율을 지켜 따라 줄어든다.
