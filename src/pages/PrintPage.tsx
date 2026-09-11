@@ -978,7 +978,9 @@ export function PrintPage() {
               '--print-pad-y': `${Math.max(12, margin)}mm`,
               '--print-scale': scale,
               '--print-leading': leading,
-              '--print-image-width': imageWidth,
+              // 단위가 없는 숫자를 calc()로 조합하면 인쇄 미리보기 엔진에 따라
+              // 선언 전체가 무효가 될 수 있다. 완성된 백분율 값을 넘긴다.
+              '--print-image-width': `${imageWidth}%`,
             } as CSSProperties
           }
           className={cn(

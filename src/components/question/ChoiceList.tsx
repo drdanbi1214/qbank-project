@@ -212,6 +212,7 @@ function ChoiceImage({ url, no }: { url: string; no: number }) {
   }
   return (
     <img
+      data-print-media-frame=""
       src={src}
       alt={`보기 ${no}`}
       loading="lazy"

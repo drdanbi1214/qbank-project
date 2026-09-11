@@ -781,12 +781,12 @@
 }
 
 /*
- * 문제에 넣은 사진은 본문 폭을 꽉 채운다. 화면에서는 그래야 잘 보이지만,
- * 종이에서는 사진 하나가 한 쪽을 다 먹어 문제와 풀이가 갈라진다. 내보내기
- * 문서 안에서만 너비를 줄인다. 높이는 비율을 지켜 따라 줄어든다.
+ * 문제 사진, 본문/알렌 이미지, 강의록 쪽, 보기 이미지를 모두 같은 설정으로
+ * 제한한다. 이미지 자체가 아니라 캡션·필기까지 포함한 프레임을 줄여야
+ * 강의록과 잘라낸 본문 이미지도 함께 축소된다.
  */
-[data-print-doc] img[data-stem-image] {
-  max-width: calc(1% * var(--print-image-width, 70));
+[data-print-doc] [data-print-media-frame] {
+  max-width: var(--print-image-width, 70%) !important;
   margin-inline: auto;
 }
 

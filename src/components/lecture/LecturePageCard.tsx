@@ -136,6 +136,7 @@ export function LecturePageCard({
   return (
     <>
       <figure
+        data-print-media-frame=""
         ref={frame}
         className={cn(
           'overflow-hidden rounded-xl border bg-white dark:bg-slate-900',

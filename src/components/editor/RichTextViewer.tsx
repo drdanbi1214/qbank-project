@@ -462,6 +462,7 @@ function ViewerImage({
 
   return (
     <button
+      data-print-media-frame=""
       type="button"
       onClick={() => onZoom(src)}
       // 폭만 박아 두면 좁은 칸(내보내기 2단 등)에서 넘친다. 넘치면 종이보다
