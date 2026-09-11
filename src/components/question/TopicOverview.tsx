@@ -3,7 +3,6 @@ import { Spinner } from '@/components/ui/Spinner'
 import type { Unit } from '@/lib/queries/taxonomy'
 import type { Topic } from '@/lib/queries/topics'
 import { formatShortDate } from '@/utils/date'
-import { cn } from '@/utils/cn'
 
 type Props = {
   /** 아직 받아오는 중이면 null */
@@ -27,8 +26,16 @@ const NO_UNIT = ''
  * 하나를 고르면 그 자리에 글이 들어서고 목차는 왼쪽에만 남는다.
  */
 export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
+  if (topics === null) {
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner />
+      </div>
+    )
+  }
+
   const byUnit = new Map<string, Topic[]>()
-  for (const row of topics ?? []) {
+  for (const row of topics) {
     const key = row.unitId ?? NO_UNIT
     const bucket = byUnit.get(key)
     if (bucket) bucket.push(row)
@@ -46,14 +53,6 @@ export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
   }))
   const loose = byUnit.get(NO_UNIT)
   if (loose) groups.push({ key: NO_UNIT, name: '단원 없음', rows: loose })
-
-  if (topics === null) {
-    return (
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
-    )
-  }
 
   if (groups.length === 0) {
     return (
@@ -105,10 +104,7 @@ export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
                   <li key={row.id}>
                     <Link
                       to={`/topics/${subjectId}/${row.id}`}
-                      className={cn(
-                        'flex items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
-                        'text-slate-700 hover:bg-sky-50 hover:text-sky-800 dark:text-slate-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-200',
-                      )}
+                      className="flex items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-sky-50 hover:text-sky-800 dark:text-slate-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-200"
                     >
                       <span className="min-w-0 flex-1 truncate font-medium">{row.title}</span>
                       <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">

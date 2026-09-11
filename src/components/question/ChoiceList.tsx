@@ -55,6 +55,18 @@ export function ChoiceList({
         const inYama = revealed?.yamaAnswer?.includes(choice.no) ?? false
         // 내가 고른 오답만 X 로 표시한다. 고르지 않은 오답은 건드리지 않는다.
         const isMyWrong = revealed !== null && isSelected && !isAnswer
+        // 내가 틀리게 고른 것이 먼저다. 편집자답에 밀린 야마답이면서 동시에 내가
+        // 고른 선지일 수 있는데, 그때는 틀렸다는 사실이 더 중요하다.
+        const rowTone =
+          revealed === null
+            ? null
+            : isAnswer
+              ? 'bg-brand-50 dark:bg-brand-900/30'
+              : isMyWrong
+                ? 'bg-rose-50 dark:bg-rose-950/30'
+                : inYama
+                  ? 'bg-amber-50 dark:bg-amber-950/30'
+                  : null
 
         return (
           <li key={choice.no}>
@@ -68,11 +80,9 @@ export function ChoiceList({
                 compact ? 'py-1' : 'py-2',
                 locked ? 'cursor-default' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
                 // 글자 색만 바꾸면 선지가 여럿일 때 어느 줄이 정답인지 한눈에
-                // 들어오지 않는다. 채점 뒤에는 줄 전체를 칠한다.
-                revealed !== null && isAnswer && 'bg-brand-50 dark:bg-brand-900/30',
-                // 편집자답이 따로 있어 채점 기준에서 밀린 야마답도 표는 낸다.
-                revealed !== null && !isAnswer && inYama && 'bg-amber-50 dark:bg-amber-950/30',
-                isMyWrong && 'bg-rose-50 dark:bg-rose-950/30',
+                // 들어오지 않는다. 채점 뒤에는 줄 전체를 칠한다. cn 은 클래스를
+                // 이어 붙이기만 하므로, 배경은 반드시 하나만 나오게 갈라 둔다.
+                rowTone,
               )}
             >
               <Indicator

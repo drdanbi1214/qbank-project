@@ -404,6 +404,7 @@ function QuestionCard({
   const [selectedChoices, setSelectedChoices] = useState<number[]>([])
   const [answer, setAnswer] = useState<AnswerPayload | null>(null)
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const [graded, setGraded] = useState(false)
   const [grading, setGrading] = useState(false)
   const [gradeError, setGradeError] = useState<string | null>(null)
   const [authoringYamaAnswer, setAuthoringYamaAnswer] = useState<number[] | null>(null)
@@ -430,27 +431,30 @@ function QuestionCard({
     }
   }, [interactive, questionId])
 
-  // '풀이 바로 보기' 는 채점 기록을 남기지 않고 정답만 받아온다. 예전에는
-  // showSolution 만 올려서, answer 가 없는 채로 정답 표시가 하나도 없는 목록이
-  // 그려졌다.
-  const [revealing, setRevealing] = useState(false)
-  const reveal = useCallback(async () => {
-    if (revealing || answer) {
-      setShowSolution(true)
-      return
+  // 해설이 펼쳐졌는데 정답이 아직 없으면 받아온다. '풀이 바로 보기' 를 눌렀을
+  // 때와, '풀이 한번에 보기' 로 들어와 처음부터 펼쳐진 채 시작할 때가 모두 여기로
+  // 온다. 예전에는 둘 다 showSolution 만 올려서, 정답 표시가 하나도 없는 선지
+  // 목록이 그려졌다. 채점 기록은 남기지 않는다.
+  //
+  // '문제 먼저 보기' 에서는 풀기 전까지 showSolution 이 false 라 여기 오지 않는다.
+  // 정답을 미리 요청하지 않는다는 규칙은 그대로다.
+  const [revealError, setRevealError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!interactive || !showSolution || answer) return
+    let active = true
+    void revealAnswer(questionId)
+      .then((revealed) => {
+        if (!active) return
+        setAnswer(revealed)
+        setRevealError(null)
+      })
+      .catch((caught: unknown) => {
+        if (active) setRevealError(messageOf(caught, '정답을 불러오지 못했습니다.'))
+      })
+    return () => {
+      active = false
     }
-    setRevealing(true)
-    setGradeError(null)
-    try {
-      const revealed = await revealAnswer(questionId)
-      setAnswer(revealed)
-      setShowSolution(true)
-    } catch (caught) {
-      setGradeError(caught instanceof Error ? caught.message : '정답을 불러오지 못했습니다.')
-    } finally {
-      setRevealing(false)
-    }
-  }, [answer, questionId, revealing])
+  }, [interactive, showSolution, answer, questionId])
 
   const grade = useCallback(async () => {
     if (selectedChoices.length === 0 || grading) return
@@ -464,6 +468,7 @@ function QuestionCard({
       })
       setAnswer(result.answer)
       setIsCorrect(result.isCorrect)
+      setGraded(true)
       setShowSolution(true)
       refreshProgress()
     } catch (caught) {
@@ -594,16 +599,21 @@ function QuestionCard({
           </button>
           <button
             type="button"
-            onClick={() => void reveal()}
-            disabled={revealing}
-            className="px-1 py-1.5 text-xs text-slate-500 hover:text-sky-700 disabled:opacity-40 dark:text-slate-400 dark:hover:text-sky-300"
+            onClick={() => setShowSolution(true)}
+            className="px-1 py-1.5 text-xs text-slate-500 hover:text-sky-700 dark:text-slate-400 dark:hover:text-sky-300"
           >
-            {revealing ? '불러오는 중…' : '풀이 바로 보기'}
+            풀이 바로 보기
           </button>
           {gradeError && (
             <span className="text-xs text-rose-600 dark:text-rose-400">{gradeError}</span>
           )}
         </div>
+      )}
+
+      {interactive && showSolution && !answer && revealError && (
+        <p role="alert" className="mt-2.5 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+          {revealError}
+        </p>
       )}
 
       {interactive && showSolution && answer && (
@@ -621,7 +631,9 @@ function QuestionCard({
             ? `정답입니다 · ${formatAnswer(effectiveAnswer(answer))}`
             : isCorrect === false
               ? `오답입니다 · 정답 ${formatAnswer(effectiveAnswer(answer))}`
-              : `채점되었습니다 · 정답 ${formatAnswer(effectiveAnswer(answer))}`}
+              : graded
+                ? `채점되었습니다 · 정답 ${formatAnswer(effectiveAnswer(answer))}`
+                : `정답 ${formatAnswer(effectiveAnswer(answer))}`}
         </p>
       )}
 
