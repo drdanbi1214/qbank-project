@@ -67,6 +67,12 @@ export function ChoiceList({
                 'flex w-full items-start gap-3 rounded-lg px-1 text-left transition-colors',
                 compact ? 'py-1' : 'py-2',
                 locked ? 'cursor-default' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                // 글자 색만 바꾸면 선지가 여럿일 때 어느 줄이 정답인지 한눈에
+                // 들어오지 않는다. 채점 뒤에는 줄 전체를 칠한다.
+                revealed !== null && isAnswer && 'bg-brand-50 dark:bg-brand-900/30',
+                // 편집자답이 따로 있어 채점 기준에서 밀린 야마답도 표는 낸다.
+                revealed !== null && !isAnswer && inYama && 'bg-amber-50 dark:bg-amber-950/30',
+                isMyWrong && 'bg-rose-50 dark:bg-rose-950/30',
               )}
             >
               <Indicator

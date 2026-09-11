@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon } from '@/components/ui/Icon'
 import { cn } from '@/utils/cn'
 
@@ -12,21 +12,31 @@ type Props = {
 }
 
 export function Modal({ title, onClose, children, wide, footer }: Props) {
-  // 열려 있는 동안 배경 스크롤을 막고 Esc 로 닫는다.
+  // onClose 는 호출부에서 대부분 인라인 화살표 함수라 렌더마다 새 함수다. 잠금
+  // effect 가 여기에 딸려 있으면 렌더마다 정리와 실행이 번갈아 돌면서, 되돌릴
+  // 값으로 들고 있던 previous 가 직전 실행이 넣은 'hidden' 으로 덮인다. 그러면
+  // 모달을 닫은 뒤에도 body 가 hidden 으로 남아 페이지 전체가 스크롤되지 않는다.
+  // 잠금은 열리고 닫힐 때 한 번씩만 해야 하므로 Esc 처리와 분리한다.
   useEffect(() => {
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-
     return () => {
       document.body.style.overflow = previous
-      window.removeEventListener('keydown', onKeyDown)
     }
+  }, [])
+
+  // Esc 는 최신 onClose 를 불러야 하니 ref 로 받아 effect 를 다시 걸지 않는다.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
   }, [onClose])
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onCloseRef.current()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   return (
     <div

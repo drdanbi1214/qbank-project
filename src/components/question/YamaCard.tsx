@@ -430,6 +430,28 @@ function QuestionCard({
     }
   }, [interactive, questionId])
 
+  // '풀이 바로 보기' 는 채점 기록을 남기지 않고 정답만 받아온다. 예전에는
+  // showSolution 만 올려서, answer 가 없는 채로 정답 표시가 하나도 없는 목록이
+  // 그려졌다.
+  const [revealing, setRevealing] = useState(false)
+  const reveal = useCallback(async () => {
+    if (revealing || answer) {
+      setShowSolution(true)
+      return
+    }
+    setRevealing(true)
+    setGradeError(null)
+    try {
+      const revealed = await revealAnswer(questionId)
+      setAnswer(revealed)
+      setShowSolution(true)
+    } catch (caught) {
+      setGradeError(caught instanceof Error ? caught.message : '정답을 불러오지 못했습니다.')
+    } finally {
+      setRevealing(false)
+    }
+  }, [answer, questionId, revealing])
+
   const grade = useCallback(async () => {
     if (selectedChoices.length === 0 || grading) return
     setGrading(true)
@@ -524,7 +546,7 @@ function QuestionCard({
       <div>
         <StemBlocks blocks={stemBlocks} compact />
       </div>
-      {interactive && (!showSolution || answer) ? (
+      {interactive ? (
         <div className="mt-1.5 text-sm">
           <ChoiceList
             choices={choices}
@@ -572,10 +594,11 @@ function QuestionCard({
           </button>
           <button
             type="button"
-            onClick={() => setShowSolution(true)}
-            className="px-1 py-1.5 text-xs text-slate-500 hover:text-sky-700 dark:text-slate-400 dark:hover:text-sky-300"
+            onClick={() => void reveal()}
+            disabled={revealing}
+            className="px-1 py-1.5 text-xs text-slate-500 hover:text-sky-700 disabled:opacity-40 dark:text-slate-400 dark:hover:text-sky-300"
           >
-            풀이 바로 보기
+            {revealing ? '불러오는 중…' : '풀이 바로 보기'}
           </button>
           {gradeError && (
             <span className="text-xs text-rose-600 dark:text-rose-400">{gradeError}</span>
