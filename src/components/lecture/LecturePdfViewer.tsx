@@ -225,10 +225,13 @@ function PdfPage({
   onMarksChange,
   onAnnotationInteract,
   onViewportPage,
+  defaultRatio,
 }: {
   document: PDFDocumentProxy
   pageNumber: number
   width: number
+  /** 아직 안 그린 쪽이 자리를 잡을 때 쓰는 세로/가로 비율 */
+  defaultRatio: number
   searchQuery: string
   activeSearchPage: boolean
   activeSearchOccurrence: number | null
@@ -252,7 +255,12 @@ function PdfPage({
   const latestSearchQuery = useRef(searchQuery)
   const latestActiveOccurrence = useRef<number | null>(null)
   const [visible, setVisible] = useState(false)
-  const [ratio, setRatio] = useState(1.414) // A4 세로 비율. 실제 크기를 알기 전 자리만 잡는다.
+  // 아직 안 그린 쪽은 자리만 잡아 둔다. 이 비율이 실제와 다르면 위쪽 쪽들이
+  // 그려지면서 높이가 바뀌고, 쪽 이동으로 잡아 둔 스크롤 위치가 통째로
+  // 어긋난다. 그래서 문서에서 잰 비율을 받아 쓰고, 자기 쪽을 그린 뒤에는
+  // 잰 값으로 바꾼다.
+  const [measuredRatio, setMeasuredRatio] = useState<number | null>(null)
+  const ratio = measuredRatio ?? defaultRatio
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle')
 
   async function copyPage() {
@@ -320,7 +328,7 @@ function PdfPage({
       if (cancelled) return
 
       const base = page.getViewport({ scale: 1 })
-      if (!cancelled) setRatio(base.height / base.width)
+      if (!cancelled) setMeasuredRatio(base.height / base.width)
 
       // 화면 배율만큼 키워 그려야 글자가 또렷하다. 다만 브라우저마다 캔버스
       // 최대 넓이가 있어서(특히 iOS 사파리) 그 선을 넘으면 그리기가 통째로
@@ -764,9 +772,48 @@ export function LecturePdfViewer({
     [searchHits],
   )
 
+  // 강의록은 거의 전부 가로 슬라이드인데 자리표시자는 A4 세로로 잡혀 있었다.
+  // 쪽마다 크기가 다른 문서는 드물어, 첫 쪽을 재서 기본값으로 쓰면 아직 안 그린
+  // 쪽들도 실제와 비슷한 높이를 차지한다. 그려야 알 수 있는 게 아니라 쪽 정보만
+  // 읽으면 되므로 값이 싸다.
+  const [defaultRatio, setDefaultRatio] = useState(1.414)
+  useEffect(() => {
+    if (!document) return
+    let active = true
+    void document
+      .getPage(1)
+      .then((page) => {
+        const viewport = page.getViewport({ scale: 1 })
+        if (active && viewport.width > 0 && viewport.height > 0) {
+          setDefaultRatio(viewport.height / viewport.width)
+        }
+      })
+      .catch(() => {
+        // 못 재면 기본값 그대로 둔다. 자리만 어긋날 뿐 보기에는 지장이 없다.
+      })
+    return () => {
+      active = false
+    }
+  }, [document])
+
+  // 옮겨 간 뒤에도 위쪽 쪽들이 그려지면서 높이가 조금씩 바뀐다. 자리가 잡힐
+  // 때까지 두어 번 더 맞춘다. 새로 옮기면 이전 보정은 취소한다.
+  const scrollCorrections = useRef<number[]>([])
   const scrollToPage = useCallback((pageNumber: number) => {
-    const target = root.current?.querySelector(`[data-page="${pageNumber}"]`)
-    target?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    for (const timer of scrollCorrections.current) window.clearTimeout(timer)
+    const run = () => {
+      const target = root.current?.querySelector(`[data-page="${pageNumber}"]`)
+      target?.scrollIntoView({ block: 'start' })
+    }
+    run()
+    scrollCorrections.current = [
+      window.setTimeout(run, 120),
+      window.setTimeout(run, 400),
+    ]
+  }, [])
+
+  useEffect(() => () => {
+    for (const timer of scrollCorrections.current) window.clearTimeout(timer)
   }, [])
 
   const noteViewportPage = useCallback((pageNumber: number) => {
@@ -775,8 +822,11 @@ export function LecturePdfViewer({
 
   const goToPage = useCallback(() => {
     if (!document) return
-    const pageNumber = Number(pageInput)
-    if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > document.numPages) return
+    const typed = Number(pageInput.trim())
+    if (!Number.isFinite(typed) || pageInput.trim() === '') return
+    // 89쪽짜리에 200 을 넣었다고 아무 일도 안 일어나면 입력이 고장난 것처럼
+    // 보인다. 있는 쪽 중 가장 가까운 곳으로 데려간다.
+    const pageNumber = Math.min(Math.max(Math.round(typed), 1), document.numPages)
     setActiveAnnotationPage(pageNumber)
     scrollToPage(pageNumber)
     setPageInput('')
@@ -1015,11 +1065,15 @@ export function LecturePdfViewer({
               onChange={(event) => setPageInput(event.target.value)}
               placeholder={String(activeAnnotationPage ?? 1)}
               aria-label="이동할 쪽 번호"
-              className="h-8 w-14 rounded-md border border-slate-300 bg-white px-1.5 text-center text-xs outline-none focus:border-brand-500 dark:border-slate-600 dark:bg-slate-800"
+              title={`지금 ${activeAnnotationPage ?? 1}쪽. 갈 쪽 번호를 적으세요.`}
+              className="h-8 w-16 rounded-md border border-slate-300 bg-white px-1.5 text-center text-xs outline-none focus:border-brand-500 dark:border-slate-600 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="h-8 rounded-md border border-slate-300 px-2 text-xs font-medium hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+              // 회색 숫자는 지금 쪽을 알려 주는 자리글이지 값이 아니다. 비어 있는
+              // 채로 누르면 아무 일도 안 일어나 입력이 고장난 것처럼 보였다.
+              disabled={pageInput.trim() === ''}
+              className="h-8 rounded-md border border-slate-300 px-2 text-xs font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:border-slate-600 dark:hover:bg-slate-800"
             >
               이동
             </button>
@@ -1494,6 +1548,7 @@ export function LecturePdfViewer({
                 setActiveAnnotationPage(pageNumber)
               }}
               onViewportPage={noteViewportPage}
+              defaultRatio={defaultRatio}
               // 여러 낱말 중 일부만 있는 쪽은 결과가 아니므로 부분 강조도 하지 않는다.
               searchQuery={searchPageNumbers.has(pageNumber) ? searchQuery : ''}
               activeSearchPage={searchHits[activeResult]?.pageNumber === pageNumber}
