@@ -835,6 +835,21 @@
     display: none !important;
   }
 
+  /*
+   * 제목과 다단 목록이 별도 블록이면 Chrome 인쇄 엔진이 긴 다단 목록을 다음
+   * 용지부터 배치해 첫 장에 제목만 남길 수 있다. 두 블록 사이에서는 쪽을
+   * 넘기지 않게 해 첫 문항이 반드시 제목 바로 아래에서 시작하도록 한다.
+   */
+  [data-print-doc] > header {
+    page-break-after: avoid;
+    break-after: avoid-page;
+  }
+
+  [data-print-doc] .print-columns {
+    page-break-before: avoid;
+    break-before: avoid-page;
+  }
+
   @page {
     size: A4;
     margin: 15mm 12mm;
