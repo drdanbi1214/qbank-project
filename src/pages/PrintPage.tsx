@@ -5,6 +5,7 @@ import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import {
   fetchQuestions,
@@ -20,6 +21,12 @@ import { examShortLabel, examYearLabel } from '@/lib/queries/taxonomy'
 import { fetchBookmarkedQuestions, fetchWrongNotes } from '@/lib/queries/study'
 import { circled, formatAnswer, type AnswerPayload } from '@/types/question'
 import { type RichDoc } from '@/types/richtext'
+import {
+  DEFAULT_PRINT_SETTINGS,
+  parsePrintSettings,
+  printSettingsKey,
+  type PrintSettings,
+} from '@/lib/printSettings'
 import { cn } from '@/utils/cn'
 
 /**
@@ -39,7 +46,7 @@ const SENIOR_KEY = '__senior__'
 const PUBLIC_KEY = '__public__'
 
 /** 문제와 풀이를 지면에 어떻게 앉힐지. */
-type Layout = 'stack' | 'split' | 'separate'
+type Layout = PrintSettings['layout']
 
 const LAYOUT_LABEL: Record<Layout, string> = {
   stack: '세로형',
@@ -76,13 +83,37 @@ export function PrintPage() {
   const cohort = params.get('cohort')
 
   const [withAnswer, setWithAnswer] = useState(params.get('answer') !== '0')
-  const [layout, setLayout] = useState<Layout>('stack')
+  // 같은 모양으로 여러 번 뽑는 일이 많아 지난번 설정에서 시작한다. 저장이
+  // 막혀 있어도 기본값으로 열리기만 하면 되므로 조용히 넘어간다.
+  const { session } = useAuth()
+  const userId = session?.user.id ?? ''
+  const settingsKey = printSettingsKey(userId)
+  const [saved] = useState<PrintSettings>(() => {
+    try {
+      return parsePrintSettings(localStorage.getItem(printSettingsKey(userId)))
+    } catch {
+      return { ...DEFAULT_PRINT_SETTINGS }
+    }
+  })
+
+  const [layout, setLayout] = useState<Layout>(saved.layout)
   // 종이 설정. 화면의 미리보기와 실제 인쇄가 같은 값을 쓴다.
-  const [landscape, setLandscape] = useState(false)
-  const [margin, setMargin] = useState(12)
-  const [scale, setScale] = useState(1)
+  const [landscape, setLandscape] = useState(saved.landscape)
+  const [margin, setMargin] = useState(saved.margin)
+  const [scale, setScale] = useState(saved.scale)
   // 좌우 분할에서 문제가 차지하는 비율(%). 가운데 바를 끌어 바꾼다.
-  const [splitRatio, setSplitRatio] = useState(50)
+  const [splitRatio, setSplitRatio] = useState(saved.splitRatio)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        settingsKey,
+        JSON.stringify({ layout, landscape, margin, scale, splitRatio } satisfies PrintSettings),
+      )
+    } catch {
+      // 저장이 막혀 있어도 이번 판은 그대로 쓸 수 있다. 알릴 일은 아니다.
+    }
+  }, [settingsKey, layout, landscape, margin, scale, splitRatio])
   const solutionOffByDefault = params.get('solution') === '0'
 
   // 켜진 목록이 아니라 "끈 목록"을 들고 있다. 출처 목록은 조회가 끝나야
@@ -469,10 +500,10 @@ export function PrintPage() {
           <button
             type="button"
             onClick={() => {
-              setLandscape(false)
-              setMargin(12)
-              setScale(1)
-              setSplitRatio(50)
+              setLandscape(DEFAULT_PRINT_SETTINGS.landscape)
+              setMargin(DEFAULT_PRINT_SETTINGS.margin)
+              setScale(DEFAULT_PRINT_SETTINGS.scale)
+              setSplitRatio(DEFAULT_PRINT_SETTINGS.splitRatio)
             }}
             className="ml-auto text-sm text-slate-500 underline"
           >
