@@ -427,17 +427,14 @@ function ViewerImage({
   marks: PageMark[]
   onZoom: (src: string) => void
 }) {
-  const external = /^https?:\/\//i.test(path)
-  const { url: signedUrl, status, retry, onImageError } = useSignedUrlState(external ? null : path)
-  const src = external ? path : signedUrl
+  const { url: src, status, retry, onImageError } = useSignedUrlState(path)
   const [naturalSize, setNaturalSize] = useState<{ width: number; aspect: number } | null>(null)
-  const [failedExternal, setFailedExternal] = useState(false)
   const cropAspectRatio =
     crop && naturalSize ? crop.width / (crop.height * naturalSize.aspect) : null
   const cropReady = cropAspectRatio !== null ? crop : null
   const displayWidth = width ?? (crop ? imageWidthOf(naturalSize?.width) : null)
 
-  if ((!external && status === 'failed') || failedExternal) {
+  if (status === 'failed') {
     return (
       <div
         role="alert"
@@ -445,11 +442,9 @@ function ViewerImage({
         className="flex h-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-amber-300 text-sm text-amber-700 dark:border-amber-800 dark:text-amber-300"
       >
         본문 이미지를 불러오지 못했습니다.
-        {!external && (
-          <button type="button" onClick={retry} className="underline">
-            다시 불러오기
-          </button>
-        )}
+        <button type="button" onClick={retry} className="underline">
+          다시 불러오기
+        </button>
       </div>
     )
   }
@@ -510,8 +505,7 @@ function ViewerImage({
             // 서명은 받았는데 그림만 못 받는 일이 있다. 서명을 버리고 다시 받는다.
             onError={() => {
               setNaturalSize(null)
-              if (external) setFailedExternal(true)
-              else onImageError()
+              onImageError()
             }}
             onLoad={(event) => {
               const image = event.currentTarget

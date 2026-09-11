@@ -9,6 +9,7 @@ const SIGNED_TTL_SEC = 60 * 60
 const cache = new Map<string, { url: string; expiresAt: number }>()
 
 const STORAGE_PROVIDER = import.meta.env.VITE_STORAGE_PROVIDER ?? 'supabase'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '')
 const R2_GATEWAY_URL = import.meta.env.VITE_R2_GATEWAY_URL?.replace(/\/$/, '')
 const R2_CANARY_BUCKETS = new Set(
   (import.meta.env.VITE_R2_CANARY_BUCKETS ?? '').split(',').map((item) => item.trim()).filter(Boolean),
@@ -21,6 +22,44 @@ function parseStoragePath(storagePath: string): { bucket: string; path: string }
   const [bucket, ...rest] = storagePath.replace(/^\/+/, '').split('/')
   const path = rest.join('/')
   return bucket && path ? { bucket, path } : null
+}
+
+/**
+ * 예전 본문에 실수로 저장된 만료형 전체 URL을 영구 Storage 경로로 되돌린다.
+ *
+ * Supabase sign URL과 우리 R2 gateway URL은 몇 분~몇 시간 뒤 만료된다. 그것을
+ * 본문에 그대로 저장한 옛 자료는 새로고침해도 영원히 깨지므로, 알고 있는 두
+ * 저장소 주소만 역변환해 현재 계정 권한으로 새 서명을 받는다.
+ */
+function recoverStoredPath(value: string): string | null {
+  if (!/^https?:\/\//i.test(value)) return null
+
+  try {
+    const url = new URL(value)
+    const supabaseOrigin = SUPABASE_URL ? new URL(SUPABASE_URL).origin : null
+    const r2Origin = R2_GATEWAY_URL ? new URL(R2_GATEWAY_URL).origin : null
+    let encoded: string | null = null
+
+    if (supabaseOrigin && url.origin === supabaseOrigin) {
+      const match = /^\/storage\/v1\/object\/(?:sign|public|authenticated)\/(.+)$/.exec(
+        url.pathname,
+      )
+      encoded = match?.[1] ?? null
+    } else if (r2Origin && url.origin === r2Origin) {
+      const match = /^\/v1\/objects\/(.+)$/.exec(url.pathname)
+      encoded = match?.[1] ?? null
+    }
+    if (!encoded) return null
+
+    const decoded = encoded
+      .split('/')
+      .map((part) => decodeURIComponent(part))
+      .join('/')
+    const parsed = parseStoragePath(decoded)
+    return parsed ? `${parsed.bucket}/${parsed.path}` : null
+  } catch {
+    return null
+  }
 }
 
 function encodeStoragePath(storagePath: string): string {
@@ -96,7 +135,9 @@ export async function getSignedUrl(
   storagePath: string,
   options: { preferReadFallback?: boolean } = {},
 ): Promise<string | null> {
-  if (/^https?:\/\//.test(storagePath)) return storagePath
+  const recoveredPath = recoverStoredPath(storagePath)
+  const effectivePath = recoveredPath ?? storagePath
+  if (/^https?:\/\//.test(effectivePath)) return effectivePath
 
   // A signed URL is a bearer credential. Keep it scoped to the account that
   // passed the authorization check so a later login in the same tab cannot
@@ -108,7 +149,7 @@ export async function getSignedUrl(
   // Supabase 원본을 시도할 때 앞서 만든 R2 주소를 캐시에서 다시 꺼내지 않도록
   // 공급자까지 열쇠에 넣는다.
   const providerKey = options.preferReadFallback ? 'fallback' : 'primary'
-  const cacheKey = `${session.user.id}:${providerKey}:${storagePath}`
+  const cacheKey = `${session.user.id}:${providerKey}:${effectivePath}`
 
   const cached = cache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.url
@@ -117,7 +158,7 @@ export async function getSignedUrl(
   if (pending) return pending
 
   const task = signOnce(
-    storagePath,
+    effectivePath,
     session.access_token,
     cacheKey,
     options.preferReadFallback === true,
@@ -279,24 +320,25 @@ export type SignedUrlState = {
  * 안내를 하든 다시 받든 할 수 있다.
  */
 export function useSignedUrlState(storagePath: string | null | undefined): SignedUrlState {
+  const effectivePath = storagePath ? (recoverStoredPath(storagePath) ?? storagePath) : storagePath
   const [nonce, setNonce] = useState(0)
   // 경로와 함께 센다. 경로가 바뀌면 앞 그림의 실패 횟수를 물려받지 않는다.
   const [imageError, setImageError] = useState<{ path: string; count: number }>({
     path: '',
     count: 0,
   })
-  const errorCount = imageError.path === (storagePath ?? '') ? imageError.count : 0
+  const errorCount = imageError.path === (effectivePath ?? '') ? imageError.count : 0
   const [result, setResult] = useState<{ key: string; url: string | null } | null>(null)
   // 실패 횟수를 열쇠에 넣어 두면, 한 번 더 세는 것만으로 다시 서명하러 간다.
-  const key = `${nonce}:${errorCount}:${storagePath ?? ''}`
+  const key = `${nonce}:${errorCount}:${effectivePath ?? ''}`
 
   useEffect(() => {
-    if (!storagePath) return
+    if (!effectivePath) return
     let active = true
     // 기본 저장소에서 실제 이미지 GET이 실패한 뒤라면, 서명 요청의 성공 여부와
     // 무관하게 남아 있는 Supabase 원본을 먼저 읽는다. 예전에는 같은 R2 주소만
     // 반복 발급해 특정 강의록 쪽이 계속 깨진 그림으로 남았다.
-    getSignedUrl(storagePath, { preferReadFallback: errorCount > 0 })
+    getSignedUrl(effectivePath, { preferReadFallback: errorCount > 0 })
       .then((next) => {
         if (active) setResult({ key, url: next })
       })
@@ -308,26 +350,26 @@ export function useSignedUrlState(storagePath: string | null | undefined): Signe
     return () => {
       active = false
     }
-  }, [storagePath, key, errorCount])
+  }, [effectivePath, key, errorCount])
 
   const retry = useCallback(() => {
-    if (storagePath) invalidateSignedUrl(storagePath)
+    if (effectivePath) invalidateSignedUrl(effectivePath)
     setImageError({ path: '', count: 0 })
     setNonce((value) => value + 1)
-  }, [storagePath])
+  }, [effectivePath])
 
   const onImageError = useCallback(() => {
-    if (!storagePath) return
-    invalidateSignedUrl(storagePath)
+    if (!effectivePath) return
+    invalidateSignedUrl(effectivePath)
     setImageError((previous) =>
-      previous.path === storagePath
-        ? { path: storagePath, count: previous.count + 1 }
-        : { path: storagePath, count: 1 },
+      previous.path === effectivePath
+        ? { path: effectivePath, count: previous.count + 1 }
+        : { path: effectivePath, count: 1 },
     )
-  }, [storagePath])
+  }, [effectivePath])
 
   const settled = result?.key === key
-  if (!storagePath) return { url: null, status: 'idle', retry, onImageError }
+  if (!effectivePath) return { url: null, status: 'idle', retry, onImageError }
   // 되짚을 만큼 되짚었으면 깨진 그림 대신 안내를 내보낸다.
   if (errorCount > IMAGE_RETRY_LIMIT) {
     return { url: null, status: 'failed', retry, onImageError }
