@@ -62,7 +62,7 @@ test('단 설정이 없던 시절에 저장한 값도 그대로 열린다', () =
   // 이 기능이 생기기 전에 저장된 것에는 columns 가 없다. 1단으로 열려야 한다.
   const old = parsePrintSettings(JSON.stringify({ layout: 'split', margin: 8 }))
   assert.equal(old.columns, 1)
-  assert.equal(old.onePerColumn, true)
+  assert.equal(old.onePerColumn, false)
   assert.equal(old.columnRule, true)
   assert.equal(old.leading, 1)
   assert.equal(old.imageWidth, 70)

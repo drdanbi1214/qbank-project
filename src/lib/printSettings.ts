@@ -48,7 +48,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   splitRatio: 50,
   imageWidth: 70,
   columns: 1,
-  onePerColumn: true,
+  onePerColumn: false,
   columnRule: true,
 }
 
@@ -94,9 +94,9 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
     columns: Math.round(
       bounded(row.columns, columns.min, columns.max, DEFAULT_PRINT_SETTINGS.columns),
     ),
-    // 저장된 적이 없으면 켜 둔다. 2단을 고르는 까닭이 대개 문항마다 단을 나누는
-    // 것이라, 끄고 시작하면 무엇이 달라졌는지 알기 어렵다.
-    onePerColumn: row.onePerColumn !== false,
+    // 저장된 적이 없으면 꺼 둔다. 켜면 문항마다 단을 강제로 넘겨, 짧은 문항
+    // 뒤에 남는 자리가 통째로 빈다. 종이를 아끼는 쪽을 기본으로 둔다.
+    onePerColumn: row.onePerColumn === true,
     columnRule: row.columnRule !== false,
   }
 }

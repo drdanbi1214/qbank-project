@@ -561,6 +561,9 @@ export function PrintPage() {
                 onChange={(event) => setOnePerColumn(event.target.checked)}
               />
               문항마다 새 단에서 시작
+              <span className="text-slate-500">
+                (끄면 빈틈없이 이어 흐릅니다)
+              </span>
             </label>
           )}
 
