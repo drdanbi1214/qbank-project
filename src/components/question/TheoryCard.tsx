@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { Spinner } from '@/components/ui/Spinner'
-import { fetchTheoryDocuments, type TheoryDocument } from '@/lib/queries/theory'
+import { fetchTheoryDocumentById, type TheoryDocument } from '@/lib/queries/theory'
 import { richTextToPlain } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
@@ -24,33 +24,66 @@ type Props = {
  * 고쳐진 내용이 보인다.
  */
 export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
-  const [document, setDocument] = useState<TheoryDocument | null | 'missing'>(
-    documentId ? null : 'missing',
-  )
   const [open, setOpen] = useState(false)
+  const [nonce, setNonce] = useState(0)
+  // 못 불러온 것과 없는 것은 다르다. 예전에는 둘 다 '없음' 으로 뭉뚱그려, 조회가
+  // 실패했을 뿐인데 "열람 권한이 없습니다" 라고 잘못 알렸다.
+  const [result, setResult] = useState<{
+    key: string
+    document: TheoryDocument | null
+    failed: boolean
+  } | null>(null)
+  const key = `${nonce}:${documentId ?? ''}`
 
   useEffect(() => {
     if (!documentId) return
     let active = true
-    // 이론은 과목 단위로 받아 오는 API 뿐이라 전체에서 골라낸다. 495건 수준이라
-    // 감당할 만하고, 결과는 브라우저 캐시를 탄다.
-    void fetchTheoryDocuments()
-      .then((rows) => {
-        if (!active) return
-        setDocument(rows.find((row) => row.id === documentId) ?? 'missing')
+    fetchTheoryDocumentById(documentId)
+      .then((found) => {
+        if (active) setResult({ key, document: found, failed: false })
       })
       .catch(() => {
-        if (active) setDocument('missing')
+        if (active) setResult({ key, document: null, failed: true })
       })
     return () => {
       active = false
     }
-  }, [documentId])
+  }, [documentId, key])
+
+  const settled = result?.key === key
+  const document: TheoryDocument | null | 'missing' | 'failed' = !documentId
+    ? 'missing'
+    : !settled
+      ? null
+      : result.failed
+        ? 'failed'
+        : (result.document ?? 'missing')
 
   if (document === null) {
     return (
       <div className="flex h-14 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
         <Spinner className="h-4 w-4" />
+      </div>
+    )
+  }
+
+  if (document === 'failed') {
+    return (
+      <div
+        role="alert"
+        className={cn(
+          'rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
+          selected && 'ring-2 ring-brand-500',
+        )}
+      >
+        알렌 문서를 불러오지 못했습니다.
+        <button
+          type="button"
+          onClick={() => setNonce((value) => value + 1)}
+          className="ml-2 underline"
+        >
+          다시 불러오기
+        </button>
       </div>
     )
   }

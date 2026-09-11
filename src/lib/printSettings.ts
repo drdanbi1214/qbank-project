@@ -28,7 +28,8 @@ export type PrintSettings = {
 }
 
 export const PRINT_SETTINGS_RANGE = {
-  margin: { min: 5, max: 30 },
+  // 5mm 는 종이 가장자리에 글이 닿아 잘려 나온다. 8mm 아래로는 내리지 않는다.
+  margin: { min: 8, max: 30 },
   scale: { min: 0.7, max: 1.5 },
   leading: { min: 0.75, max: 1.3 },
   splitRatio: { min: 20, max: 80 },
@@ -38,7 +39,7 @@ export const PRINT_SETTINGS_RANGE = {
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   layout: 'stack',
   landscape: false,
-  margin: 12,
+  margin: 15,
   scale: 1,
   leading: 1,
   splitRatio: 50,

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
-import { useSignedUrl } from '@/lib/storage'
+import { useSignedUrlState } from '@/lib/storage'
 import type { StemBlock } from '@/types/question'
 import { cn } from '@/utils/cn'
 
@@ -252,7 +252,23 @@ function StemImage({
   marks: RenderMark[]
   onZoom: (src: string) => void
 }) {
-  const src = useSignedUrl(url)
+  const { url: src, status, retry } = useSignedUrlState(url)
+
+  // 실패와 받는 중을 갈라야 한다. 예전에는 둘 다 같은 문구라, 못 받은 이미지가
+  // 끝나지 않는 로딩처럼 보였다.
+  if (status === 'failed') {
+    return (
+      <div
+        role="alert"
+        className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 text-sm text-amber-700 dark:border-amber-800 dark:text-amber-300"
+      >
+        이미지를 불러오지 못했습니다
+        <button type="button" onClick={retry} className="underline">
+          다시 불러오기
+        </button>
+      </div>
+    )
+  }
 
   if (!src) {
     return (

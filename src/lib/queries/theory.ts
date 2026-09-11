@@ -36,6 +36,42 @@ type TheoryRow = {
   updated_at: string
 }
 
+const THEORY_COLUMNS =
+  'id, subject_id, unit_id, parent_id, source_key, has_content, title, content, sort_order, updated_at'
+
+function toTheoryDocument(row: TheoryRow): TheoryDocument {
+  return {
+    id: row.id,
+    subjectId: row.subject_id,
+    unitId: row.unit_id,
+    parentId: row.parent_id,
+    sourceKey: row.source_key,
+    hasContent: row.has_content,
+    title: row.title,
+    content: parseRichDoc(row.content),
+    sortOrder: row.sort_order,
+    updatedAt: row.updated_at,
+  }
+}
+
+/**
+ * 본문에 끼워 넣은 알렌 카드 한 장을 위한 조회.
+ *
+ * 예전에는 카드마다 fetchTheoryDocuments() 로 495건을 본문까지 통째로 받아
+ * 그중에서 골라냈다. 한 쪽에 카드가 여럿이면 그 큰 응답이 여러 번 오갔고,
+ * 하나라도 실패하면 "권한이 없습니다" 처럼 보였다. 없으면 null 이고, 실패는
+ * 던진다 — 부르는 쪽이 둘을 갈라 볼 수 있어야 한다.
+ */
+export async function fetchTheoryDocumentById(id: string): Promise<TheoryDocument | null> {
+  const { data, error } = await supabase
+    .from('theory_documents')
+    .select(THEORY_COLUMNS)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data ? toTheoryDocument(data as TheoryRow) : null
+}
+
 export async function fetchTheoryDocuments(subjectId?: string): Promise<TheoryDocument[]> {
   let query = supabase
     .from('theory_documents')
@@ -48,18 +84,7 @@ export async function fetchTheoryDocuments(subjectId?: string): Promise<TheoryDo
   const { data, error } = await query
   if (error) throw error
 
-  return ((data ?? []) as TheoryRow[]).map((row) => ({
-    id: row.id,
-    subjectId: row.subject_id,
-    unitId: row.unit_id,
-    parentId: row.parent_id,
-    sourceKey: row.source_key,
-    hasContent: row.has_content,
-    title: row.title,
-    content: parseRichDoc(row.content),
-    sortOrder: row.sort_order,
-    updatedAt: row.updated_at,
-  }))
+  return ((data ?? []) as TheoryRow[]).map(toTheoryDocument)
 }
 
 /** 알렌 제목과 리치텍스트 본문을 여러 낱말 AND 규칙으로 검색한다. */

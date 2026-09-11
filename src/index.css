@@ -693,6 +693,23 @@
     margin: 15mm 12mm;
   }
 
+  /*
+   * 시험지에서는 색이 뜻을 나른다 — 정답 강조, 콜아웃, 형광펜, 표 머리. 브라우저는
+   * '배경 그래픽' 을 끄면 배경과 일부 색을 지워 버리는데, 그러면 강조가 통째로
+   * 사라져 읽을 수 없는 종이가 된다. 이 문서만 그대로 찍게 한다.
+   */
+  [data-print-doc],
+  [data-print-doc] * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 위의 a 규칙이 본문 링크 색까지 검게 덮지 않도록, 이 문서 안에서는 둘레 색을
+     따르게 둔다. */
+  [data-print-doc] a {
+    color: inherit !important;
+  }
+
   .rich-text pre {
     background: #f1f5f9 !important;
     color: #000 !important;

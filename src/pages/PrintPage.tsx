@@ -476,7 +476,7 @@ export function PrintPage() {
             <span className="text-slate-500">여백</span>
             <input
               type="range"
-              min={5}
+              min={8}
               max={30}
               step={1}
               value={margin}
@@ -627,7 +627,7 @@ export function PrintPage() {
       {/* index.css 의 @page 를 이 화면에서만 덮어쓴다. 종이 크기와 여백은 CSS
           변수로 넘길 수 없어, 고른 값으로 규칙을 직접 만들어 끼운다. */}
       <style>
-        {`@media print { @page { size: ${paperWidth}mm ${paperHeight}mm; margin: 15mm ${margin}mm; } }`}
+        {`@media print { @page { size: ${paperWidth}mm ${paperHeight}mm; margin: ${Math.max(12, margin)}mm ${margin}mm; } }`}
       </style>
 
       {error ? (

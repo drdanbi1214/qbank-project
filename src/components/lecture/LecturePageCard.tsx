@@ -10,7 +10,7 @@ import {
   type MarkTool,
   type PageMark,
 } from '@/components/lecture/pageMarks'
-import { useSignedUrl } from '@/lib/storage'
+import { useSignedUrlState } from '@/lib/storage'
 import { imageWidthOf, MAX_IMAGE_WIDTH, MIN_IMAGE_WIDTH } from '@/types/richtext'
 import { cn } from '@/utils/cn'
 
@@ -70,7 +70,7 @@ export function LecturePageCard({
   onMarksChange,
   canMove = false,
 }: Props) {
-  const imageUrl = useSignedUrl(src)
+  const { url: imageUrl, status: imageStatus, retry: retryImage } = useSignedUrlState(src)
   const frame = useRef<HTMLDivElement | null>(null)
   const [tool, setTool] = useState<MarkTool | 'erase' | null>(null)
   const [color, setColor] = useState<string>(STROKE_COLORS[0])
@@ -184,6 +184,17 @@ export function LecturePageCard({
                 color={color}
                 textSize={textSize}
               />
+            </div>
+          ) : imageStatus === 'failed' ? (
+            // 예전에는 실패해도 '불러오는 중' 에 머물러, 끝나지 않는 것처럼 보였다.
+            <div
+              role="alert"
+              className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-amber-700 dark:text-amber-300"
+            >
+              강의록 쪽을 불러오지 못했습니다.
+              <button type="button" onClick={retryImage} className="underline">
+                다시 불러오기
+              </button>
             </div>
           ) : (
             <div className="flex h-40 items-center justify-center text-sm text-slate-400">

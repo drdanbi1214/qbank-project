@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 /**
@@ -177,21 +177,50 @@ export async function uploadStoredObject(
   }
 }
 
-export function useSignedUrl(storagePath: string | null | undefined): string | null {
-  const [url, setUrl] = useState<string | null>(null)
+export type SignedUrlState = {
+  url: string | null
+  status: 'idle' | 'loading' | 'ready' | 'failed'
+  /** 다시 받아 본다. 서명이 한 번 막혔다고 영영 못 보게 둘 이유는 없다. */
+  retry: () => void
+}
+
+/**
+ * 서명 주소를 상태와 함께 돌려준다.
+ *
+ * getSignedUrl 은 권한이 없든, 그물이 끊겼든, 주소가 이상하든 모두 null 을
+ * 돌려준다. 그것만 보면 "아직 받는 중" 과 "못 받았다" 가 구별되지 않아, 실패한
+ * 카드가 영영 "불러오는 중…" 에 머문다. 무엇이 일어났는지 부르는 쪽이 알아야
+ * 안내를 하든 다시 받든 할 수 있다.
+ */
+export function useSignedUrlState(storagePath: string | null | undefined): SignedUrlState {
+  const [nonce, setNonce] = useState(0)
+  const [result, setResult] = useState<{ key: string; url: string | null } | null>(null)
+  const key = `${nonce}:${storagePath ?? ''}`
 
   useEffect(() => {
-    if (!storagePath) {
-      return
-    }
+    if (!storagePath) return
     let active = true
-    void getSignedUrl(storagePath).then((next) => {
-      if (active) setUrl(next)
-    })
+    getSignedUrl(storagePath)
+      .then((next) => {
+        if (active) setResult({ key, url: next })
+      })
+      .catch(() => {
+        // 던져도 여기서 받는다. 예전에는 catch 가 없어 거부된 약속이 그대로
+        // 새고, 카드가 끝나지 않는 로딩에 갇혔다.
+        if (active) setResult({ key, url: null })
+      })
     return () => {
       active = false
     }
-  }, [storagePath])
+  }, [storagePath, key])
 
-  return storagePath ? url : null
+  const retry = useCallback(() => setNonce((value) => value + 1), [])
+  const settled = result?.key === key
+  if (!storagePath) return { url: null, status: 'idle', retry }
+  if (!settled) return { url: null, status: 'loading', retry }
+  return { url: result.url, status: result.url ? 'ready' : 'failed', retry }
+}
+
+export function useSignedUrl(storagePath: string | null | undefined): string | null {
+  return useSignedUrlState(storagePath).url
 }
