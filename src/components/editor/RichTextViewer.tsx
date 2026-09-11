@@ -444,7 +444,9 @@ function ViewerImage({
     <button
       type="button"
       onClick={() => onZoom(src)}
-      style={displayWidth ? { width: displayWidth } : undefined}
+      // 폭만 박아 두면 좁은 칸(내보내기 2단 등)에서 넘친다. 넘치면 종이보다
+      // 넓어져 브라우저가 쪽 전체를 줄여 버린다.
+      style={displayWidth ? { width: displayWidth, maxWidth: '100%' } : undefined}
       className="block w-fit max-w-full cursor-zoom-in"
     >
       <span

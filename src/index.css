@@ -696,6 +696,21 @@
   margin-top: calc(1.07em * var(--print-leading, 1));
 }
 /*
+ * 종이보다 넓은 것이 하나라도 있으면 브라우저가 쪽 전체를 줄여 버린다.
+ *
+ * 그러면 여백을 '없음' 으로 두어도 내용이 종이의 8할만 차지하고 오른쪽이 빈다.
+ * 폭이 px 로 박힌 그림과 임베드가 특히 그렇다 — 화면에서 정한 폭이 2단의 좁은
+ * 칸을 쉽게 넘는다. 이 문서 안에서는 무엇이든 제 칸을 넘지 못하게 막는다.
+ */
+[data-print-doc] :is(img, svg, video, canvas, iframe, figure, pre, blockquote) {
+  max-width: 100% !important;
+}
+[data-print-doc] .print-columns > li,
+[data-print-doc] .print-columns > li > * {
+  max-width: 100%;
+}
+
+/*
  * 종이에서는 좌우로 끌 수 없다.
  *
  * 표는 화면에서 넘치면 overflow-x-auto 안에서 밀어 보면 되지만, 인쇄하면 넘친
