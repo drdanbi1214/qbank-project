@@ -9,7 +9,7 @@ import {
 const saved = {
   layout: 'split',
   landscape: true,
-  margin: 8,
+  margin: 11,
   scale: 1.25,
   leading: 0.85,
   splitRatio: 65,
@@ -58,7 +58,7 @@ test('숫자가 아닌 값은 기본값으로 대신한다', () => {
   assert.equal(broken.landscape, false)
 })
 
-test('단 설정이 없던 시절에 저장한 값도 그대로 열린다', () => {
+test('단 설정이 없던 시절의 값도 열고, 작은 여백은 안전선으로 올린다', () => {
   // 이 기능이 생기기 전에 저장된 것에는 columns 가 없다. 1단으로 열려야 한다.
   const old = parsePrintSettings(JSON.stringify({ layout: 'split', margin: 8 }))
   assert.equal(old.columns, 1)
@@ -67,7 +67,7 @@ test('단 설정이 없던 시절에 저장한 값도 그대로 열린다', () =
   assert.equal(old.leading, 1)
   assert.equal(old.imageWidth, 70)
   assert.equal(old.layout, 'split')
-  assert.equal(old.margin, 8)
+  assert.equal(old.margin, 11)
 })
 
 test('배율은 슬라이더 눈금(5%)에 맞춘다', () => {

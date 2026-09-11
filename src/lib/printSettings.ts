@@ -11,7 +11,7 @@ export type PrintSettings = {
   layout: PrintLayout
   /** A4 가로로 돌렸는지 */
   landscape: boolean
-  /** 좌우 여백 (mm) */
+  /** 용지 바깥 여백 (mm) */
   margin: number
   /** 글자 배율 (1 이 지금까지의 크기) */
   scale: number
@@ -30,8 +30,9 @@ export type PrintSettings = {
 }
 
 export const PRINT_SETTINGS_RANGE = {
-  // 5mm 는 종이 가장자리에 글이 닿아 잘려 나온다. 8mm 아래로는 내리지 않는다.
-  margin: { min: 8, max: 30 },
+  // A4 짧은 변(210mm)의 약 5%. 일반 프린터의 비인쇄 영역 때문에 모서리가
+  // 잘리지 않도록, 예전에 저장된 더 작은 값도 읽을 때 이 안전선으로 올린다.
+  margin: { min: 11, max: 30 },
   scale: { min: 0.7, max: 1.5 },
   leading: { min: 0.75, max: 1.3 },
   splitRatio: { min: 20, max: 80 },

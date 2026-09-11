@@ -23,6 +23,7 @@ import { circled, formatAnswer, type AnswerPayload } from '@/types/question'
 import { type RichDoc } from '@/types/richtext'
 import {
   DEFAULT_PRINT_SETTINGS,
+  PRINT_SETTINGS_RANGE,
   parsePrintSettings,
   printSettingsKey,
   type PrintSettings,
@@ -768,8 +769,8 @@ export function PrintPage() {
             <span className="text-slate-500">여백</span>
             <input
               type="range"
-              min={8}
-              max={30}
+              min={PRINT_SETTINGS_RANGE.margin.min}
+              max={PRINT_SETTINGS_RANGE.margin.max}
               step={1}
               value={margin}
               onChange={(event) => setMargin(Number(event.target.value))}
@@ -975,7 +976,7 @@ export function PrintPage() {
               // 값을 버리고 인쇄 영역을 그대로 쓴다 — 인라인이면 못 버린다.
               '--print-sheet-width': `${paperWidth}mm`,
               '--print-pad-x': `${margin}mm`,
-              '--print-pad-y': `${Math.max(12, margin)}mm`,
+              '--print-pad-y': `${margin}mm`,
               '--print-scale': scale,
               '--print-leading': leading,
               // 단위가 없는 숫자를 calc()로 조합하면 인쇄 미리보기 엔진에 따라
