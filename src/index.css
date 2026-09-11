@@ -754,12 +754,13 @@
  * 흐른다. 그래서 문항에 break-inside: avoid 를 걸면 안 된다 — 그것이 걸려
  * 있으면 단을 넘지 못해 긴 문항이 통째로 다음 단으로 밀리고 앞 단이 비어 버린다.
  *
- * column-fill: auto 는 단을 앞에서부터 차례로 채운다. 기본값(balance)은 마지막
- * 쪽의 두 단 높이를 맞추려 들어, 쪽마다 문항이 놓이는 자리가 달라진다.
+ * column-fill 은 balance 로 둔다. auto 로 앞에서부터 차례로 채우면, 내용이 한
+ * 쪽에 들어가는 분량일 때 첫 단만 쓰고 나머지 단을 통째로 비운다. 종이 오른쪽이
+ * 절반 넘게 비어 여백이 크게 잡힌 것처럼 보인다.
  */
 [data-print-doc] .print-columns {
   column-gap: 8mm;
-  column-fill: auto;
+  column-fill: balance;
 }
 /* 단 사이 구분선. 글이 빽빽할수록 어디까지가 한 단인지 눈으로 잡아 준다. */
 [data-print-doc] .print-columns.print-column-rule {
