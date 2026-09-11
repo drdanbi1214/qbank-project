@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties, RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
 import { StemBlocks } from '@/components/question/StemBlocks'
@@ -27,6 +27,16 @@ import {
   printSettingsKey,
   type PrintSettings,
 } from '@/lib/printSettings'
+import {
+  canSettlePrintLayout,
+  EMPTY_PRINT_READINESS,
+  failedPrintAssetCount,
+  pendingPrintAssetCount,
+  PRINT_ASSET_KINDS,
+  samePrintReadiness,
+  type PrintAssetKind,
+  type PrintReadinessSnapshot,
+} from '@/lib/printReadiness'
 import { cn } from '@/utils/cn'
 
 /**
@@ -68,6 +78,134 @@ type Loaded = {
   answers: Map<string, AnswerPayload>
   /** 문항 id -> 그 문항에 붙일 풀이 전부. 출처 구분은 각 항목이 들고 있다. */
   solutions: Map<string, PrintSolution[]>
+}
+
+type PrintReadiness = PrintReadinessSnapshot & { settled: boolean }
+
+const EMPTY_READINESS: PrintReadiness = { ...EMPTY_PRINT_READINESS, settled: false }
+
+function assetCounts(root: HTMLElement): PrintReadinessSnapshot {
+  const images = [...root.querySelectorAll<HTMLImageElement>('img')]
+  // 아래쪽의 lazy 이미지도 인쇄 직전에는 전부 받아야 한다. 화면 밖에 있다는
+  // 이유로 Chrome이 요청을 미루지 않도록 실제 DOM 속성을 eager로 바꾼다.
+  for (const image of images) image.loading = 'eager'
+
+  const countMarkers = (attribute: 'data-print-pending' | 'data-print-failed') => {
+    const counts = { image: 0, lecture: 0, allen: 0, yama: 0 }
+    for (const element of root.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
+      const kind = element.getAttribute(attribute)
+      if (PRINT_ASSET_KINDS.includes(kind as PrintAssetKind)) {
+        counts[kind as PrintAssetKind] += 1
+      }
+    }
+    return counts
+  }
+
+  return {
+    imageTotal: images.length,
+    imageReady: images.filter((image) => image.complete && image.naturalWidth > 0).length,
+    imageFailed: images.filter((image) => image.complete && image.naturalWidth === 0).length,
+    pending: countMarkers('data-print-pending'),
+    failed: countMarkers('data-print-failed'),
+    fontsReady: !document.fonts || document.fonts.status === 'loaded',
+  }
+}
+
+/**
+ * 인쇄 문서 안에서 나중에 생기는 자료까지 감시한다.
+ *
+ * 서명 URL을 받는 동안에는 data-print-pending 표식이 있고, URL을 받은 뒤에는
+ * 실제 img의 load/error를 본다. 전부 끝나도 이미지 디코딩과 두 프레임을 더
+ * 기다려 다단 배치가 최종 높이로 자리 잡은 뒤에만 settled가 된다.
+ */
+function usePrintReadiness(
+  rootRef: RefObject<HTMLElement | null>,
+  enabled: boolean,
+  renderKey: string,
+): PrintReadiness {
+  const [result, setResult] = useState<{ key: string; value: PrintReadiness }>({
+    key: '',
+    value: EMPTY_READINESS,
+  })
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!enabled || !root) return
+
+    let disposed = false
+    let firstFrame = 0
+    let secondFrame = 0
+    let settleTimer = 0
+
+    const cancelSettle = () => {
+      window.cancelAnimationFrame(firstFrame)
+      window.cancelAnimationFrame(secondFrame)
+      window.clearTimeout(settleTimer)
+    }
+
+    const publish = (next: PrintReadinessSnapshot, settled: boolean) => {
+      if (disposed) return
+      setResult((current) =>
+        current.key === renderKey &&
+        current.value.settled === settled &&
+        samePrintReadiness(current.value, next)
+          ? current
+          : { key: renderKey, value: { ...next, settled } },
+      )
+    }
+
+    const scan = () => {
+      if (disposed) return
+      cancelSettle()
+      const snapshot = assetCounts(root)
+      publish(snapshot, false)
+      if (!canSettlePrintLayout(snapshot)) return
+
+      firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          settleTimer = window.setTimeout(() => {
+            const finalImages = [...root.querySelectorAll<HTMLImageElement>('img')]
+            void Promise.all(
+              finalImages.map((image) =>
+                typeof image.decode === 'function' ? image.decode().catch(() => undefined) : undefined,
+              ),
+            ).then(() => {
+              const finalSnapshot = assetCounts(root)
+              publish(finalSnapshot, canSettlePrintLayout(finalSnapshot))
+            })
+          }, 250)
+        })
+      })
+    }
+
+    // 이펙트가 시작된 렌더와 같은 틱에서 setState하지 않고, DOM 커밋이 끝난
+    // 다음 프레임부터 센다.
+    firstFrame = window.requestAnimationFrame(scan)
+    const observer = new MutationObserver(scan)
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'data-print-pending', 'data-print-failed'],
+    })
+    root.addEventListener('load', scan, true)
+    root.addEventListener('error', scan, true)
+    document.fonts?.addEventListener('loadingdone', scan)
+    document.fonts?.addEventListener('loadingerror', scan)
+    void document.fonts?.ready.then(scan)
+
+    return () => {
+      disposed = true
+      cancelSettle()
+      observer.disconnect()
+      root.removeEventListener('load', scan, true)
+      root.removeEventListener('error', scan, true)
+      document.fonts?.removeEventListener('loadingdone', scan)
+      document.fonts?.removeEventListener('loadingerror', scan)
+    }
+  }, [rootRef, enabled, renderKey])
+
+  return enabled && result.key === renderKey ? result.value : EMPTY_READINESS
 }
 
 export function PrintPage() {
@@ -281,6 +419,60 @@ export function PrintPage() {
 
   const isOn = (key: string) => !off.has(key)
   const onCount = sources.filter((item) => isOn(item.key)).length
+  const articleRef = useRef<HTMLElement>(null)
+  const visibleSourceKey = sources
+    .filter((item) => isOn(item.key))
+    .map((item) => item.key)
+    .join(',')
+  // 풀이 출처를 바꾸면 같은 개수의 이미지가 우연히 남더라도 새 DOM을 다시
+  // 확인해야 한다. 지면 설정도 마지막 배치가 끝난 다음 인쇄하도록 열쇠에 넣는다.
+  const readinessRenderKey = [
+    requestKey,
+    withAnswer ? 'answer' : 'no-answer',
+    visibleSourceKey,
+    effectiveLayout,
+    landscape ? 'landscape' : 'portrait',
+    margin,
+    scale,
+    splitRatio,
+    columns,
+    onePerColumn ? 'one' : 'flow',
+    columnRule ? 'rule' : 'no-rule',
+    imageWidth,
+    leading,
+  ].join('|')
+  const readiness = usePrintReadiness(
+    articleRef,
+    ready && questions.length > 0,
+    readinessRenderKey,
+  )
+  const pendingAssets = pendingPrintAssetCount(readiness)
+  const failedAssets = failedPrintAssetCount(readiness)
+  const hasLoadFailure = Boolean(error) || failedAssets > 0
+  const printReady = ready && questions.length > 0 && readiness.settled
+
+  const loadingDetails = [
+    readiness.imageTotal + readiness.pending.image > 0
+      ? `이미지 ${readiness.imageReady}/${readiness.imageTotal + readiness.pending.image}`
+      : null,
+    readiness.pending.lecture > 0 ? `강의록 ${readiness.pending.lecture}개` : null,
+    readiness.pending.allen > 0 ? `알렌 ${readiness.pending.allen}개` : null,
+    readiness.pending.yama > 0 ? `야마 ${readiness.pending.yama}개` : null,
+    !readiness.fontsReady ? '글꼴' : null,
+  ].filter((item): item is string => item !== null)
+
+  useEffect(() => {
+    const stopEarlyPrint = (event: KeyboardEvent) => {
+      if (printReady || event.key.toLowerCase() !== 'p' || (!event.metaKey && !event.ctrlKey)) return
+      event.preventDefault()
+      document.querySelector<HTMLElement>('[data-print-status]')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+    window.addEventListener('keydown', stopEarlyPrint, true)
+    return () => window.removeEventListener('keydown', stopEarlyPrint, true)
+  }, [printReady])
 
   function toggleSource(key: string, next: boolean) {
     const draft = new Set(off)
@@ -447,9 +639,84 @@ export function PrintPage() {
             ))}
           </span>
 
-          <Button className="ml-auto" onClick={() => window.print()} disabled={!ready}>
-            인쇄 또는 PDF 저장
+          <Button
+            className="ml-auto"
+            onClick={() => {
+              if (printReady) window.print()
+            }}
+            disabled={!printReady}
+            title={printReady ? undefined : '모든 자료가 준비되면 인쇄할 수 있습니다.'}
+          >
+            {printReady ? '인쇄 또는 PDF 저장' : '인쇄 준비 중…'}
           </Button>
+        </div>
+
+        <div
+          data-print-status=""
+          role="status"
+          aria-live="polite"
+          className={cn(
+            'overflow-hidden rounded-lg border bg-white dark:bg-slate-900',
+            hasLoadFailure
+              ? 'border-amber-300 dark:border-amber-800'
+              : printReady
+                ? 'border-emerald-300 dark:border-emerald-800'
+                : 'border-sky-200 dark:border-sky-800',
+          )}
+        >
+          <div className="flex items-center gap-2 px-3 py-2 text-sm">
+            {hasLoadFailure ? (
+              <span aria-hidden="true" className="text-amber-600">!</span>
+            ) : printReady ? (
+              <span aria-hidden="true" className="text-emerald-600">✓</span>
+            ) : (
+              <Spinner className="h-4 w-4" />
+            )}
+            <span
+              className={cn(
+                'font-medium',
+                hasLoadFailure
+                  ? 'text-amber-800 dark:text-amber-200'
+                  : printReady
+                    ? 'text-emerald-800 dark:text-emerald-200'
+                    : 'text-slate-700 dark:text-slate-200',
+              )}
+            >
+              {error
+                ? '문제집 데이터를 불러오지 못했습니다.'
+                : !ready
+                  ? '문제와 풀이를 불러오는 중입니다…'
+                  : questions.length === 0
+                    ? '담을 문제가 없습니다.'
+                    : failedAssets > 0
+                      ? `자료 ${failedAssets}개를 불러오지 못했습니다. 시험지 안의 ‘다시 불러오기’를 눌러주세요.`
+                      : printReady
+                        ? `인쇄 준비 완료 · 이미지 ${readiness.imageReady}장과 강의록·알렌을 모두 확인했습니다.`
+                        : pendingAssets > 0 || !readiness.fontsReady
+                          ? `자료를 불러오는 중입니다 · ${loadingDetails.join(' · ')}`
+                          : '모든 자료를 받았습니다. 지면 배치를 확인하는 중입니다…'}
+            </span>
+            {failedAssets > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  document.querySelector<HTMLElement>('[data-print-failed]')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                  })
+                }
+                className="ml-auto shrink-0 text-xs font-medium text-amber-700 underline dark:text-amber-300"
+              >
+                오류 위치 보기
+              </button>
+            )}
+          </div>
+          {!printReady && !hasLoadFailure && (!ready || questions.length > 0) && (
+            <div className="h-1 bg-sky-100 dark:bg-sky-950">
+              <div className="h-full w-2/3 animate-pulse rounded-r-full bg-sky-500" />
+            </div>
+          )}
+          {printReady && <div className="h-1 bg-emerald-500" />}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
@@ -651,20 +918,30 @@ export function PrintPage() {
         {`@media print { @page { size: ${paperWidth}mm ${paperHeight}mm; margin: ${margin}mm; } }`}
       </style>
 
+      {!printReady && (
+        <div className="mx-auto hidden max-w-[180mm] py-20 text-center print:block">
+          <h1 className="text-xl font-bold">인쇄 자료를 아직 준비하고 있습니다.</h1>
+          <p className="mt-2 text-sm">
+            이 창을 닫고 상단에 ‘인쇄 준비 완료’가 표시된 뒤 다시 인쇄해주세요.
+          </p>
+        </div>
+      )}
+
       {error ? (
-        <p className="mx-auto max-w-[210mm] rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+        <p className="mx-auto max-w-[210mm] rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 print:hidden dark:bg-rose-950/50 dark:text-rose-300">
           {error}
         </p>
       ) : !ready ? (
-        <div className="flex justify-center py-20">
+        <div className="flex justify-center py-20 print:hidden">
           <Spinner className="h-7 w-7" />
         </div>
       ) : questions.length === 0 ? (
-        <p className="mx-auto max-w-[210mm] rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+        <p className="mx-auto max-w-[210mm] rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 print:hidden dark:border-slate-700 dark:text-slate-400">
           담을 문제가 없습니다.
         </p>
       ) : (
         <article
+          ref={articleRef}
           data-print-doc
           // 흰 종이는 용지 전체 폭이고, 여백은 그 안쪽 흰 자리로 그린다. 그래야
           // 여백을 키워도 종이가 줄어드는 것처럼 보이지 않고, 화면과 인쇄가 같은
@@ -681,7 +958,10 @@ export function PrintPage() {
               '--print-image-width': imageWidth,
             } as CSSProperties
           }
-          className="print-sheet mx-auto bg-white text-slate-900 shadow-sm print:shadow-none"
+          className={cn(
+            'print-sheet mx-auto bg-white text-slate-900 shadow-sm print:shadow-none',
+            !printReady && 'print:hidden',
+          )}
         >
           <header className="mb-6 border-b-2 border-slate-800 pb-3">
             <h1 className="text-2xl font-bold">{title}</h1>

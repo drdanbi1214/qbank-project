@@ -187,10 +187,27 @@ function Indicator({ state }: { state: 'idle' | 'selected' | 'correct' | 'wrong'
 }
 
 function ChoiceImage({ url, no }: { url: string; no: number }) {
-  const { url: src, onImageError } = useSignedUrlState(url)
+  const { url: src, status, retry, onImageError } = useSignedUrlState(url)
+  if (status === 'failed') {
+    return (
+      <span
+        role="alert"
+        data-print-failed="image"
+        className="mt-1 flex h-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-amber-300 text-xs text-amber-700 dark:border-amber-800 dark:text-amber-300"
+      >
+        보기 이미지를 불러오지 못했습니다.
+        <button type="button" onClick={retry} className="underline">
+          다시 불러오기
+        </button>
+      </span>
+    )
+  }
   if (!src) {
     return (
-      <span className="mt-1 block h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
+      <span
+        data-print-pending="image"
+        className="mt-1 block h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700"
+      />
     )
   }
   return (

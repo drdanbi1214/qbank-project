@@ -92,7 +92,10 @@ const inflight = new Map<string, Promise<string | null>>()
 
 const SIGN_ATTEMPTS = 3
 
-export async function getSignedUrl(storagePath: string): Promise<string | null> {
+export async function getSignedUrl(
+  storagePath: string,
+  options: { preferReadFallback?: boolean } = {},
+): Promise<string | null> {
   if (/^https?:\/\//.test(storagePath)) return storagePath
 
   // A signed URL is a bearer credential. Keep it scoped to the account that
@@ -101,7 +104,11 @@ export async function getSignedUrl(storagePath: string): Promise<string | null> 
   const { data } = await supabase.auth.getSession()
   const session = data.session
   if (!session) return null
-  const cacheKey = `${session.user.id}:${storagePath}`
+  // R2 서명 자체는 성공해도 실제 파일 GET이 404/5xx로 실패할 수 있다. 그 뒤
+  // Supabase 원본을 시도할 때 앞서 만든 R2 주소를 캐시에서 다시 꺼내지 않도록
+  // 공급자까지 열쇠에 넣는다.
+  const providerKey = options.preferReadFallback ? 'fallback' : 'primary'
+  const cacheKey = `${session.user.id}:${providerKey}:${storagePath}`
 
   const cached = cache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.url
@@ -109,7 +116,12 @@ export async function getSignedUrl(storagePath: string): Promise<string | null> 
   const pending = inflight.get(cacheKey)
   if (pending) return pending
 
-  const task = signOnce(storagePath, session.access_token, cacheKey).finally(() => {
+  const task = signOnce(
+    storagePath,
+    session.access_token,
+    cacheKey,
+    options.preferReadFallback === true,
+  ).finally(() => {
     inflight.delete(cacheKey)
   })
   inflight.set(cacheKey, task)
@@ -120,22 +132,26 @@ async function signOnce(
   storagePath: string,
   accessToken: string,
   cacheKey: string,
+  preferReadFallback: boolean,
 ): Promise<string | null> {
   const parsed = parseStoragePath(storagePath)
   if (!parsed) return null
   const useR2 = usesR2(parsed.bucket)
 
   for (let attempt = 0; attempt < SIGN_ATTEMPTS; attempt += 1) {
-    let signed: SignResult = useR2
-      ? await getR2SignedUrl(storagePath, accessToken)
-      : await getSupabaseSignedUrl(storagePath)
+    let signed: SignResult =
+      preferReadFallback && useR2 && READ_FALLBACK
+        ? await getSupabaseSignedUrl(storagePath)
+        : useR2
+          ? await getR2SignedUrl(storagePath, accessToken)
+          : await getSupabaseSignedUrl(storagePath)
 
     if (signed === RETRY) {
       // 한꺼번에 몰려 밀린 것이라면 조금 기다렸다 다시 간다.
       if (attempt < SIGN_ATTEMPTS - 1) await wait(250 * 2 ** attempt)
       continue
     }
-    if (!signed && useR2 && READ_FALLBACK) {
+    if (!signed && useR2 && READ_FALLBACK && !preferReadFallback) {
       signed = await getSupabaseSignedUrl(storagePath)
     }
     if (!signed) return null
@@ -277,7 +293,10 @@ export function useSignedUrlState(storagePath: string | null | undefined): Signe
   useEffect(() => {
     if (!storagePath) return
     let active = true
-    getSignedUrl(storagePath)
+    // 기본 저장소에서 실제 이미지 GET이 실패한 뒤라면, 서명 요청의 성공 여부와
+    // 무관하게 남아 있는 Supabase 원본을 먼저 읽는다. 예전에는 같은 R2 주소만
+    // 반복 발급해 특정 강의록 쪽이 계속 깨진 그림으로 남았다.
+    getSignedUrl(storagePath, { preferReadFallback: errorCount > 0 })
       .then((next) => {
         if (active) setResult({ key, url: next })
       })
@@ -289,7 +308,7 @@ export function useSignedUrlState(storagePath: string | null | undefined): Signe
     return () => {
       active = false
     }
-  }, [storagePath, key])
+  }, [storagePath, key, errorCount])
 
   const retry = useCallback(() => {
     if (storagePath) invalidateSignedUrl(storagePath)

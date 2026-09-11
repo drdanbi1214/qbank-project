@@ -84,6 +84,8 @@ export function LecturePageCard({
   const [aspect, setAspect] = useState(1.414)
   const [dragged, setDragged] = useState<number | null>(null)
   const [cropping, setCropping] = useState(false)
+  const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null)
+  const imageReady = loadedImageUrl === imageUrl
   const shownWidth = dragged ?? imageWidthOf(width)
   const activeCrop = pageCropOf(crop)
 
@@ -159,7 +161,7 @@ export function LecturePageCard({
         >
           {imageUrl ? (
             <div
-              className="relative"
+              className={cn('relative', !imageReady && 'min-h-40')}
               style={
                 activeCrop
                   ? {
@@ -171,17 +173,26 @@ export function LecturePageCard({
                   : undefined
               }
             >
+              {!imageReady && (
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">
+                  강의록 쪽을 불러오는 중…
+                </div>
+              )}
               <img
                 src={imageUrl}
                 alt={caption}
                 draggable={false}
                 // 서명은 받았는데 그림만 못 받는 일이 있다. 서명을 버리고 스스로
                 // 한두 번 다시 받아 본다.
-                onError={onImageError}
-                className="block w-full"
+                onError={() => {
+                  setLoadedImageUrl(null)
+                  onImageError()
+                }}
+                className={cn('block w-full', !imageReady && 'invisible')}
                 onLoad={(event) => {
                   const image = event.currentTarget
                   if (image.naturalWidth > 0) setAspect(image.naturalHeight / image.naturalWidth)
+                  setLoadedImageUrl(imageUrl)
                 }}
               />
               <PageMarkLayer
@@ -197,6 +208,7 @@ export function LecturePageCard({
             // 예전에는 실패해도 '불러오는 중' 에 머물러, 끝나지 않는 것처럼 보였다.
             <div
               role="alert"
+              data-print-failed="lecture"
               className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-amber-700 dark:text-amber-300"
             >
               강의록 쪽을 불러오지 못했습니다.
@@ -205,7 +217,10 @@ export function LecturePageCard({
               </button>
             </div>
           ) : (
-            <div className="flex h-40 items-center justify-center text-sm text-slate-400">
+            <div
+              data-print-pending="lecture"
+              className="flex h-40 items-center justify-center text-sm text-slate-400"
+            >
               강의록 쪽을 불러오는 중…
             </div>
           )}

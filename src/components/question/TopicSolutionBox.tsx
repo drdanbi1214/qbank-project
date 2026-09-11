@@ -40,7 +40,7 @@ export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
   const userId = session?.user.id ?? ''
 
   const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId })
-  const [solution, setSolution] = useState<Solution | null | 'loading'>('loading')
+  const [solution, setSolution] = useState<Solution | null | 'loading' | 'failed'>('loading')
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const draftRef = useRef<RichDoc>(solutionTemplateDoc(choiceCount))
@@ -70,7 +70,7 @@ export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
         setSolution(mine)
         draftRef.current = mine?.content ?? solutionTemplateDoc(choiceCount)
       })
-      .catch(() => setSolution(null))
+      .catch(() => setSolution('failed'))
   }, [questionId, groupId, scope?.authorId, scope?.requiredPermission, choiceCount])
 
   useEffect(load, [load])
@@ -85,7 +85,7 @@ export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
       window.alert(caught instanceof Error ? caught.message : '해설을 저장하지 못했습니다.')
     }
 
-    if (solution && solution !== 'loading') {
+    if (solution && solution !== 'loading' && solution !== 'failed') {
       void updateSolution({
         id: solution.id,
         content: draftRef.current,
@@ -112,8 +112,30 @@ export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
 
   if (solution === 'loading') {
     return (
-      <div className="mt-2.5 flex justify-center py-3">
+      <div data-print-pending="yama" className="mt-2.5 flex justify-center py-3">
         <Spinner className="h-4 w-4" />
+      </div>
+    )
+  }
+
+  if (solution === 'failed') {
+    return (
+      <div
+        role="alert"
+        data-print-failed="yama"
+        className="mt-2.5 rounded-md border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+      >
+        야마 해설을 불러오지 못했습니다.
+        <button
+          type="button"
+          onClick={() => {
+            setSolution('loading')
+            load()
+          }}
+          className="ml-2 underline"
+        >
+          다시 불러오기
+        </button>
       </div>
     )
   }

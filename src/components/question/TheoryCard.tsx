@@ -61,7 +61,10 @@ export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
 
   if (document === null) {
     return (
-      <div className="flex h-14 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+      <div
+        data-print-pending="allen"
+        className="flex h-14 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700"
+      >
         <Spinner className="h-4 w-4" />
       </div>
     )
@@ -71,6 +74,7 @@ export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
     return (
       <div
         role="alert"
+        data-print-failed="allen"
         className={cn(
           'rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
           selected && 'ring-2 ring-brand-500',
@@ -91,6 +95,7 @@ export function TheoryCard({ documentId, selected = false, onRemove }: Props) {
   if (document === 'missing') {
     return (
       <div
+        data-print-failed="allen"
         className={cn(
           'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400',
           selected && 'ring-2 ring-brand-500',

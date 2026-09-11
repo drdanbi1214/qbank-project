@@ -428,16 +428,41 @@ function ViewerImage({
   onZoom: (src: string) => void
 }) {
   const external = /^https?:\/\//i.test(path)
-  const { url: signedUrl, onImageError } = useSignedUrlState(external ? null : path)
+  const { url: signedUrl, status, retry, onImageError } = useSignedUrlState(external ? null : path)
   const src = external ? path : signedUrl
   const [naturalSize, setNaturalSize] = useState<{ width: number; aspect: number } | null>(null)
+  const [failedExternal, setFailedExternal] = useState(false)
   const cropAspectRatio =
     crop && naturalSize ? crop.width / (crop.height * naturalSize.aspect) : null
   const cropReady = cropAspectRatio !== null ? crop : null
   const displayWidth = width ?? (crop ? imageWidthOf(naturalSize?.width) : null)
 
+  if ((!external && status === 'failed') || failedExternal) {
+    return (
+      <div
+        role="alert"
+        data-print-failed="image"
+        className="flex h-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-amber-300 text-sm text-amber-700 dark:border-amber-800 dark:text-amber-300"
+      >
+        본문 이미지를 불러오지 못했습니다.
+        {!external && (
+          <button type="button" onClick={retry} className="underline">
+            다시 불러오기
+          </button>
+        )}
+      </div>
+    )
+  }
+
   if (!src) {
-    return <div className="h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
+    return (
+      <div
+        data-print-pending="image"
+        className="flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-400 dark:border-slate-700"
+      >
+        이미지를 불러오는 중입니다
+      </div>
+    )
   }
 
   return (
@@ -447,8 +472,16 @@ function ViewerImage({
       // 폭만 박아 두면 좁은 칸(내보내기 2단 등)에서 넘친다. 넘치면 종이보다
       // 넓어져 브라우저가 쪽 전체를 줄여 버린다.
       style={displayWidth ? { width: displayWidth, maxWidth: '100%' } : undefined}
-      className="block w-fit max-w-full cursor-zoom-in"
+      className={cn(
+        'relative block w-fit max-w-full cursor-zoom-in',
+        !naturalSize && 'min-h-24 min-w-40',
+      )}
     >
+      {!naturalSize && (
+        <span className="absolute inset-0 flex items-center justify-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-400 dark:border-slate-700">
+          이미지를 불러오는 중입니다
+        </span>
+      )}
       <span
         style={
           cropAspectRatio !== null
@@ -475,7 +508,11 @@ function ViewerImage({
             alt={alt ?? '본문 이미지'}
             loading="lazy"
             // 서명은 받았는데 그림만 못 받는 일이 있다. 서명을 버리고 다시 받는다.
-            onError={onImageError}
+            onError={() => {
+              setNaturalSize(null)
+              if (external) setFailedExternal(true)
+              else onImageError()
+            }}
             onLoad={(event) => {
               const image = event.currentTarget
               if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
@@ -485,7 +522,7 @@ function ViewerImage({
               })
             }}
             style={displayWidth ? { width: '100%' } : undefined}
-            className="block h-auto max-w-full"
+            className={cn('block h-auto max-w-full', !naturalSize && 'invisible')}
           />
           <PageMarkLayer marks={marks} aspect={naturalSize?.aspect ?? 1} />
         </span>

@@ -87,7 +87,10 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
 
   if (question === null) {
     return (
-      <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+      <div
+        data-print-pending="yama"
+        className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700"
+      >
         <Spinner className="h-4 w-4" />
       </div>
     )
@@ -96,6 +99,7 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
   if (question === 'missing') {
     return (
       <div
+        data-print-failed="yama"
         className={cn(
           'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400',
           selected && 'ring-2 ring-brand-500',
@@ -152,7 +156,7 @@ function YamaBody({
   const editing = Boolean(onRemove)
   const canCluster = editing && (isAdmin || hasPermission('study_legendob'))
 
-  const { groupId, cards, identicalOf, attach, detach } = useCluster(
+  const { groupId, siblings, cards, identicalOf, attach, detach } = useCluster(
     question.id,
     question.groupId,
   )
@@ -206,6 +210,7 @@ function YamaBody({
 
   return (
     <div
+      data-print-pending={siblings === null ? 'yama' : undefined}
       className={cn(
         'rounded-lg border-l-2 border-sky-500 bg-sky-100/80 px-3 py-2.5 dark:border-sky-600 dark:bg-sky-950/35',
         selected && 'ring-2 ring-brand-500',
@@ -611,9 +616,19 @@ function QuestionCard({
       )}
 
       {interactive && showSolution && !answer && revealError && (
-        <p role="alert" className="mt-2.5 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+        <p
+          role="alert"
+          data-print-failed="yama"
+          className="mt-2.5 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+        >
           {revealError}
         </p>
+      )}
+
+      {interactive && showSolution && !answer && !revealError && (
+        <div data-print-pending="yama" className="mt-2.5 flex justify-center py-2">
+          <Spinner className="h-4 w-4" />
+        </div>
       )}
 
       {interactive && showSolution && answer && (
