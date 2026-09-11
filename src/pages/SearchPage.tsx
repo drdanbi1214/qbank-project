@@ -24,8 +24,6 @@ const SEARCH_SOURCE_ORDER: SearchSource[] = ['questions', 'theory', 'lectures', 
  */
 export function SearchPage() {
   const [params, setParams] = useSearchParams()
-  const [searchNonce, setSearchNonce] = useState(0)
-  const [theoryFailed, setTheoryFailed] = useState<{ key: string; message: string } | null>(null)
   const { taxonomy } = useData()
   const { hasPermission, isAdmin } = useAuth()
   const canViewStudySolutions = isAdmin || hasPermission('study_hapbon3')
@@ -74,11 +72,10 @@ export function SearchPage() {
     message: string
   } | null>(null)
 
-  const requestKey = `${searchNonce}|${query}|${includeQuestionSearch}|${includeSolutions}|${includeTheory}|${includeLectures}|${includeNotes}|${subjectId ?? ''}|${cohort ?? ''}`
+  const requestKey = `${query}|${includeQuestionSearch}|${includeSolutions}|${includeTheory}|${includeLectures}|${includeNotes}|${subjectId ?? ''}|${cohort ?? ''}`
   const error = failed?.key === requestKey ? failed.message : null
   const lectureError = lectureFailed?.key === requestKey ? lectureFailed.message : null
-  const theoryError = theoryFailed?.key === requestKey ? theoryFailed.message : null
-  const searchError = [error, lectureError, theoryError].filter(Boolean).join(' · ') || null
+  const searchError = [error, lectureError].filter(Boolean).join(' · ') || null
 
   useEffect(() => {
     if (query.trim() === '') {
@@ -135,13 +132,10 @@ export function SearchPage() {
     if (includeTheory) {
       void searchTheoryDocuments(query, subjectId)
         .then((rows) => {
-          if (active) { setTheoryLoaded({ key: requestKey, rows }); setTheoryFailed(null) }
+          if (active) setTheoryLoaded({ key: requestKey, rows })
         })
-        .catch((caught: unknown) => {
-          if (active) {
-            setTheoryLoaded({ key: requestKey, rows: [] })
-            setTheoryFailed({ key: requestKey, message: `알렌 검색 실패: ${caughtMessage(caught, '잠시 후 다시 시도해주세요.')}` })
-          }
+        .catch(() => {
+          if (active) setTheoryLoaded({ key: requestKey, rows: [] })
         })
     }
 
@@ -229,7 +223,6 @@ export function SearchPage() {
   function submit(event: FormEvent) {
     event.preventDefault()
     update({ q: input.trim() })
-    setSearchNonce((n) => n + 1)
   }
 
   function toggleSource(source: SearchSource) {
@@ -363,7 +356,6 @@ export function SearchPage() {
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {searchError ?? '검색 결과가 없습니다.'}
-            {searchError && <button type="button" className="ml-3 underline" onClick={() => setSearchNonce((n) => n + 1)}>다시 검색</button>}
           </p>
         </div>
       ) : (
@@ -371,7 +363,6 @@ export function SearchPage() {
           {searchError && (
             <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
               일부 범위를 검색하지 못했습니다: {searchError}
-              <button type="button" className="ml-3 underline" onClick={() => setSearchNonce((n) => n + 1)}>다시 검색</button>
             </p>
           )}
           {theoryHits.length > 0 && (
