@@ -16,7 +16,7 @@ import { cn } from '@/utils/cn'
  */
 export function StudyLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const { taxonomy, loading, subjectProgress, unitProgress } = useData()
+  const { taxonomy, loading, error, refreshAll, subjectProgress, unitProgress } = useData()
   const params = useParams()
   const [expanded, setExpanded] = useState<string | null>(params.subjectId ?? null)
 
@@ -32,6 +32,8 @@ export function StudyLayout() {
             <div className="flex justify-center py-8">
               <Spinner />
             </div>
+          ) : error ? (
+            <div role="alert" className="p-3 text-sm text-rose-700 dark:text-rose-300"><p>과목을 불러오지 못했습니다.</p><button type="button" onClick={refreshAll} className="mt-2 underline">다시 불러오기</button></div>
           ) : !taxonomy || taxonomy.subjects.length === 0 ? (
             <p className="px-2 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
               등록된 과목이 없습니다.
@@ -74,7 +76,7 @@ export function StudyLayout() {
                           )
                         }
                       >
-                        이론
+                        알렌
                       </NavLink>
                       <ProgressBadge
                         progress={subjectProgress(subject.id)}

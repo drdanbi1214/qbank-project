@@ -38,7 +38,7 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
           <button
             type="button"
             onClick={onOpenDrawer}
-            aria-label="메뉴 열기"
+            aria-label="과목 목록 열기"
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <Icon name="menu" />
@@ -103,7 +103,7 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
                 />
                 <div
                   role="menu"
-                  className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                  className="absolute right-0 z-20 mt-2 max-h-[calc(100dvh-5rem)] w-48 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
                 >
                   <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                     {profile?.email}

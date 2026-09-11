@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { withReturnTo } from '@/lib/learningNavigation'
+import { Button } from '@/components/ui/Button'
 import { ResetProgressMenu } from '@/components/ResetProgressMenu'
 import { DailyChallengeStatsModal } from '@/components/study/DailyChallengeStatsModal'
 import { Icon } from '@/components/ui/Icon'
@@ -52,23 +53,27 @@ function sessionScopeLabel(session: StudySession, taxonomy: Taxonomy | null): st
 }
 
 export function StudyHomePage() {
-  const { taxonomy, loading, subjectProgress } = useData()
+  const { taxonomy, loading, error, refreshAll, subjectProgress } = useData()
   const { session: authSession } = useAuth()
   const userId = authSession?.user.id ?? ''
 
   // 진행 중인 세션이 있으면 이어풀기 버튼을 띄운다.
   const [openSession, setOpenSession] = useState<StudySession | null>(null)
+  const [resumeError, setResumeError] = useState(false)
+  const [resumeNonce, setResumeNonce] = useState(0)
+  const [dailyError, setDailyError] = useState(false)
+  const [dailyNonce, setDailyNonce] = useState(0)
   useEffect(() => {
     let active = true
     void fetchOpenSession()
       .then((found) => {
-        if (active) setOpenSession(found)
+        if (active) { setOpenSession(found); setResumeError(false) }
       })
-      .catch((caught: unknown) => console.error('세션을 불러오지 못했습니다.', caught))
+      .catch(() => { if (active) setResumeError(true) })
     return () => {
       active = false
     }
-  }, [])
+  }, [resumeNonce, userId])
 
   // 오늘의 문제: 26학번 학년말고사 전 과목에서 매일 같은 10문제를 모두가 푼다.
   const [dailySession, setDailySession] = useState<{
@@ -90,9 +95,9 @@ export function StudyHomePage() {
         setDailySession(session)
 
         const stats = await fetchDailyChallengeStats()
-        if (active) setDailyStats(stats)
-      } catch (caught) {
-        console.error('오늘의 문제를 불러오지 못했습니다.', caught)
+        if (active) { setDailyStats(stats); setDailyError(false) }
+      } catch {
+        if (active) setDailyError(true)
       }
     }
 
@@ -100,7 +105,7 @@ export function StudyHomePage() {
     return () => {
       active = false
     }
-  }, [userId])
+  }, [userId, dailyNonce])
 
   const today = dailySession ? dailyStats?.history.find((day) => day.date === dailySession.date) : undefined
   const dailyDone = today?.done ?? 0
@@ -115,6 +120,7 @@ export function StudyHomePage() {
     )
   }
 
+  if (error) return <div role="alert" className="rounded-xl border border-rose-200 p-5"><p>과목을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p><Button className="mt-3" onClick={refreshAll}>다시 불러오기</Button></div>
 
   const subjects = taxonomy?.subjects ?? []
 
@@ -127,6 +133,8 @@ export function StudyHomePage() {
         </p>
       </header>
 
+      {resumeError && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">이어풀기를 불러오지 못했습니다. <button type="button" className="underline" onClick={() => { setResumeError(false); setResumeNonce((n) => n + 1) }}>다시 불러오기</button></p>}
+      {dailyError && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">오늘의 문제 현황을 불러오지 못했습니다. <button type="button" className="underline" onClick={() => { setDailyError(false); setDailyNonce((n) => n + 1) }}>다시 불러오기</button></p>}
       {openSession && openSession.questionIds.length > 0 && (
         <Link
           to={openSession.mode === 'block_test' && typeof openSession.scope.exam_id === 'string' ? `/block-test?exam=${openSession.scope.exam_id}` : withReturnTo(`/solve?session=${openSession.id}`, '/study')}
@@ -157,7 +165,9 @@ export function StudyHomePage() {
             <span className="min-w-0">
               <span className="block text-sm font-semibold">오늘의 문제</span>
               <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                {dailyRemaining === 0
+                {!dailyStats
+                  ? dailyError ? '현황을 불러오지 못했습니다' : '현황을 확인하고 있습니다…'
+                  : dailyRemaining === 0
                   ? '오늘의 문제를 모두 풀었습니다'
                   : `오늘의 문제가 ${dailyRemaining}개 남았습니다.`}
               </span>
