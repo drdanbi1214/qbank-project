@@ -678,6 +678,29 @@
 [data-print-doc] .rich-text .footnote-list {
   margin-top: calc(1.07em * var(--print-leading, 1));
 }
+/*
+ * 표 칸과 콜아웃 속은 .rich-text 의 직접 자식이 아니라 위의 문단 여백 규칙이
+ * 닿지 않는다. 칸 안쪽 여백과 콜아웃 항목 사이도 rem 으로 굳어 있어, 줄 간격을
+ * 줄여도 표와 콜아웃만 그대로 남았다. 같은 배수를 받게 한다.
+ */
+[data-print-doc] .rich-text :is(th, td) {
+  padding: calc(0.29em * var(--print-leading, 1)) 0.57em;
+}
+[data-print-doc] .rich-text .callout-block {
+  gap: 0.8em;
+  padding: calc(0.8em * var(--print-leading, 1));
+  /* @apply leading-6 이 1.5rem 로 굳혀 놓은 자리다. 클래스 이름이 leading-6 이
+     아니라 위의 유틸리티 되돌리기가 닿지 않아, 속이 통째로 24px 에 묶여 있었다. */
+  line-height: calc(1.6 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text .callout-block [data-callout-content] > * + * {
+  margin-top: calc(0.4em * var(--print-leading, 1));
+}
+/* 표와 콜아웃 속 문단도 줄 간격을 따라야 한다. 안에서 다시 고정되면 소용없다. */
+[data-print-doc] .rich-text :is(th, td, .callout-block) :is(p, li, div) {
+  line-height: inherit;
+}
+
 /* 지문도 같은 규칙을 탄다. 문제 쪽만 촘촘해지면 두 단의 높이가 어긋난다. */
 [data-print-doc] .space-y-1 > * + * {
   margin-top: calc(0.27em * var(--print-leading, 1));
