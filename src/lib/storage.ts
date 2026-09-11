@@ -224,11 +224,34 @@ export async function uploadStoredObject(
   }
 }
 
+/**
+ * 이 경로로 만들어 둔 서명을 버린다.
+ *
+ * 서명은 받았는데 그 주소로 그림을 받다가 실패하는 일이 있다 — 서명이 이미
+ * 삭았거나, 한꺼번에 몰려 밀렸거나. 캐시를 그대로 두고 다시 시도하면 같은
+ * 못 쓰는 주소가 돌아오므로 먼저 버려야 한다. 계정이 달라도 경로가 같으면
+ * 함께 버린다.
+ */
+export function invalidateSignedUrl(storagePath: string): void {
+  const suffix = `:${storagePath}`
+  for (const key of [...cache.keys()]) {
+    if (key.endsWith(suffix)) cache.delete(key)
+  }
+}
+
+/** 그림 받기 실패로 다시 서명해 보는 횟수. 정말 없는 파일을 끝없이 조르지 않는다. */
+const IMAGE_RETRY_LIMIT = 2
+
 export type SignedUrlState = {
   url: string | null
   status: 'idle' | 'loading' | 'ready' | 'failed'
-  /** 다시 받아 본다. 서명이 한 번 막혔다고 영영 못 보게 둘 이유는 없다. */
+  /** 서명을 버리고 다시 받아 본다. 한 번 막혔다고 영영 못 보게 둘 이유는 없다. */
   retry: () => void
+  /**
+   * <img onError> 에 걸어 둔다. 서명이 삭았거나 밀려서 그림만 못 받은 경우를
+   * 스스로 한두 번 되짚는다. 그래도 안 되면 status 가 failed 로 바뀐다.
+   */
+  onImageError: () => void
 }
 
 /**
@@ -241,8 +264,15 @@ export type SignedUrlState = {
  */
 export function useSignedUrlState(storagePath: string | null | undefined): SignedUrlState {
   const [nonce, setNonce] = useState(0)
+  // 경로와 함께 센다. 경로가 바뀌면 앞 그림의 실패 횟수를 물려받지 않는다.
+  const [imageError, setImageError] = useState<{ path: string; count: number }>({
+    path: '',
+    count: 0,
+  })
+  const errorCount = imageError.path === (storagePath ?? '') ? imageError.count : 0
   const [result, setResult] = useState<{ key: string; url: string | null } | null>(null)
-  const key = `${nonce}:${storagePath ?? ''}`
+  // 실패 횟수를 열쇠에 넣어 두면, 한 번 더 세는 것만으로 다시 서명하러 간다.
+  const key = `${nonce}:${errorCount}:${storagePath ?? ''}`
 
   useEffect(() => {
     if (!storagePath) return
@@ -261,11 +291,30 @@ export function useSignedUrlState(storagePath: string | null | undefined): Signe
     }
   }, [storagePath, key])
 
-  const retry = useCallback(() => setNonce((value) => value + 1), [])
+  const retry = useCallback(() => {
+    if (storagePath) invalidateSignedUrl(storagePath)
+    setImageError({ path: '', count: 0 })
+    setNonce((value) => value + 1)
+  }, [storagePath])
+
+  const onImageError = useCallback(() => {
+    if (!storagePath) return
+    invalidateSignedUrl(storagePath)
+    setImageError((previous) =>
+      previous.path === storagePath
+        ? { path: storagePath, count: previous.count + 1 }
+        : { path: storagePath, count: 1 },
+    )
+  }, [storagePath])
+
   const settled = result?.key === key
-  if (!storagePath) return { url: null, status: 'idle', retry }
-  if (!settled) return { url: null, status: 'loading', retry }
-  return { url: result.url, status: result.url ? 'ready' : 'failed', retry }
+  if (!storagePath) return { url: null, status: 'idle', retry, onImageError }
+  // 되짚을 만큼 되짚었으면 깨진 그림 대신 안내를 내보낸다.
+  if (errorCount > IMAGE_RETRY_LIMIT) {
+    return { url: null, status: 'failed', retry, onImageError }
+  }
+  if (!settled) return { url: null, status: 'loading', retry, onImageError }
+  return { url: result.url, status: result.url ? 'ready' : 'failed', retry, onImageError }
 }
 
 export function useSignedUrl(storagePath: string | null | undefined): string | null {

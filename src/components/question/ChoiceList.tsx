@@ -1,4 +1,4 @@
-import { useSignedUrl } from '@/lib/storage'
+import { useSignedUrlState } from '@/lib/storage'
 import { circled, effectiveAnswer, type AnswerPayload, type Choice } from '@/types/question'
 import { cn } from '@/utils/cn'
 
@@ -187,7 +187,7 @@ function Indicator({ state }: { state: 'idle' | 'selected' | 'correct' | 'wrong'
 }
 
 function ChoiceImage({ url, no }: { url: string; no: number }) {
-  const src = useSignedUrl(url)
+  const { url: src, onImageError } = useSignedUrlState(url)
   if (!src) {
     return (
       <span className="mt-1 block h-24 rounded-lg border border-dashed border-slate-300 dark:border-slate-700" />
@@ -198,6 +198,7 @@ function ChoiceImage({ url, no }: { url: string; no: number }) {
       src={src}
       alt={`보기 ${no}`}
       loading="lazy"
+      onError={onImageError}
       className="mt-1 max-h-48 rounded-lg border border-slate-200 object-contain dark:border-slate-700"
     />
   )

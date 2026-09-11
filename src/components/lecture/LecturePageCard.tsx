@@ -70,7 +70,12 @@ export function LecturePageCard({
   onMarksChange,
   canMove = false,
 }: Props) {
-  const { url: imageUrl, status: imageStatus, retry: retryImage } = useSignedUrlState(src)
+  const {
+    url: imageUrl,
+    status: imageStatus,
+    retry: retryImage,
+    onImageError,
+  } = useSignedUrlState(src)
   const frame = useRef<HTMLDivElement | null>(null)
   const [tool, setTool] = useState<MarkTool | 'erase' | null>(null)
   const [color, setColor] = useState<string>(STROKE_COLORS[0])
@@ -170,6 +175,9 @@ export function LecturePageCard({
                 src={imageUrl}
                 alt={caption}
                 draggable={false}
+                // 서명은 받았는데 그림만 못 받는 일이 있다. 서명을 버리고 스스로
+                // 한두 번 다시 받아 본다.
+                onError={onImageError}
                 className="block w-full"
                 onLoad={(event) => {
                   const image = event.currentTarget

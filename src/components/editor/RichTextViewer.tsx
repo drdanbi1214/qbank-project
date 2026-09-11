@@ -14,7 +14,7 @@ import { safeFontSize } from '@/components/editor/extensions/fontSize'
 import { HIGHLIGHT_SET, TEXT_COLOR_SET } from '@/components/editor/palette'
 import { indentStyle, safeIndent } from '@/components/editor/extensions/indent'
 import { renderMarkedText, type RenderMark } from '@/components/marking/marks'
-import { useSignedUrl } from '@/lib/storage'
+import { useSignedUrl, useSignedUrlState } from '@/lib/storage'
 import {
   cellShadeOf,
   colWidthsOf,
@@ -428,7 +428,7 @@ function ViewerImage({
   onZoom: (src: string) => void
 }) {
   const external = /^https?:\/\//i.test(path)
-  const signedUrl = useSignedUrl(external ? null : path)
+  const { url: signedUrl, onImageError } = useSignedUrlState(external ? null : path)
   const src = external ? path : signedUrl
   const [naturalSize, setNaturalSize] = useState<{ width: number; aspect: number } | null>(null)
   const cropAspectRatio =
@@ -472,6 +472,8 @@ function ViewerImage({
             src={src}
             alt={alt ?? '본문 이미지'}
             loading="lazy"
+            // 서명은 받았는데 그림만 못 받는 일이 있다. 서명을 버리고 다시 받는다.
+            onError={onImageError}
             onLoad={(event) => {
               const image = event.currentTarget
               if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return

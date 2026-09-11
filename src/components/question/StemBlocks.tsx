@@ -252,7 +252,7 @@ function StemImage({
   marks: RenderMark[]
   onZoom: (src: string) => void
 }) {
-  const { url: src, status, retry } = useSignedUrlState(url)
+  const { url: src, status, retry, onImageError } = useSignedUrlState(url)
 
   // 실패와 받는 중을 갈라야 한다. 예전에는 둘 다 같은 문구라, 못 받은 이미지가
   // 끝나지 않는 로딩처럼 보였다.
@@ -288,6 +288,7 @@ function StemImage({
           // 내보내기에서 이 표식으로 너비를 줄인다. 클래스 조합으로 집으면
           // 스타일을 손댈 때 같이 깨진다.
           data-stem-image=""
+          onError={onImageError}
           className="mx-auto max-h-[60vh] rounded-lg border border-slate-200 object-contain dark:border-slate-700"
         />
       </button>
