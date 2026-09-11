@@ -679,6 +679,33 @@
   margin-top: calc(1.07em * var(--print-leading, 1));
 }
 /*
+ * 종이에서는 좌우로 끌 수 없다.
+ *
+ * 표는 화면에서 넘치면 overflow-x-auto 안에서 밀어 보면 되지만, 인쇄하면 넘친
+ * 쪽이 그냥 잘려 나간다. 지문 표는 min-w-max 로 내용 너비를 최소값으로 못박고
+ * 있어 거의 늘 넘쳤다. 이 문서 안에서는 스크롤 상자를 풀고, 표가 제 칸을
+ * 넘지 않게 하며, 셀 안에서 줄을 바꾸게 한다.
+ *
+ * 열 폭을 끌어 정한 표는 colgroup 의 px 가 칸보다 넓어도 그대로 버틴다. 종이
+ * 폭은 화면보다 좁고 다단이면 더 좁아, 그 값을 지키면 늘 잘린다. 정한 비율을
+ * 잃더라도 다 보이는 편이 낫다.
+ */
+[data-print-doc] .overflow-x-auto {
+  overflow-x: visible !important;
+}
+[data-print-doc] table {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+[data-print-doc] colgroup col {
+  width: auto !important;
+}
+[data-print-doc] :is(th, td) {
+  overflow-wrap: anywhere;
+}
+
+/*
  * 표 칸과 콜아웃 속은 .rich-text 의 직접 자식이 아니라 위의 문단 여백 규칙이
  * 닿지 않는다. 칸 안쪽 여백과 콜아웃 항목 사이도 rem 으로 굳어 있어, 줄 간격을
  * 줄여도 표와 콜아웃만 그대로 남았다. 같은 배수를 받게 한다.
