@@ -24,6 +24,7 @@ import { LecturePicker } from '@/components/lecture/LecturePicker'
 import { TheoryPicker } from '@/components/question/TheoryPicker'
 import type { LecturePageAttrs } from '@/components/lecture/LecturePageCard'
 import { TopicSidebar } from '@/components/question/TopicSidebar'
+import { TopicOverview } from '@/components/question/TopicOverview'
 import { TopicMemoWorkspace } from '@/components/theory/TheoryMemoWorkspace'
 import { uploadTopicImage } from '@/lib/uploads'
 import { formatDateTime, formatShortDate } from '@/utils/date'
@@ -667,9 +668,14 @@ export function TopicsPage() {
               </TopicScopeProvider>
             </div>
           ) : !selected ? (
-            <p className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              왼쪽에서 주제를 고르거나 새로 만드세요.
-            </p>
+            // 과목만 고른 상태에서는 이 자리에 전체 목차를 펼친다. 글을 고르면
+            // 그 자리를 글이 차지하고 목차는 왼쪽에만 남는다.
+            <TopicOverview
+              topics={topics}
+              units={subjectUnits}
+              subjectId={subjectId}
+              onNewTopic={startDraft}
+            />
           ) : (
             <div className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
               <div className="mb-3 flex flex-wrap items-center gap-2">
