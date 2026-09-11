@@ -106,6 +106,7 @@ export function PrintPage() {
   const [columns, setColumns] = useState(saved.columns)
   const [onePerColumn, setOnePerColumn] = useState(saved.onePerColumn)
   const [columnRule, setColumnRule] = useState(saved.columnRule)
+  const [imageWidth, setImageWidth] = useState(saved.imageWidth)
   const [leading, setLeading] = useState(saved.leading)
   // 한 단은 이미 좁다. 거기서 문제와 풀이를 또 좌우로 가르면 글줄이 너무 짧아
   // 읽히지 않는다. 다단에서는 세로형과 분리형만 쓴다.
@@ -122,6 +123,7 @@ export function PrintPage() {
           scale,
           leading,
           splitRatio,
+          imageWidth,
           columns,
           onePerColumn,
           columnRule,
@@ -130,7 +132,7 @@ export function PrintPage() {
     } catch {
       // 저장이 막혀 있어도 이번 판은 그대로 쓸 수 있다. 알릴 일은 아니다.
     }
-  }, [settingsKey, layout, landscape, margin, scale, leading, splitRatio, columns, onePerColumn, columnRule])
+  }, [settingsKey, layout, landscape, margin, scale, leading, splitRatio, columns, onePerColumn, columnRule, imageWidth])
   const solutionOffByDefault = params.get('solution') === '0'
 
   // 켜진 목록이 아니라 "끈 목록"을 들고 있다. 출처 목록은 조회가 끝나야
@@ -536,6 +538,21 @@ export function PrintPage() {
             <span className="w-12 tabular-nums text-slate-500">{Math.round(leading * 100)}%</span>
           </label>
 
+          {/* 사진 하나가 한 쪽을 다 먹으면 문제와 풀이가 갈라진다. */}
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-slate-500">사진</span>
+            <input
+              type="range"
+              min={30}
+              max={100}
+              step={5}
+              value={imageWidth}
+              onChange={(event) => setImageWidth(Number(event.target.value))}
+              className="w-24"
+            />
+            <span className="w-20 tabular-nums text-slate-500">최대 {imageWidth}%</span>
+          </label>
+
           {columns > 1 && (
             <label className="flex items-center gap-1 text-sm">
               <input
@@ -583,6 +600,7 @@ export function PrintPage() {
               setColumns(DEFAULT_PRINT_SETTINGS.columns)
               setOnePerColumn(DEFAULT_PRINT_SETTINGS.onePerColumn)
               setColumnRule(DEFAULT_PRINT_SETTINGS.columnRule)
+              setImageWidth(DEFAULT_PRINT_SETTINGS.imageWidth)
               setLeading(DEFAULT_PRINT_SETTINGS.leading)
               setLandscape(DEFAULT_PRINT_SETTINGS.landscape)
               setMargin(DEFAULT_PRINT_SETTINGS.margin)
@@ -652,6 +670,7 @@ export function PrintPage() {
               maxWidth: `calc(${contentWidth}mm + 4rem)`,
               '--print-scale': scale,
               '--print-leading': leading,
+              '--print-image-width': imageWidth,
             } as CSSProperties
           }
           className="mx-auto bg-white p-8 text-slate-900 shadow-sm print:p-0 print:shadow-none"

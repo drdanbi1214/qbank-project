@@ -19,6 +19,8 @@ export type PrintSettings = {
   splitRatio: number
   /** 줄 간격 배수 (1 이 지금까지의 간격) */
   leading: number
+  /** 문제 사진의 최대 너비 (%) */
+  imageWidth: number
   /** 한 쪽에 세울 단 수 */
   columns: number
   /** 문항마다 새 단에서 시작할지. 끄면 앞 문항에 이어 흐른다. */
@@ -34,6 +36,7 @@ export const PRINT_SETTINGS_RANGE = {
   leading: { min: 0.75, max: 1.3 },
   splitRatio: { min: 20, max: 80 },
   columns: { min: 1, max: 3 },
+  imageWidth: { min: 30, max: 100 },
 } as const
 
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
@@ -43,6 +46,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   scale: 1,
   leading: 1,
   splitRatio: 50,
+  imageWidth: 70,
   columns: 1,
   onePerColumn: true,
   columnRule: true,
@@ -70,7 +74,7 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
   if (typeof value !== 'object' || value === null) return { ...DEFAULT_PRINT_SETTINGS }
 
   const row = value as Record<string, unknown>
-  const { margin, scale, leading, splitRatio, columns } = PRINT_SETTINGS_RANGE
+  const { margin, scale, leading, splitRatio, columns, imageWidth } = PRINT_SETTINGS_RANGE
   return {
     layout: row.layout === 'split' || row.layout === 'separate' ? row.layout : 'stack',
     landscape: row.landscape === true,
@@ -83,6 +87,9 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
       20,
     splitRatio: Math.round(
       bounded(row.splitRatio, splitRatio.min, splitRatio.max, DEFAULT_PRINT_SETTINGS.splitRatio),
+    ),
+    imageWidth: Math.round(
+      bounded(row.imageWidth, imageWidth.min, imageWidth.max, DEFAULT_PRINT_SETTINGS.imageWidth),
     ),
     columns: Math.round(
       bounded(row.columns, columns.min, columns.max, DEFAULT_PRINT_SETTINGS.columns),

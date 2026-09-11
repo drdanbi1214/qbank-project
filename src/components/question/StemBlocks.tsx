@@ -285,6 +285,9 @@ function StemImage({
           src={src}
           alt={caption ?? '문제 이미지'}
           loading="lazy"
+          // 내보내기에서 이 표식으로 너비를 줄인다. 클래스 조합으로 집으면
+          // 스타일을 손댈 때 같이 깨진다.
+          data-stem-image=""
           className="mx-auto max-h-[60vh] rounded-lg border border-slate-200 object-contain dark:border-slate-700"
         />
       </button>
