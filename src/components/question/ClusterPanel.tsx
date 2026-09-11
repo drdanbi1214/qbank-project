@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { safeReturnTo, withReturnTo } from '@/lib/learningNavigation'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { circled } from '@/types/question'
 import { useCluster } from '@/components/question/useCluster'
@@ -19,6 +20,10 @@ type Props = {
  */
 export function ClusterPanel({ questionId, initialGroupId, currentSameAs, examLabelOf }: Props) {
   const { siblings, cards, identicalOf } = useCluster(questionId, initialGroupId)
+  const [params] = useSearchParams()
+  const carriedReturnTo = safeReturnTo(params.get('returnTo'))
+  const solveHref = (id: string) =>
+    carriedReturnTo ? withReturnTo(`/solve?question=${id}`, carriedReturnTo) : `/solve?question=${id}`
   // 동일 판본 자체에서 들어온 경우에는 그것이 가리키는 카드도 동일 출제 배너에
   // 포함한다. 카드 전문을 다시 펼치면 같은 문제를 중복 표시하게 된다.
   const sameCard = currentSameAs
@@ -77,7 +82,7 @@ export function ClusterPanel({ questionId, initialGroupId, currentSameAs, examLa
             </ol>
 
             <Link
-              to={`/solve?question=${row.id}`}
+              to={solveHref(row.id)}
               className="mt-3 inline-block rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-brand-700 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:text-brand-300 dark:ring-slate-600 dark:hover:bg-slate-800"
             >
               이 문제 보러가기
