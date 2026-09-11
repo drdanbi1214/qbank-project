@@ -715,8 +715,8 @@
 [data-print-doc] :is(img, svg, video, canvas, iframe, figure, pre, blockquote) {
   max-width: 100% !important;
 }
-[data-print-doc] .print-columns > li,
-[data-print-doc] .print-columns > li > * {
+[data-print-doc] .print-columns .print-column-items > li,
+[data-print-doc] .print-columns .print-column-items > li > * {
   max-width: 100%;
 }
 
@@ -805,16 +805,30 @@
   column-gap: 8mm;
   column-fill: balance;
 }
+/* 제목을 다단 컨테이너 안에서 전폭으로 펼친다. 목록은 상자를 만들지 않고
+   문항들을 바로 다단 흐름에 참여시켜 첫 장부터 제목 아래를 채운다. */
+[data-print-doc] .print-columns > .print-column-header {
+  column-span: all;
+  page-break-after: avoid;
+  break-after: avoid-page;
+}
+[data-print-doc] .print-columns > .print-column-items {
+  display: contents;
+}
 /* 단 사이 구분선. 글이 빽빽할수록 어디까지가 한 단인지 눈으로 잡아 준다. */
 [data-print-doc] .print-columns.print-column-rule {
   column-rule: 1px solid #cbd5e1;
 }
-[data-print-doc] .print-columns > li {
+[data-print-doc] .print-columns .print-column-items > li {
   break-inside: auto;
   margin: 0 0 1.5rem;
 }
 /* 문항마다 새 단에서 시작한다. 첫 문항까지 밀면 앞에 빈 단이 생긴다. */
-[data-print-doc] .print-columns.print-one-per-column > li + li {
+[data-print-doc]
+  .print-columns.print-one-per-column
+  .print-column-items
+  > li
+  + li {
   break-before: column;
 }
 
@@ -833,21 +847,6 @@
   header nav,
   .print-hide {
     display: none !important;
-  }
-
-  /*
-   * 제목과 다단 목록이 별도 블록이면 Chrome 인쇄 엔진이 긴 다단 목록을 다음
-   * 용지부터 배치해 첫 장에 제목만 남길 수 있다. 두 블록 사이에서는 쪽을
-   * 넘기지 않게 해 첫 문항이 반드시 제목 바로 아래에서 시작하도록 한다.
-   */
-  [data-print-doc] > header {
-    page-break-after: avoid;
-    break-after: avoid-page;
-  }
-
-  [data-print-doc] .print-columns {
-    page-break-before: avoid;
-    break-before: avoid-page;
   }
 
   @page {

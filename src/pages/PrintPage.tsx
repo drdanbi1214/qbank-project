@@ -989,29 +989,9 @@ export function PrintPage() {
             !printReady && 'print:hidden',
           )}
         >
-          <header className="mb-6 border-b-2 border-slate-800 pb-3">
-            <h1 className="text-2xl font-bold">{title}</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              총 {questions.length}문항
-              {withAnswer ? ', 정답·해설 포함' : ''}
-              {onCount > 0
-                ? `, 풀이 ${sources
-                    .filter((item) => isOn(item.key))
-                    .map((item) => item.label)
-                    .join('·')}`
-                : ''}
-              {effectiveLayout !== 'stack' ? `, ${LAYOUT_LABEL[effectiveLayout]}` : ''}
-              {columns > 1 ? `, ${columns}단` : ''}
-            </p>
-            {source === 'exam' && exam?.overview && (
-              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{exam.overview}</p>
-            )}
-          </header>
-
-          {/* 다단에서는 문항 간격을 CSS 쪽(print-columns > li)에서 잡는다.
-              space-y-* 는 형제에 margin-top 을 주는데, 단 맨 위에 남은 여백이
-              단마다 시작 높이를 어긋나게 한다. */}
-          <ol
+          {/* 제목과 목록을 같은 다단 컨테이너에 둔다. 제목만 바깥에 두면 Chrome
+              인쇄가 긴 다단 목록을 다음 종이부터 시작해 첫 장이 표지가 돼 버린다. */}
+          <div
             className={cn(
               columns > 1
                 ? cn(
@@ -1019,50 +999,86 @@ export function PrintPage() {
                     onePerColumn && 'print-one-per-column',
                     columnRule && 'print-column-rule',
                   )
-                : effectiveLayout === 'separate'
-                  ? 'space-y-6'
-                  : 'space-y-8',
+                : undefined,
             )}
             style={columns > 1 ? { columnCount: columns } : undefined}
           >
-            {questions.map((question, position) => {
-              const answer = loaded.answers.get(question.id) ?? null
+            <header
+              className={cn(
+                'mb-6 border-b-2 border-slate-800 pb-3',
+                columns > 1 && 'print-column-header',
+              )}
+            >
+              <h1 className="text-2xl font-bold">{title}</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                총 {questions.length}문항
+                {withAnswer ? ', 정답·해설 포함' : ''}
+                {onCount > 0
+                  ? `, 풀이 ${sources
+                      .filter((item) => isOn(item.key))
+                      .map((item) => item.label)
+                      .join('·')}`
+                  : ''}
+                {effectiveLayout !== 'stack' ? `, ${LAYOUT_LABEL[effectiveLayout]}` : ''}
+                {columns > 1 ? `, ${columns}단` : ''}
+              </p>
+              {source === 'exam' && exam?.overview && (
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{exam.overview}</p>
+              )}
+            </header>
 
-              return (
-                <li key={question.id} className={cn(columns === 1 && 'break-inside-avoid')}>
-                  {renderMeta(question)}
-                  <div className="flex gap-2">
-                    <span className="shrink-0 text-base font-bold">{position + 1}.</span>
-                    <div className="min-w-0 flex-1">
-                      {/* 분리형은 앞쪽에 문제만 싣고 정답·풀이를 뒤로 몰아 둔다.
-                          좌우형은 같은 줄에서 왼쪽 문제 / 오른쪽 풀이로 가른다. */}
-                      {effectiveLayout === 'separate' ? (
-                        renderQuestion(question, answer, false)
-                      ) : effectiveLayout === 'split' ? (
-                        <div
-                          className="grid items-start"
-                          style={{
-                            gridTemplateColumns: `minmax(0, ${splitRatio}fr) 1rem minmax(0, ${100 - splitRatio}fr)`,
-                          }}
-                        >
-                          <div className="min-w-0">{renderQuestion(question, answer, withAnswer)}</div>
-                          <SplitHandle ratio={splitRatio} onRatio={setSplitRatio} />
-                          <div className="min-w-0 text-sm">
-                            {renderAnswerAndSolutions(question, answer)}
+            {/* 다단에서는 문항 간격을 CSS 쪽에서 잡는다. space-y-* 는 형제에
+                margin을 주어 단마다 시작 높이를 어긋나게 하므로 1단에만 쓴다. */}
+            <ol
+              className={cn(
+                columns > 1
+                  ? 'print-column-items'
+                  : effectiveLayout === 'separate'
+                    ? 'space-y-6'
+                    : 'space-y-8',
+              )}
+            >
+              {questions.map((question, position) => {
+                const answer = loaded.answers.get(question.id) ?? null
+
+                return (
+                  <li key={question.id} className={cn(columns === 1 && 'break-inside-avoid')}>
+                    {renderMeta(question)}
+                    <div className="flex gap-2">
+                      <span className="shrink-0 text-base font-bold">{position + 1}.</span>
+                      <div className="min-w-0 flex-1">
+                        {/* 분리형은 앞쪽에 문제만 싣고 정답·풀이를 뒤로 몰아 둔다.
+                            좌우형은 같은 줄에서 왼쪽 문제 / 오른쪽 풀이로 가른다. */}
+                        {effectiveLayout === 'separate' ? (
+                          renderQuestion(question, answer, false)
+                        ) : effectiveLayout === 'split' ? (
+                          <div
+                            className="grid items-start"
+                            style={{
+                              gridTemplateColumns: `minmax(0, ${splitRatio}fr) 1rem minmax(0, ${100 - splitRatio}fr)`,
+                            }}
+                          >
+                            <div className="min-w-0">
+                              {renderQuestion(question, answer, withAnswer)}
+                            </div>
+                            <SplitHandle ratio={splitRatio} onRatio={setSplitRatio} />
+                            <div className="min-w-0 text-sm">
+                              {renderAnswerAndSolutions(question, answer)}
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <>
-                          {renderQuestion(question, answer, withAnswer)}
-                          {renderAnswerAndSolutions(question, answer)}
-                        </>
-                      )}
+                        ) : (
+                          <>
+                            {renderQuestion(question, answer, withAnswer)}
+                            {renderAnswerAndSolutions(question, answer)}
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
 
           {effectiveLayout === 'separate' && (withAnswer || onCount > 0) && (
             <section style={{ breakBefore: 'page' }} className="mt-10">
