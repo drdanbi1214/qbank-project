@@ -583,6 +583,29 @@
 }
 
 /*
+ * 시험지 2단 조판.
+ *
+ * 한 단에 한 문제를 넣되, 문제와 풀이가 길어 한 단을 넘치면 다음 단으로 이어
+ * 흐른다. 그래서 문항에 break-inside: avoid 를 걸면 안 된다 — 그것이 걸려
+ * 있으면 단을 넘지 못해 긴 문항이 통째로 다음 단으로 밀리고 앞 단이 비어 버린다.
+ *
+ * column-fill: auto 는 단을 앞에서부터 차례로 채운다. 기본값(balance)은 마지막
+ * 쪽의 두 단 높이를 맞추려 들어, 쪽마다 문항이 놓이는 자리가 달라진다.
+ */
+[data-print-doc] .print-columns {
+  column-gap: 8mm;
+  column-fill: auto;
+}
+[data-print-doc] .print-columns > li {
+  break-inside: auto;
+  margin: 0 0 1.5rem;
+}
+/* 문항마다 새 단에서 시작한다. 첫 문항까지 밀면 앞에 빈 단이 생긴다. */
+[data-print-doc] .print-columns.print-one-per-column > li + li {
+  break-before: column;
+}
+
+/*
  * 인쇄 (문제집 PDF 저장).
  * 화면용 배경과 다크모드를 걷어내고 종이에 맞춘다.
  */

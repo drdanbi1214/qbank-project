@@ -103,17 +103,30 @@ export function PrintPage() {
   const [scale, setScale] = useState(saved.scale)
   // 좌우 분할에서 문제가 차지하는 비율(%). 가운데 바를 끌어 바꾼다.
   const [splitRatio, setSplitRatio] = useState(saved.splitRatio)
+  const [columns, setColumns] = useState(saved.columns)
+  const [onePerColumn, setOnePerColumn] = useState(saved.onePerColumn)
+  // 한 단은 이미 좁다. 거기서 문제와 풀이를 또 좌우로 가르면 글줄이 너무 짧아
+  // 읽히지 않는다. 다단에서는 세로형과 분리형만 쓴다.
+  const effectiveLayout: Layout = columns > 1 && layout === 'split' ? 'stack' : layout
 
   useEffect(() => {
     try {
       localStorage.setItem(
         settingsKey,
-        JSON.stringify({ layout, landscape, margin, scale, splitRatio } satisfies PrintSettings),
+        JSON.stringify({
+          layout,
+          landscape,
+          margin,
+          scale,
+          splitRatio,
+          columns,
+          onePerColumn,
+        } satisfies PrintSettings),
       )
     } catch {
       // 저장이 막혀 있어도 이번 판은 그대로 쓸 수 있다. 알릴 일은 아니다.
     }
-  }, [settingsKey, layout, landscape, margin, scale, splitRatio])
+  }, [settingsKey, layout, landscape, margin, scale, splitRatio, columns, onePerColumn])
   const solutionOffByDefault = params.get('solution') === '0'
 
   // 켜진 목록이 아니라 "끈 목록"을 들고 있다. 출처 목록은 조회가 끝나야
@@ -484,7 +497,37 @@ export function PrintPage() {
             <span className="w-12 tabular-nums text-slate-500">{Math.round(scale * 100)}%</span>
           </label>
 
-          {layout === 'split' && (
+          <span className="flex items-center gap-1 text-sm">
+            <span className="text-slate-500">단</span>
+            {[1, 2, 3].map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setColumns(value)}
+                className={cn(
+                  'rounded-md px-2 py-1 text-sm transition-colors',
+                  columns === value
+                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+                )}
+              >
+                {value}단
+              </button>
+            ))}
+          </span>
+
+          {columns > 1 && (
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={onePerColumn}
+                onChange={(event) => setOnePerColumn(event.target.checked)}
+              />
+              문항마다 새 단에서 시작
+            </label>
+          )}
+
+          {effectiveLayout === 'split' && (
             <span className="flex items-center gap-2 text-sm text-slate-500">
               문제 {splitRatio}% · 풀이 {100 - splitRatio}%
               <button
@@ -497,9 +540,17 @@ export function PrintPage() {
             </span>
           )}
 
+          {columns > 1 && layout === 'split' && (
+            <span className="text-sm text-amber-700 dark:text-amber-300">
+              다단에서는 좌우 분할 대신 세로형으로 싣습니다
+            </span>
+          )}
+
           <button
             type="button"
             onClick={() => {
+              setColumns(DEFAULT_PRINT_SETTINGS.columns)
+              setOnePerColumn(DEFAULT_PRINT_SETTINGS.onePerColumn)
               setLandscape(DEFAULT_PRINT_SETTINGS.landscape)
               setMargin(DEFAULT_PRINT_SETTINGS.margin)
               setScale(DEFAULT_PRINT_SETTINGS.scale)
@@ -579,28 +630,41 @@ export function PrintPage() {
                     .map((item) => item.label)
                     .join('·')}`
                 : ''}
-              {layout !== 'stack' ? ` (${LAYOUT_LABEL[layout]})` : ''}
+              {effectiveLayout !== 'stack' ? `, ${LAYOUT_LABEL[effectiveLayout]}` : ''}
+              {columns > 1 ? `, ${columns}단` : ''}
             </p>
             {source === 'exam' && exam?.overview && (
               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{exam.overview}</p>
             )}
           </header>
 
-          <ol className={layout === 'separate' ? 'space-y-6' : 'space-y-8'}>
+          {/* 다단에서는 문항 간격을 CSS 쪽(print-columns > li)에서 잡는다.
+              space-y-* 는 형제에 margin-top 을 주는데, 단 맨 위에 남은 여백이
+              단마다 시작 높이를 어긋나게 한다. */}
+          <ol
+            className={cn(
+              columns > 1
+                ? cn('print-columns', onePerColumn && 'print-one-per-column')
+                : effectiveLayout === 'separate'
+                  ? 'space-y-6'
+                  : 'space-y-8',
+            )}
+            style={columns > 1 ? { columnCount: columns } : undefined}
+          >
             {questions.map((question, position) => {
               const answer = loaded.answers.get(question.id) ?? null
 
               return (
-                <li key={question.id} className="break-inside-avoid">
+                <li key={question.id} className={cn(columns === 1 && 'break-inside-avoid')}>
                   {renderMeta(question)}
                   <div className="flex gap-2">
                     <span className="shrink-0 text-base font-bold">{position + 1}.</span>
                     <div className="min-w-0 flex-1">
                       {/* 분리형은 앞쪽에 문제만 싣고 정답·풀이를 뒤로 몰아 둔다.
                           좌우형은 같은 줄에서 왼쪽 문제 / 오른쪽 풀이로 가른다. */}
-                      {layout === 'separate' ? (
+                      {effectiveLayout === 'separate' ? (
                         renderQuestion(question, answer, false)
-                      ) : layout === 'split' ? (
+                      ) : effectiveLayout === 'split' ? (
                         <div
                           className="grid items-start"
                           style={{
@@ -626,7 +690,7 @@ export function PrintPage() {
             })}
           </ol>
 
-          {layout === 'separate' && (withAnswer || onCount > 0) && (
+          {effectiveLayout === 'separate' && (withAnswer || onCount > 0) && (
             <section style={{ breakBefore: 'page' }} className="mt-10">
               <h2 className="mb-4 border-b-2 border-slate-800 pb-2 text-xl font-bold">
                 정답 및 풀이

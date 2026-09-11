@@ -6,7 +6,15 @@ import {
   printSettingsKey,
 } from '../src/lib/printSettings.ts'
 
-const saved = { layout: 'split', landscape: true, margin: 8, scale: 1.25, splitRatio: 65 }
+const saved = {
+  layout: 'split',
+  landscape: true,
+  margin: 8,
+  scale: 1.25,
+  splitRatio: 65,
+  columns: 2,
+  onePerColumn: false,
+}
 
 test('지난번 설정 그대로 다시 연다', () => {
   assert.deepEqual(parsePrintSettings(JSON.stringify(saved)), saved)
@@ -23,11 +31,12 @@ test('저장된 것이 없거나 깨졌으면 기본값으로 연다', () => {
 
 test('범위를 벗어난 값은 슬라이더가 낼 수 있는 값으로 끌어온다', () => {
   const wild = parsePrintSettings(
-    JSON.stringify({ layout: '세로형', margin: 900, scale: 99, splitRatio: -40 }),
+    JSON.stringify({ layout: '세로형', margin: 900, scale: 99, splitRatio: -40, columns: 9 }),
   )
   assert.equal(wild.margin, 30)
   assert.equal(wild.scale, 1.5)
   assert.equal(wild.splitRatio, 20)
+  assert.equal(wild.columns, 3)
   // 모르는 배치는 기본 배치로 돌린다.
   assert.equal(wild.layout, 'stack')
   assert.equal(wild.landscape, false)
@@ -42,6 +51,15 @@ test('숫자가 아닌 값은 기본값으로 대신한다', () => {
   assert.equal(broken.splitRatio, DEFAULT_PRINT_SETTINGS.splitRatio)
   // landscape 는 참인 값만 참으로 본다. 문자열 'true' 는 지난 판의 흔적일 수 있다.
   assert.equal(broken.landscape, false)
+})
+
+test('단 설정이 없던 시절에 저장한 값도 그대로 열린다', () => {
+  // 이 기능이 생기기 전에 저장된 것에는 columns 가 없다. 1단으로 열려야 한다.
+  const old = parsePrintSettings(JSON.stringify({ layout: 'split', margin: 8 }))
+  assert.equal(old.columns, 1)
+  assert.equal(old.onePerColumn, true)
+  assert.equal(old.layout, 'split')
+  assert.equal(old.margin, 8)
 })
 
 test('배율은 슬라이더 눈금(5%)에 맞춘다', () => {

@@ -17,12 +17,17 @@ export type PrintSettings = {
   scale: number
   /** 좌우 분할에서 문제가 차지하는 비율 (%) */
   splitRatio: number
+  /** 한 쪽에 세울 단 수 */
+  columns: number
+  /** 문항마다 새 단에서 시작할지. 끄면 앞 문항에 이어 흐른다. */
+  onePerColumn: boolean
 }
 
 export const PRINT_SETTINGS_RANGE = {
   margin: { min: 5, max: 30 },
   scale: { min: 0.7, max: 1.5 },
   splitRatio: { min: 20, max: 80 },
+  columns: { min: 1, max: 3 },
 } as const
 
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
@@ -31,6 +36,8 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   margin: 12,
   scale: 1,
   splitRatio: 50,
+  columns: 1,
+  onePerColumn: true,
 }
 
 /** 브라우저를 같이 쓰는 경우가 있어 계정별로 나눠 담는다. */
@@ -55,7 +62,7 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
   if (typeof value !== 'object' || value === null) return { ...DEFAULT_PRINT_SETTINGS }
 
   const row = value as Record<string, unknown>
-  const { margin, scale, splitRatio } = PRINT_SETTINGS_RANGE
+  const { margin, scale, splitRatio, columns } = PRINT_SETTINGS_RANGE
   return {
     layout: row.layout === 'split' || row.layout === 'separate' ? row.layout : 'stack',
     landscape: row.landscape === true,
@@ -66,5 +73,11 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
     splitRatio: Math.round(
       bounded(row.splitRatio, splitRatio.min, splitRatio.max, DEFAULT_PRINT_SETTINGS.splitRatio),
     ),
+    columns: Math.round(
+      bounded(row.columns, columns.min, columns.max, DEFAULT_PRINT_SETTINGS.columns),
+    ),
+    // 저장된 적이 없으면 켜 둔다. 2단을 고르는 까닭이 대개 문항마다 단을 나누는
+    // 것이라, 끄고 시작하면 무엇이 달라졌는지 알기 어렵다.
+    onePerColumn: row.onePerColumn !== false,
   }
 }
