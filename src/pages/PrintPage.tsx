@@ -411,7 +411,7 @@ export function PrintPage() {
       {/* 도구 모음은 아래 시험지와 같은 폭으로 둔다. 종이를 가로로 돌리면
           시험지만 넓어지고 도구는 좁게 남아 어긋나 보였다. */}
       <div
-        style={{ maxWidth: `calc(${contentWidth}mm + 4rem)` }}
+        style={{ maxWidth: `${paperWidth}mm` }}
         className="mx-auto mb-4 space-y-2 px-4 print:hidden"
       >
         <div className="flex flex-wrap items-center gap-3">
@@ -666,17 +666,20 @@ export function PrintPage() {
       ) : (
         <article
           data-print-doc
-          // 인쇄에서는 안쪽 여백이 0 이 되고 @page 여백이 대신 잡는다. 그래서
-          // 화면에서만 p-8 만큼 더 넓게 잡아야 글 폭이 양쪽에서 같아진다.
+          // 흰 종이는 용지 전체 폭이고, 여백은 그 안쪽 흰 자리로 그린다. 그래야
+          // 여백을 키워도 종이가 줄어드는 것처럼 보이지 않고, 화면과 인쇄가 같은
+          // 그림이 된다.
           style={
             {
-              maxWidth: `calc(${contentWidth}mm + 4rem)`,
+              maxWidth: `${paperWidth}mm`,
+              '--print-pad-x': `${margin}mm`,
+              '--print-pad-y': `${Math.max(12, margin)}mm`,
               '--print-scale': scale,
               '--print-leading': leading,
               '--print-image-width': imageWidth,
             } as CSSProperties
           }
-          className="mx-auto bg-white p-8 text-slate-900 shadow-sm print:p-0 print:shadow-none"
+          className="print-sheet mx-auto bg-white text-slate-900 shadow-sm print:shadow-none"
         >
           <header className="mb-6 border-b-2 border-slate-800 pb-3">
             <h1 className="text-2xl font-bold">{title}</h1>
