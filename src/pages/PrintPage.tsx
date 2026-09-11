@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { RichTextViewer } from '@/components/editor/RichTextViewer'
@@ -76,6 +77,12 @@ export function PrintPage() {
 
   const [withAnswer, setWithAnswer] = useState(params.get('answer') !== '0')
   const [layout, setLayout] = useState<Layout>('stack')
+  // 종이 설정. 화면의 미리보기와 실제 인쇄가 같은 값을 쓴다.
+  const [landscape, setLandscape] = useState(false)
+  const [margin, setMargin] = useState(12)
+  const [scale, setScale] = useState(1)
+  // 좌우 분할에서 문제가 차지하는 비율(%). 가운데 바를 끌어 바꾼다.
+  const [splitRatio, setSplitRatio] = useState(50)
   const solutionOffByDefault = params.get('solution') === '0'
 
   // 켜진 목록이 아니라 "끈 목록"을 들고 있다. 출처 목록은 조회가 끝나야
@@ -241,6 +248,12 @@ export function PrintPage() {
     return (loaded.solutions.get(questionId) ?? []).filter((item) => isOn(item.sourceLabel))
   }
 
+  const paperWidth = landscape ? 297 : 210
+  const paperHeight = landscape ? 210 : 297
+  // 글이 실제로 놓이는 폭. 화면에서는 안쪽 여백(p-8) 만큼 더 잡아, 미리보기의
+  // 글 폭이 인쇄 결과와 같아지게 한다.
+  const contentWidth = paperWidth - margin * 2
+
   const exam = source === 'exam' && examId ? taxonomy?.examById.get(examId) : undefined
   const examSubjectName = exam ? taxonomy?.subjectById.get(exam.subjectId)?.name : undefined
 
@@ -344,7 +357,12 @@ export function PrintPage() {
   return (
     <div className="min-h-dvh bg-slate-100 py-6 print:bg-white print:py-0 dark:bg-slate-950">
       {/* 인쇄물에는 나가지 않는 설정 막대 */}
-      <div className="mx-auto mb-4 max-w-[210mm] space-y-2 px-4 print:hidden">
+      {/* 도구 모음은 아래 시험지와 같은 폭으로 둔다. 종이를 가로로 돌리면
+          시험지만 넓어지고 도구는 좁게 남아 어긋나 보였다. */}
+      <div
+        style={{ maxWidth: `calc(${contentWidth}mm + 4rem)` }}
+        className="mx-auto mb-4 space-y-2 px-4 print:hidden"
+      >
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="secondary" onClick={() => navigate(-1)}>
             돌아가기
@@ -383,6 +401,85 @@ export function PrintPage() {
           </Button>
         </div>
 
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
+          <span className="flex items-center gap-1 text-sm">
+            <span className="text-slate-500">용지</span>
+            {([false, true] as const).map((value) => (
+              <button
+                key={String(value)}
+                type="button"
+                onClick={() => setLandscape(value)}
+                className={cn(
+                  'rounded-md px-2 py-1 text-sm transition-colors',
+                  landscape === value
+                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+                )}
+              >
+                {value ? 'A4 가로' : 'A4 세로'}
+              </button>
+            ))}
+          </span>
+
+          {/* 여백을 줄이면 글 폭이 넓어진다. 종이 크기를 바꾸지 않고 폭을 늘리는
+              길이라, 프린터가 못 찍는 크기로 새어 나갈 걱정이 없다. */}
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-slate-500">여백</span>
+            <input
+              type="range"
+              min={5}
+              max={30}
+              step={1}
+              value={margin}
+              onChange={(event) => setMargin(Number(event.target.value))}
+              className="w-28"
+            />
+            <span className="w-20 tabular-nums text-slate-500">
+              {margin}mm · 글 폭 {contentWidth}mm
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-slate-500">글자</span>
+            <input
+              type="range"
+              min={70}
+              max={150}
+              step={5}
+              value={Math.round(scale * 100)}
+              onChange={(event) => setScale(Number(event.target.value) / 100)}
+              className="w-28"
+            />
+            <span className="w-12 tabular-nums text-slate-500">{Math.round(scale * 100)}%</span>
+          </label>
+
+          {layout === 'split' && (
+            <span className="flex items-center gap-2 text-sm text-slate-500">
+              문제 {splitRatio}% · 풀이 {100 - splitRatio}%
+              <button
+                type="button"
+                onClick={() => setSplitRatio(50)}
+                className="rounded-md bg-slate-200 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              >
+                반반으로
+              </button>
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setLandscape(false)
+              setMargin(12)
+              setScale(1)
+              setSplitRatio(50)
+            }}
+            className="ml-auto text-sm text-slate-500 underline"
+          >
+            기본값으로
+          </button>
+        </div>
+
         {sources.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
             <span className="text-sm text-slate-500">풀이 포함</span>
@@ -412,6 +509,12 @@ export function PrintPage() {
         )}
       </div>
 
+      {/* index.css 의 @page 를 이 화면에서만 덮어쓴다. 종이 크기와 여백은 CSS
+          변수로 넘길 수 없어, 고른 값으로 규칙을 직접 만들어 끼운다. */}
+      <style>
+        {`@media print { @page { size: ${paperWidth}mm ${paperHeight}mm; margin: 15mm ${margin}mm; } }`}
+      </style>
+
       {error ? (
         <p className="mx-auto max-w-[210mm] rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
           {error}
@@ -425,7 +528,15 @@ export function PrintPage() {
           담을 문제가 없습니다.
         </p>
       ) : (
-        <article className="mx-auto max-w-[210mm] bg-white p-8 text-slate-900 shadow-sm print:p-0 print:shadow-none">
+        <article
+          data-print-doc
+          // 인쇄에서는 안쪽 여백이 0 이 되고 @page 여백이 대신 잡는다. 그래서
+          // 화면에서만 p-8 만큼 더 넓게 잡아야 글 폭이 양쪽에서 같아진다.
+          style={
+            { maxWidth: `calc(${contentWidth}mm + 4rem)`, '--print-scale': scale } as CSSProperties
+          }
+          className="mx-auto bg-white p-8 text-slate-900 shadow-sm print:p-0 print:shadow-none"
+        >
           <header className="mb-6 border-b-2 border-slate-800 pb-3">
             <h1 className="text-2xl font-bold">{title}</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -459,8 +570,14 @@ export function PrintPage() {
                       {layout === 'separate' ? (
                         renderQuestion(question, answer, false)
                       ) : layout === 'split' ? (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div
+                          className="grid items-start"
+                          style={{
+                            gridTemplateColumns: `minmax(0, ${splitRatio}fr) 1rem minmax(0, ${100 - splitRatio}fr)`,
+                          }}
+                        >
                           <div className="min-w-0">{renderQuestion(question, answer, withAnswer)}</div>
+                          <SplitHandle ratio={splitRatio} onRatio={setSplitRatio} />
                           <div className="min-w-0 text-sm">
                             {renderAnswerAndSolutions(question, answer)}
                           </div>
@@ -503,6 +620,62 @@ export function PrintPage() {
           )}
         </article>
       )}
+    </div>
+  )
+}
+
+/**
+ * 좌우 분할에서 문제와 풀이 사이의 바.
+ *
+ * 끌면 모든 문항의 비율이 함께 바뀐다. 문항마다 따로 잡으면 쪽마다 글 폭이
+ * 달라져 읽기 어렵다. 인쇄에는 바를 빼고 가운데 칸만 여백으로 남는다.
+ */
+function SplitHandle({ ratio, onRatio }: { ratio: number; onRatio: (next: number) => void }) {
+  function clamp(next: number) {
+    return Math.min(80, Math.max(20, Math.round(next)))
+  }
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="문제와 풀이 폭 조절"
+      aria-valuenow={ratio}
+      aria-valuemin={20}
+      aria-valuemax={80}
+      tabIndex={0}
+      title="끌어서 문제와 풀이 폭 조절"
+      onPointerDown={(event) => {
+        const grid = event.currentTarget.parentElement
+        if (!grid) return
+        const rect = grid.getBoundingClientRect()
+        if (rect.width === 0) return
+        event.preventDefault()
+        const move = (moved: PointerEvent) => {
+          onRatio(clamp(((moved.clientX - rect.left) / rect.width) * 100))
+        }
+        const stop = () => {
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', stop)
+          window.removeEventListener('pointercancel', stop)
+        }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', stop)
+        window.addEventListener('pointercancel', stop)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault()
+          onRatio(clamp(ratio - 2))
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault()
+          onRatio(clamp(ratio + 2))
+        }
+      }}
+      className="print-hide group relative cursor-col-resize self-stretch focus:outline-none"
+    >
+      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-300 transition-colors group-hover:bg-brand-500 group-focus:bg-brand-500" />
     </div>
   )
 }
