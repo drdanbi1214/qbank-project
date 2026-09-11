@@ -687,8 +687,12 @@
  * 넘지 않게 하며, 셀 안에서 줄을 바꾸게 한다.
  *
  * 열 폭을 끌어 정한 표는 colgroup 의 px 가 칸보다 넓어도 그대로 버틴다. 종이
- * 폭은 화면보다 좁고 다단이면 더 좁아, 그 값을 지키면 늘 잘린다. 정한 비율을
- * 잃더라도 다 보이는 편이 낫다.
+ * 폭은 화면보다 좁고 다단이면 더 좁아, 그 값을 지키면 늘 잘린다.
+ *
+ * 그렇다고 col 의 폭을 지우면 안 된다. 그 표들은 table-fixed 라, 폭을 지우는
+ * 순간 열이 균등하게 나뉘어 라벨 칸과 내용 칸이 반반이 된다. 대신 자동 배치로
+ * 돌린다. 자동 배치에서 col 의 폭은 "이만큼이면 좋겠다" 는 희망으로 쓰여,
+ * 칸이 좁으면 그 비율을 지키며 함께 줄어든다.
  */
 [data-print-doc] .overflow-x-auto {
   overflow-x: visible !important;
@@ -698,8 +702,8 @@
   min-width: 0 !important;
   max-width: 100% !important;
 }
-[data-print-doc] colgroup col {
-  width: auto !important;
+[data-print-doc] table {
+  table-layout: auto !important;
 }
 [data-print-doc] :is(th, td) {
   overflow-wrap: anywhere;
