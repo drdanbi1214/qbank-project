@@ -549,37 +549,99 @@
 }
 [data-print-doc] .text-xs {
   font-size: 0.75em;
-  line-height: 1.34;
+  line-height: calc(1.34 * var(--print-leading, 1));
 }
 [data-print-doc] .text-sm {
   font-size: 0.875em;
-  line-height: 1.43;
+  line-height: calc(1.43 * var(--print-leading, 1));
 }
 [data-print-doc] .text-base {
   font-size: 1em;
-  line-height: 1.5;
+  line-height: calc(1.5 * var(--print-leading, 1));
 }
 [data-print-doc] .text-lg {
   font-size: 1.125em;
-  line-height: 1.56;
+  line-height: calc(1.56 * var(--print-leading, 1));
 }
 [data-print-doc] .text-xl {
   font-size: 1.25em;
-  line-height: 1.4;
+  line-height: calc(1.4 * var(--print-leading, 1));
 }
 [data-print-doc] .text-2xl {
   font-size: 1.5em;
-  line-height: 1.34;
+  line-height: calc(1.34 * var(--print-leading, 1));
 }
 [data-print-doc] .text-\[15px\] {
   font-size: 0.9375em;
 }
+/*
+ * 줄 간격.
+ *
+ * Tailwind 의 leading-* 는 rem 이라 글자를 줄여도 줄 사이가 그대로 남는다.
+ * 글자만 작아지고 부피는 안 줄던 까닭이 이것이다. 글자 크기에 대한 배수로
+ * 바꾸고, --print-leading 으로 더 조일 수 있게 한다.
+ */
+[data-print-doc] .leading-snug {
+  line-height: calc(1.375 * var(--print-leading, 1));
+}
 [data-print-doc] .leading-6 {
-  line-height: 1.6;
+  line-height: calc(1.6 * var(--print-leading, 1));
+}
+[data-print-doc] .leading-7 {
+  line-height: calc(1.867 * var(--print-leading, 1));
 }
 [data-print-doc] .hierarchical-rich-text .hierarchy-section-start {
   font-size: 1.125em;
-  line-height: 1.56;
+  line-height: calc(1.56 * var(--print-leading, 1));
+}
+
+/*
+ * 풀이 본문(.rich-text)은 자기 font-size 를 px 로 직접 박아, 바깥에서 키운
+ * 글자 크기가 여기서 끊겼다. 문제는 커지는데 풀이만 그대로였던 까닭이다.
+ * em 으로 바꾸면 부모가 무엇이냐에 따라 지금 크기가 달라지므로, 배율을 직접
+ * 곱해 지금과 똑같은 값에서 시작하게 한다.
+ */
+[data-print-doc] .rich-text {
+  font-size: calc(15px * var(--print-scale, 1));
+  line-height: calc(1.867 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text.solution-rich-text {
+  line-height: calc(1.6 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text.topic-solution-rich-text {
+  font-size: calc(13px * var(--print-scale, 1));
+}
+[data-print-doc] .rich-text.memo-rich-text {
+  font-size: calc(11px * var(--print-scale, 1));
+}
+[data-print-doc] .rich-text :is(h1, h2) {
+  font-size: calc(24px * var(--print-scale, 1));
+  line-height: calc(1.34 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text h3 {
+  font-size: calc(18px * var(--print-scale, 1));
+  line-height: calc(1.56 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text h4 {
+  font-size: calc(15px * var(--print-scale, 1));
+}
+[data-print-doc] .rich-text .callout-block [data-callout-icon] {
+  font-size: calc(20px * var(--print-scale, 1));
+  line-height: calc(1.2 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text :is(code, pre) {
+  font-size: calc(13px * var(--print-scale, 1));
+}
+[data-print-doc] .rich-text a.footnote-ref {
+  font-size: calc(10px * var(--print-scale, 1));
+}
+[data-print-doc] .rich-text .footnote-list {
+  font-size: calc(12px * var(--print-scale, 1));
+  line-height: calc(1.34 * var(--print-leading, 1));
+}
+[data-print-doc] .rich-text table {
+  font-size: calc(14px * var(--print-scale, 1));
+  line-height: calc(1.43 * var(--print-leading, 1));
 }
 
 /*
@@ -595,6 +657,10 @@
 [data-print-doc] .print-columns {
   column-gap: 8mm;
   column-fill: auto;
+}
+/* 단 사이 구분선. 글이 빽빽할수록 어디까지가 한 단인지 눈으로 잡아 준다. */
+[data-print-doc] .print-columns.print-column-rule {
+  column-rule: 1px solid #cbd5e1;
 }
 [data-print-doc] .print-columns > li {
   break-inside: auto;

@@ -105,6 +105,8 @@ export function PrintPage() {
   const [splitRatio, setSplitRatio] = useState(saved.splitRatio)
   const [columns, setColumns] = useState(saved.columns)
   const [onePerColumn, setOnePerColumn] = useState(saved.onePerColumn)
+  const [columnRule, setColumnRule] = useState(saved.columnRule)
+  const [leading, setLeading] = useState(saved.leading)
   // 한 단은 이미 좁다. 거기서 문제와 풀이를 또 좌우로 가르면 글줄이 너무 짧아
   // 읽히지 않는다. 다단에서는 세로형과 분리형만 쓴다.
   const effectiveLayout: Layout = columns > 1 && layout === 'split' ? 'stack' : layout
@@ -118,15 +120,17 @@ export function PrintPage() {
           landscape,
           margin,
           scale,
+          leading,
           splitRatio,
           columns,
           onePerColumn,
+          columnRule,
         } satisfies PrintSettings),
       )
     } catch {
       // 저장이 막혀 있어도 이번 판은 그대로 쓸 수 있다. 알릴 일은 아니다.
     }
-  }, [settingsKey, layout, landscape, margin, scale, splitRatio, columns, onePerColumn])
+  }, [settingsKey, layout, landscape, margin, scale, leading, splitRatio, columns, onePerColumn, columnRule])
   const solutionOffByDefault = params.get('solution') === '0'
 
   // 켜진 목록이 아니라 "끈 목록"을 들고 있다. 출처 목록은 조회가 끝나야
@@ -314,8 +318,9 @@ export function PrintPage() {
 
   /** 지문과 선지. 정답 표시는 세로형·좌우형에서만 선지에 굵게 남긴다. */
   function renderQuestion(question: SolveQuestion, answer: AnswerPayload | null, markAnswer: boolean) {
+    // 종이에서 slate-50 은 거의 흰색이라 상자 테두리가 보이지 않았다. 한 단계만 올린다.
     return (
-      <div className="rounded-lg bg-slate-50 p-3">
+      <div className="rounded-lg bg-slate-100 p-3">
         <StemBlocks blocks={question.stemBlocks} />
 
         {question.choices.length > 0 && (
@@ -347,7 +352,7 @@ export function PrintPage() {
     return (
       <>
         {withAnswer && answer && (
-          <div className="mt-2 border-l-4 border-slate-800 bg-slate-50 py-1.5 pl-3 text-sm">
+          <div className="mt-2 border-l-4 border-slate-800 bg-slate-100 py-1.5 pl-3 text-sm">
             <p>
               <span className="font-bold">정답</span>{' '}
               {answer.editorAnswer.length > 0 ? formatAnswer(answer.editorAnswer) : '미확정'}
@@ -516,6 +521,21 @@ export function PrintPage() {
             ))}
           </span>
 
+          {/* 글자만 줄이면 줄 사이가 그대로라 부피가 잘 줄지 않는다. */}
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-slate-500">줄 간격</span>
+            <input
+              type="range"
+              min={75}
+              max={130}
+              step={5}
+              value={Math.round(leading * 100)}
+              onChange={(event) => setLeading(Number(event.target.value) / 100)}
+              className="w-24"
+            />
+            <span className="w-12 tabular-nums text-slate-500">{Math.round(leading * 100)}%</span>
+          </label>
+
           {columns > 1 && (
             <label className="flex items-center gap-1 text-sm">
               <input
@@ -524,6 +544,17 @@ export function PrintPage() {
                 onChange={(event) => setOnePerColumn(event.target.checked)}
               />
               문항마다 새 단에서 시작
+            </label>
+          )}
+
+          {columns > 1 && (
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={columnRule}
+                onChange={(event) => setColumnRule(event.target.checked)}
+              />
+              단 사이 구분선
             </label>
           )}
 
@@ -551,6 +582,8 @@ export function PrintPage() {
             onClick={() => {
               setColumns(DEFAULT_PRINT_SETTINGS.columns)
               setOnePerColumn(DEFAULT_PRINT_SETTINGS.onePerColumn)
+              setColumnRule(DEFAULT_PRINT_SETTINGS.columnRule)
+              setLeading(DEFAULT_PRINT_SETTINGS.leading)
               setLandscape(DEFAULT_PRINT_SETTINGS.landscape)
               setMargin(DEFAULT_PRINT_SETTINGS.margin)
               setScale(DEFAULT_PRINT_SETTINGS.scale)
@@ -615,7 +648,11 @@ export function PrintPage() {
           // 인쇄에서는 안쪽 여백이 0 이 되고 @page 여백이 대신 잡는다. 그래서
           // 화면에서만 p-8 만큼 더 넓게 잡아야 글 폭이 양쪽에서 같아진다.
           style={
-            { maxWidth: `calc(${contentWidth}mm + 4rem)`, '--print-scale': scale } as CSSProperties
+            {
+              maxWidth: `calc(${contentWidth}mm + 4rem)`,
+              '--print-scale': scale,
+              '--print-leading': leading,
+            } as CSSProperties
           }
           className="mx-auto bg-white p-8 text-slate-900 shadow-sm print:p-0 print:shadow-none"
         >
@@ -644,7 +681,11 @@ export function PrintPage() {
           <ol
             className={cn(
               columns > 1
-                ? cn('print-columns', onePerColumn && 'print-one-per-column')
+                ? cn(
+                    'print-columns',
+                    onePerColumn && 'print-one-per-column',
+                    columnRule && 'print-column-rule',
+                  )
                 : effectiveLayout === 'separate'
                   ? 'space-y-6'
                   : 'space-y-8',

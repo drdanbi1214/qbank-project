@@ -11,9 +11,11 @@ const saved = {
   landscape: true,
   margin: 8,
   scale: 1.25,
+  leading: 0.85,
   splitRatio: 65,
   columns: 2,
   onePerColumn: false,
+  columnRule: false,
 }
 
 test('지난번 설정 그대로 다시 연다', () => {
@@ -31,12 +33,13 @@ test('저장된 것이 없거나 깨졌으면 기본값으로 연다', () => {
 
 test('범위를 벗어난 값은 슬라이더가 낼 수 있는 값으로 끌어온다', () => {
   const wild = parsePrintSettings(
-    JSON.stringify({ layout: '세로형', margin: 900, scale: 99, splitRatio: -40, columns: 9 }),
+    JSON.stringify({ layout: '세로형', margin: 900, scale: 99, splitRatio: -40, columns: 9, leading: 99 }),
   )
   assert.equal(wild.margin, 30)
   assert.equal(wild.scale, 1.5)
   assert.equal(wild.splitRatio, 20)
   assert.equal(wild.columns, 3)
+  assert.equal(wild.leading, 1.3)
   // 모르는 배치는 기본 배치로 돌린다.
   assert.equal(wild.layout, 'stack')
   assert.equal(wild.landscape, false)
@@ -58,6 +61,8 @@ test('단 설정이 없던 시절에 저장한 값도 그대로 열린다', () =
   const old = parsePrintSettings(JSON.stringify({ layout: 'split', margin: 8 }))
   assert.equal(old.columns, 1)
   assert.equal(old.onePerColumn, true)
+  assert.equal(old.columnRule, true)
+  assert.equal(old.leading, 1)
   assert.equal(old.layout, 'split')
   assert.equal(old.margin, 8)
 })

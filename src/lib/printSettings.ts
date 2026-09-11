@@ -17,15 +17,20 @@ export type PrintSettings = {
   scale: number
   /** 좌우 분할에서 문제가 차지하는 비율 (%) */
   splitRatio: number
+  /** 줄 간격 배수 (1 이 지금까지의 간격) */
+  leading: number
   /** 한 쪽에 세울 단 수 */
   columns: number
   /** 문항마다 새 단에서 시작할지. 끄면 앞 문항에 이어 흐른다. */
   onePerColumn: boolean
+  /** 단과 단 사이에 구분선을 그을지 */
+  columnRule: boolean
 }
 
 export const PRINT_SETTINGS_RANGE = {
   margin: { min: 5, max: 30 },
   scale: { min: 0.7, max: 1.5 },
+  leading: { min: 0.75, max: 1.3 },
   splitRatio: { min: 20, max: 80 },
   columns: { min: 1, max: 3 },
 } as const
@@ -35,9 +40,11 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   landscape: false,
   margin: 12,
   scale: 1,
+  leading: 1,
   splitRatio: 50,
   columns: 1,
   onePerColumn: true,
+  columnRule: true,
 }
 
 /** 브라우저를 같이 쓰는 경우가 있어 계정별로 나눠 담는다. */
@@ -62,7 +69,7 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
   if (typeof value !== 'object' || value === null) return { ...DEFAULT_PRINT_SETTINGS }
 
   const row = value as Record<string, unknown>
-  const { margin, scale, splitRatio, columns } = PRINT_SETTINGS_RANGE
+  const { margin, scale, leading, splitRatio, columns } = PRINT_SETTINGS_RANGE
   return {
     layout: row.layout === 'split' || row.layout === 'separate' ? row.layout : 'stack',
     landscape: row.landscape === true,
@@ -70,6 +77,9 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
     // 배율은 5% 단위라 반올림하면 슬라이더 눈금과 어긋나지 않는다.
     scale:
       Math.round(bounded(row.scale, scale.min, scale.max, DEFAULT_PRINT_SETTINGS.scale) * 20) / 20,
+    leading:
+      Math.round(bounded(row.leading, leading.min, leading.max, DEFAULT_PRINT_SETTINGS.leading) * 20) /
+      20,
     splitRatio: Math.round(
       bounded(row.splitRatio, splitRatio.min, splitRatio.max, DEFAULT_PRINT_SETTINGS.splitRatio),
     ),
@@ -79,5 +89,6 @@ export function parsePrintSettings(raw: string | null): PrintSettings {
     // 저장된 적이 없으면 켜 둔다. 2단을 고르는 까닭이 대개 문항마다 단을 나누는
     // 것이라, 끄고 시작하면 무엇이 달라졌는지 알기 어렵다.
     onePerColumn: row.onePerColumn !== false,
+    columnRule: row.columnRule !== false,
   }
 }
