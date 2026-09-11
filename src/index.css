@@ -544,10 +544,20 @@
  * 자리를 대신하므로 안쪽 여백을 지운다.
  */
 .print-sheet {
+  max-width: var(--print-sheet-width, 210mm);
   padding: var(--print-pad-y, 2rem) var(--print-pad-x, 2rem);
 }
+/*
+ * 인쇄할 때는 폭을 우리가 정하지 않는다.
+ *
+ * @page 가 이미 "종이 − 여백" 만큼을 인쇄 영역으로 잡아 준다. 거기에 대고
+ * max-width: 210mm 처럼 값을 또 박으면, 브라우저가 잡은 영역과 조금이라도
+ * 어긋날 때 두 단이 종이에 딱 맞지 않고 한쪽이 남는다. 영역을 그대로 쓰게 둔다.
+ */
 @media print {
   .print-sheet {
+    width: 100%;
+    max-width: none;
     padding: 0;
   }
 }
@@ -718,13 +728,14 @@
  * 있어 거의 늘 넘쳤다. 이 문서 안에서는 스크롤 상자를 풀고, 표가 제 칸을
  * 넘지 않게 하며, 셀 안에서 줄을 바꾸게 한다.
  *
- * 열 폭을 끌어 정한 표는 colgroup 의 px 가 칸보다 넓어도 그대로 버틴다. 종이
- * 폭은 화면보다 좁고 다단이면 더 좁아, 그 값을 지키면 늘 잘린다.
+ * 특히 한 행에 큰 이미지가 여럿 든 표를 auto layout 으로 두면, 각 이미지의
+ * 저장 폭을 열의 최소 폭으로 받아들인다. 실제로 2단 289px 칸 안의 표가
+ * 1,629px 로 불어나면서 Chrome 이 종이 전체를 축소했고, 그 결과 좌우에 큰
+ * 여백이 생겼다.
  *
- * 그렇다고 col 의 폭을 지우면 안 된다. 그 표들은 table-fixed 라, 폭을 지우는
- * 순간 열이 균등하게 나뉘어 라벨 칸과 내용 칸이 반반이 된다. 대신 자동 배치로
- * 돌린다. 자동 배치에서 col 의 폭은 "이만큼이면 좋겠다" 는 희망으로 쓰여,
- * 칸이 좁으면 그 비율을 지키며 함께 줄어든다.
+ * 표 자체를 단 폭에 고정한다. colgroup 이 있는 표는 작성자가 정한 열 폭의
+ * 비율을 그대로 쓰고, 없는 표는 열을 고르게 나눈다. 셀 안의 이미지와 임베드는
+ * 위의 max-width 규칙에 따라 자기 열 안으로 줄어든다.
  */
 [data-print-doc] .overflow-x-auto {
   overflow-x: visible !important;
@@ -735,7 +746,7 @@
   max-width: 100% !important;
 }
 [data-print-doc] table {
-  table-layout: auto !important;
+  table-layout: fixed !important;
 }
 [data-print-doc] :is(th, td) {
   overflow-wrap: anywhere;

@@ -648,7 +648,7 @@ export function PrintPage() {
       {/* index.css 의 @page 를 이 화면에서만 덮어쓴다. 종이 크기와 여백은 CSS
           변수로 넘길 수 없어, 고른 값으로 규칙을 직접 만들어 끼운다. */}
       <style>
-        {`@media print { @page { size: ${paperWidth}mm ${paperHeight}mm; margin: ${Math.max(12, margin)}mm ${margin}mm; } }`}
+        {`@media print { @page { size: ${paperWidth}mm ${paperHeight}mm; margin: ${margin}mm; } }`}
       </style>
 
       {error ? (
@@ -671,7 +671,9 @@ export function PrintPage() {
           // 그림이 된다.
           style={
             {
-              maxWidth: `${paperWidth}mm`,
+              // 폭은 인라인이 아니라 변수로 넘긴다. 인쇄에서는 위 규칙이 이
+              // 값을 버리고 인쇄 영역을 그대로 쓴다 — 인라인이면 못 버린다.
+              '--print-sheet-width': `${paperWidth}mm`,
               '--print-pad-x': `${margin}mm`,
               '--print-pad-y': `${Math.max(12, margin)}mm`,
               '--print-scale': scale,
