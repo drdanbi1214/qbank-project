@@ -203,7 +203,7 @@ function StemTable({
   marks: RenderMark[]
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div data-print-table-wrap="" className="overflow-x-auto">
       <table className="w-full min-w-max border-collapse text-sm">
         {headers.length > 0 && (
           <thead>

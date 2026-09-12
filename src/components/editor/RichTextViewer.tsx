@@ -182,14 +182,14 @@ function renderNode(node: RichNode, cursor: Cursor, context: RenderContext, inde
           : null
 
       return (
-        <div className="overflow-x-auto">
+        <div data-print-table-wrap="" className="overflow-x-auto">
           {/* 편집기에서 정한 열 너비의 합을 표 전체 폭에도 적용한다. 열만 복원하고
               표를 w-full 로 두면 저장 후 본문 폭 끝까지 다시 늘어난다. */}
           <table
             data-border={tableBorderOf(node.attrs?.border) ?? undefined}
             style={tableWidth ? { width: tableWidth } : undefined}
           >
-            {colGroupOf(columns)}
+            {colGroupOf(columns, tableWidth)}
             <tbody>{children}</tbody>
           </table>
         </div>
@@ -299,13 +299,27 @@ function tableColumnsOf(node: RichNode): (number | null)[] | null {
   return cols
 }
 
-function colGroupOf(cols: (number | null)[] | null) {
+function colGroupOf(cols: (number | null)[] | null, tableWidth: number | null) {
   if (!cols) return null
   return (
     <colgroup>
-      {cols.map((width, index) => (
-        <col key={index} style={width ? { width } : undefined} />
-      ))}
+      {cols.map((width, index) => {
+        const printWidth = width && tableWidth ? `${(width / tableWidth) * 100}%` : undefined
+        return (
+          <col
+            key={index}
+            data-print-column=""
+            style={
+              width
+                ? ({
+                    width,
+                    ...(printWidth ? { '--print-column-width': printWidth } : {}),
+                  } as CSSProperties)
+                : undefined
+            }
+          />
+        )
+      })}
     </colgroup>
   )
 }
