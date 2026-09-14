@@ -27,7 +27,7 @@ function loadFunctions(path, bootMarker, names, globals = {}) {
 
 {
   const { extractSourceExamMeta } = loadFunctions(
-    'scripts/allen_pdf_workbook_0.1.8.user.js',
+    'scripts/allen_pdf_workbook_0.1.9.user.js',
     '\n  bootLoop();',
     ['extractSourceExamMeta'],
   )
@@ -48,6 +48,46 @@ function loadFunctions(path, bootMarker, names, globals = {}) {
       sourceSession: 1,
       sourceQuestionNumber: 15,
     },
+  )
+}
+
+{
+  const problem = {
+    id: 120086,
+    problemId: 120086,
+    examName: 'MD2601',
+    examPeriod: 3,
+    examNumber: 30,
+    choices: ['<p>비타민B<sub>6</sub></p>', '<p>비타민B<sub>12</sub></p>', '<p>비타민C</p>', '<p>비타민D</p>', '<p>비타민K</p>'],
+    answer: [2],
+  }
+  const { extractSourceExamMeta, embeddedAnswers } = loadFunctions(
+    'scripts/allen_pdf_workbook_0.1.9.user.js',
+    '\n  bootLoop();',
+    ['extractSourceExamMeta', 'embeddedAnswers'],
+    {
+      location: {
+        href: 'https://www.allenslibrary.com/study/chapter/1914/problem/120086',
+        origin: 'https://www.allenslibrary.com',
+        pathname: '/study/chapter/1914/problem/120086',
+      },
+      __NEXT_DATA__: { props: { pageProps: { serverData: { problem } } } },
+    },
+  )
+  assert.deepEqual(
+    { ...extractSourceExamMeta('MD2601', '202601 | 고득점 대비 핵심 문항 | 알렌의 서재') },
+    {
+      sourceLabel: 'MD2601 3교시, 30번',
+      sourceExam: 'MD2601',
+      sourceSession: 3,
+      sourceQuestionNumber: 30,
+    },
+  )
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(
+      embeddedAnswers(['비타민B6', '비타민B12', '비타민C', '비타민D', '비타민K']),
+    )),
+    [{ index: 1, text: '비타민B12' }],
   )
 }
 

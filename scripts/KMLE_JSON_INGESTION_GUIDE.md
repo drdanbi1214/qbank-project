@@ -47,8 +47,8 @@
 - `scripts/verify_kmle_ingest.py`: JSON 사전 검사와 반영 후 DB 정확 대조(읽기 전용)
 - `scripts/test_ingest_kmle_html.py`: Allen HTML의 표 변환 회귀 테스트
 - `scripts/audit_integrity.py`: 전체 DB 관계와 저장소 객체 무결성 검사(읽기 전용)
-- `scripts/allen_pdf_workbook_0.1.8.user.js`: 현재 Allen 문제/해설 및 원시험 정보 수집기
-- `scripts/allen_kmle_json_export_0.10.4.user.js`: 현재 과목 JSON 내보내기 도구
+- `scripts/allen_pdf_workbook_0.1.9.user.js`: 현재 Allen 문제/해설 및 원시험 정보 수집기
+- `scripts/allen_kmle_json_export_0.10.5.user.js`: 현재 과목 JSON 내보내기 도구
 
 운영 자격 증명은 `scripts/supabase_credentials.py`가 환경변수 또는 macOS 키체인에서
 읽는다. 작업자는 키 값을 직접 조회하거나 화면에 출력할 필요가 없다.
@@ -114,14 +114,16 @@ python3 scripts/verify_kmle_ingest.py \
 - 손상된 data URL 또는 접근할 수 없는 원격 이미지
 
 `imageFailures`가 있어도 HTML에 원격 Allen 이미지 주소가 남아 있고 사전 검사에서
-원격 복구에 성공하면 등록할 수 있다. 최신 0.10.4는 이미지를 최대 4회 요청하고,
+원격 복구에 성공하면 등록할 수 있다. 최신 0.10.5는 이미지를 최대 4회 요청하고,
 그래도 실패하면 불완전한 본 JSON을 저장하지 않고 문항·페이지·이미지 주소와 시도별
 원인이 든 `이미지_오류` JSON만 저장한다. 수집 내용은 브라우저에 남으므로 권한이나
 네트워크 문제를 고친 뒤 `KMLE JSON 저장`을 눌러 다시 시도한다. 0.10.2 이하는 Allen이 S3 경로형 주소
 (`s3.ap-northeast-2.amazonaws.com/media.allenslibrary.com/...`)로 싣는 이미지를
 포함하지 못했지만, 변환기가 같은 버킷 주소만 원격 복구한다.
 
-0.1.8 이후 문항에는 다음 원시험 정보가 함께 들어간다.
+0.1.8 이후 문항에는 다음 원시험 정보가 함께 들어간다. 0.1.9는 일반적인 문항 제목뿐
+아니라 `202601 | 고득점 대비 핵심 문항`처럼 제목에 시험 위치가 없는 페이지도 현재
+URL과 일치하는 Allen 내장 문제 데이터에서 시험·교시·번호를 읽는다.
 
 - `sourceLabel`: 화면 제목의 전체 표기(예: `임종평23-2 2교시, 43번`)
 - `sourceExam`: 시험 이름(예: `임종평23-2`)
@@ -132,9 +134,15 @@ DB에서는 각각 `allen_label`, `allen_exam`, `allen_session`,
 `allen_question_number`로 보존한다. 구버전 JSON은 `code`를 시험 이름으로 대신 쓰며,
 알 수 없는 교시와 원문제 번호를 추측해서 채우지 않는다.
 
-KMLE 수집 버튼은 PDF 설정과 관계없이 정답과 해설을 항상 연다. 정답 또는 해설을
+KMLE 수집 버튼은 PDF 설정과 관계없이 정답과 해설을 항상 연다. 0.1.9는 화면의 정답
+색상이 달라진 경우 현재 URL과 일치하는 Allen 내장 문제 데이터의 공식 정답 번호를
+보조 판독에 사용한다. 정답 또는 해설을
 판독하지 못한 문항에서는 즉시 멈추므로, 빈 정답으로 과목 전체 JSON이 만들어져서는
 안 된다. 일반 `PDF 자동 수집`에만 사용자가 저장한 PDF 설정을 적용한다.
+
+0.1.9와 0.10.5는 내부 PDF 수집 결과를 `allenPdfLastAutoResultV1`에 전달한다. 자동
+재시도 후에도 실패하면 안내창에서 실패 문항 코드, Allen 문제 URL, 실제 판독 오류를
+확인한다. `PDF 수집 대기 · 실패 1` 같은 집계 문구만으로 원인을 추측하지 않는다.
 
 필요하면 사람이 읽기 쉬운 요약을 추가로 확인한다. base64 본문 전체를 출력하지 않는다.
 
@@ -319,7 +327,7 @@ JSON은 정상인데 표·이미지·본문 변환이 잘못되면 데이터를 
 ```bash
 python3 -m unittest scripts/test_ingest_kmle_html.py
 node --check scripts/allen_kmle_json_export.user.js
-node --check scripts/allen_pdf_workbook_0.1.8.user.js
+node --check scripts/allen_pdf_workbook_0.1.9.user.js
 node scripts/test_allen_userscripts.mjs
 npm run build
 npm run lint
