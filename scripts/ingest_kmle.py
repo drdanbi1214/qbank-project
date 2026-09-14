@@ -505,7 +505,7 @@ def main() -> None:
             "answer_status": "confirmed" if answers else "unconfirmed",
             "official_explanation": explanation or None,
             "source_tags": source_tags,
-            "restorer_note": "Allen에서 수집한 국시 KMLE 문제",
+            "restorer_note": None,
             "variant_type": "original",
             "completeness": "image_missing" if item_warnings else "complete",
             "status": "published" if published else "draft",

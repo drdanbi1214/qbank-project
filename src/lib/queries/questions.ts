@@ -42,6 +42,14 @@ export type SolveQuestion = {
   unitSource: 'ai_suggested' | 'human_confirmed' | null
   /** 학번2자리+과목코드2자리+문항번호3자리. 과목에 code 가 없으면 null */
   questionCode: string | null
+  /** Allen에 기록된 원시험 이름. KMLE 문제에만 있다. */
+  sourceExam: string | null
+  /** 원시험 교시. 원본에 위치 정보가 없으면 null이다. */
+  sourceSession: number | null
+  /** 원시험 안에서의 문제 번호. 앱의 questionNumber와 별개다. */
+  sourceQuestionNumber: number | null
+  /** Allen이 표시한 원시험 전체 표기. */
+  sourceLabel: string | null
 }
 
 export type QuestionSet = {
@@ -84,7 +92,7 @@ export type QuestionState = {
 }
 
 const SOLVE_COLUMNS =
-  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, variant_type, completeness, view_count, unit_source, question_code, same_as'
+  'id, exam_id, unit_id, question_number, question_type, set_id, stem_blocks, choices, answer_count, restorer_note, source_tags, group_id, variant_type, completeness, view_count, unit_source, question_code, same_as, allen_exam, allen_session, allen_question_number, allen_label'
 
 type SolveRow = {
   id: string
@@ -105,6 +113,10 @@ type SolveRow = {
   view_count: number
   unit_source: string | null
   question_code: string | null
+  allen_exam: string | null
+  allen_session: number | null
+  allen_question_number: number | null
+  allen_label: string | null
 }
 
 function toSolveQuestion(row: SolveRow): SolveQuestion {
@@ -127,7 +139,19 @@ function toSolveQuestion(row: SolveRow): SolveQuestion {
     viewCount: row.view_count,
     unitSource: row.unit_source === 'ai_suggested' || row.unit_source === 'human_confirmed' ? row.unit_source : null,
     questionCode: row.question_code,
+    sourceExam: row.allen_exam,
+    sourceSession: row.allen_session,
+    sourceQuestionNumber: row.allen_question_number,
+    sourceLabel: row.allen_label,
   }
+}
+
+/** 풀이 화면에 표시할 Allen 원시험 위치. 위치가 없으면 확인된 시험명만 반환한다. */
+export function sourceExamPosition(question: SolveQuestion): string | null {
+  if (question.sourceExam && question.sourceSession && question.sourceQuestionNumber) {
+    return `${question.sourceExam} ${question.sourceSession}교시, ${question.sourceQuestionNumber}번`
+  }
+  return question.sourceExam || null
 }
 
 export type QuestionFilter = {

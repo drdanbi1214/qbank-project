@@ -30,6 +30,7 @@ import {
   revealAnswer,
   setBookmark,
   submitAttempt,
+  sourceExamPosition,
   type QuestionSet,
   type QuestionLectureSource,
   type SolveQuestion,
@@ -347,6 +348,7 @@ export function QuestionView({
     question.stemBlocks.find((block) => block.type === 'text')?.content ?? null
 
   const completenessLabel = COMPLETENESS_LABEL[question.completeness]
+  const originalExamPosition = sourceExamPosition(question)
   const revealed = answer !== null
   const canSubmit = selected.length > 0 && !revealed
 
@@ -375,7 +377,7 @@ export function QuestionView({
             <h1 className="mt-0.5 flex flex-wrap items-center gap-x-2 text-base font-bold">
               <span>{question.questionNumber}번</span>
               <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
-                [{examLabel}]
+                [{[examLabel, originalExamPosition].filter(Boolean).join(' · ')}]
               </span>
               <span className="text-xs font-normal text-slate-400">
                 조회 {question.viewCount}

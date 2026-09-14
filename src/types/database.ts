@@ -3262,6 +3262,10 @@ export type Database = {
       }
       questions_solve: {
         Row: {
+          allen_exam: string | null
+          allen_label: string | null
+          allen_question_number: number | null
+          allen_session: number | null
           answer_count: number | null
           answer_status: string | null
           choices: Json | null
@@ -3291,6 +3295,10 @@ export type Database = {
           view_count: number | null
         }
         Insert: {
+          allen_exam?: string | null
+          allen_label?: string | null
+          allen_question_number?: number | null
+          allen_session?: number | null
           answer_count?: number | null
           answer_status?: string | null
           choices?: Json | null
@@ -3320,6 +3328,10 @@ export type Database = {
           view_count?: number | null
         }
         Update: {
+          allen_exam?: string | null
+          allen_label?: string | null
+          allen_question_number?: number | null
+          allen_session?: number | null
           answer_count?: number | null
           answer_status?: string | null
           choices?: Json | null
