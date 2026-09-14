@@ -8,7 +8,7 @@ import type { Exam, QuestionBank } from '@/lib/queries/taxonomy'
 
 type Props = {
   exams: Exam[]
-  /** 이 과목의 시험만 후보로 둔다. null 이면 전체 */
+  /** 야마는 이 과목으로 제한하고, KMLE는 전체 검색에서 이 과목을 우선한다. */
   subjectId: string | null
   /** 야마와 국시 선택창이 서로 다른 문제은행만 검색하도록 한다. */
   questionBank?: QuestionBank
@@ -192,7 +192,8 @@ export function QuestionLookup({
 
       {questionBank === 'kmle' && (
         <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          긴 문제나 해설을 그대로 붙여 넣어도 가장 비슷한 문제부터 표시합니다.
+          전체 과목에서 찾고, 관련도가 비슷하면 현재 과목 문제를 먼저 표시합니다.
+          긴 문제나 해설도 그대로 붙여 넣을 수 있습니다.
         </p>
       )}
 
@@ -212,6 +213,18 @@ export function QuestionLookup({
                     className="block w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <span className="flex flex-wrap items-center gap-2 text-xs">
+                      {questionBank === 'kmle' && (
+                        <span className="font-semibold text-violet-700 dark:text-violet-300">
+                          {examLabelOf(hit.examId).replace(/^국시\s*/, '') || '과목 미분류'}
+                        </span>
+                      )}
+                      {questionBank === 'kmle'
+                        && subjectId
+                        && exams.find((exam) => exam.id === hit.examId)?.subjectId === subjectId && (
+                        <span className="rounded bg-violet-50 px-1.5 py-0.5 font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                          현재 과목
+                        </span>
+                      )}
                       <span className="font-medium text-brand-600 dark:text-brand-300">
                         {questionBank === 'kmle'
                           ? (hit.sourceCode || examLabelOf(hit.examId))
@@ -310,7 +323,11 @@ export function QuestionLookup({
         <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
           <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
             {questionBank === 'kmle' && pickedHit
-              ? [pickedHit.sourceCode, pickedHit.chapter].filter(Boolean).join(' · ')
+              ? [
+                  examLabelOf(pickedHit.examId).replace(/^국시\s*/, ''),
+                  pickedHit.sourceCode,
+                  pickedHit.chapter,
+                ].filter(Boolean).join(' · ')
               : `${examLabelOf(found.examId)} ${found.questionNumber}번`}
           </p>
           <StemBlocks blocks={found.stemBlocks} />
