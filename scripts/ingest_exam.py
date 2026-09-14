@@ -69,9 +69,30 @@ class Client:
         self.storage = ObjectStorage(base_url, key)
 
     def get(self, path: str, params: dict) -> list[dict]:
-        r = requests.get(f"{self.base_url}/rest/v1/{path}", headers=self.headers, params=params, timeout=30)
-        r.raise_for_status()
-        return r.json()
+        """PostgREST는 명시적인 limit이 없어도 기본 max-rows(보통 1000)에서
+        결과를 자른다. 호출자가 limit/offset을 직접 지정하지 않은 요청은
+        모든 행을 받을 때까지 자동으로 페이지네이션한다."""
+        if "limit" in params or "offset" in params:
+            r = requests.get(f"{self.base_url}/rest/v1/{path}", headers=self.headers, params=params, timeout=30)
+            r.raise_for_status()
+            return r.json()
+
+        page_size = 1000
+        rows: list[dict] = []
+        offset = 0
+        while True:
+            r = requests.get(
+                f"{self.base_url}/rest/v1/{path}",
+                headers=self.headers,
+                params={**params, "limit": page_size, "offset": offset},
+                timeout=30,
+            )
+            r.raise_for_status()
+            page = r.json()
+            rows.extend(page)
+            if len(page) < page_size:
+                return rows
+            offset += page_size
 
     def post(self, path: str, rows: list[dict], prefer: str = "return=representation") -> list[dict] | None:
         headers = {**self.headers, "Prefer": prefer}
