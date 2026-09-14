@@ -146,7 +146,8 @@ export function QuestionLookup({
             setError('이미 다른 야마에 묶여 있는 문제입니다. 먼저 묶기를 풀어 주세요.')
             return
           }
-          setHits(null)
+          // 목록은 남겨 둔다. 고른 문제가 맘에 안 들면 다시 검색하지 않고
+          // 화살표나 목록에서 다른 후보로 바로 옮겨갈 수 있어야 한다.
           setPickedHit(hit)
           setFound(result)
         })
@@ -156,6 +157,22 @@ export function QuestionLookup({
         .finally(() => setBusy(false))
     },
     [rejectGrouped],
+  )
+
+  const pickedHitIndex = useMemo(
+    () => (pickedHit && hits ? hits.findIndex((hit) => hit.questionId === pickedHit.questionId) : -1),
+    [hits, pickedHit],
+  )
+
+  const stepHit = useCallback(
+    (direction: -1 | 1) => {
+      if (!hits || pickedHitIndex === -1) return
+      const nextIndex = pickedHitIndex + direction
+      const next = hits[nextIndex]
+      if (!next) return
+      pickHit(next)
+    },
+    [hits, pickedHitIndex, pickHit],
   )
 
   const confirm = useCallback(() => {
@@ -321,15 +338,40 @@ export function QuestionLookup({
 
       {found && (
         <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-          <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-            {questionBank === 'kmle' && pickedHit
-              ? [
-                  examLabelOf(pickedHit.examId).replace(/^국시\s*/, ''),
-                  pickedHit.sourceCode,
-                  pickedHit.chapter,
-                ].filter(Boolean).join(' · ')
-              : `${examLabelOf(found.examId)} ${found.questionNumber}번`}
-          </p>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {questionBank === 'kmle' && pickedHit
+                ? [
+                    examLabelOf(pickedHit.examId).replace(/^국시\s*/, ''),
+                    pickedHit.sourceCode,
+                    pickedHit.chapter,
+                  ].filter(Boolean).join(' · ')
+                : `${examLabelOf(found.examId)} ${found.questionNumber}번`}
+            </p>
+            {hits && pickedHitIndex !== -1 && hits.length > 1 && (
+              <div className="flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                <button
+                  type="button"
+                  onClick={() => stepHit(-1)}
+                  disabled={busy || pickedHitIndex <= 0}
+                  aria-label="이전 후보"
+                  className="rounded border border-slate-300 px-1.5 py-0.5 leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-600 dark:hover:bg-slate-700"
+                >
+                  ←
+                </button>
+                <span className="tabular-nums">{pickedHitIndex + 1} / {hits.length}</span>
+                <button
+                  type="button"
+                  onClick={() => stepHit(1)}
+                  disabled={busy || pickedHitIndex >= hits.length - 1}
+                  aria-label="다음 후보"
+                  className="rounded border border-slate-300 px-1.5 py-0.5 leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-600 dark:hover:bg-slate-700"
+                >
+                  →
+                </button>
+              </div>
+            )}
+          </div>
           <StemBlocks blocks={found.stemBlocks} />
           <ol className="mt-2 space-y-1 text-sm">
             {found.choices.map((choice) => (
