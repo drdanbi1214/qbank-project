@@ -27,7 +27,7 @@ function loadFunctions(path, bootMarker, names, globals = {}) {
 
 {
   const { extractSourceExamMeta } = loadFunctions(
-    'scripts/allen_pdf_workbook_0.1.9.user.js',
+    'scripts/allen_pdf_workbook_0.1.10.user.js',
     '\n  bootLoop();',
     ['extractSourceExamMeta'],
   )
@@ -62,7 +62,7 @@ function loadFunctions(path, bootMarker, names, globals = {}) {
     answer: [2],
   }
   const { extractSourceExamMeta, embeddedAnswers } = loadFunctions(
-    'scripts/allen_pdf_workbook_0.1.9.user.js',
+    'scripts/allen_pdf_workbook_0.1.10.user.js',
     '\n  bootLoop();',
     ['extractSourceExamMeta', 'embeddedAnswers'],
     {
@@ -86,6 +86,59 @@ function loadFunctions(path, bootMarker, names, globals = {}) {
   assert.deepEqual(
     JSON.parse(JSON.stringify(
       embeddedAnswers(['비타민B6', '비타민B12', '비타민C', '비타민D', '비타민K']),
+    )),
+    [{ index: 1, text: '비타민B12' }],
+  )
+}
+
+{
+  const problem = {
+    id: 120086,
+    problemId: 120086,
+    examName: 'MD2601',
+    examPeriod: 3,
+    examNumber: 30,
+    choices: ['<p>비타민B<sub>6</sub></p>', '<p>비타민B<sub>12</sub></p>', '<p>비타민C</p>', '<p>비타민D</p>', '<p>비타민K</p>'],
+    answer: [2],
+  }
+  const pageHtml = `<html><body><script type="application/json" id="__NEXT_DATA__">${JSON.stringify({
+    props: { pageProps: { serverData: { problem } } },
+  })}</script></body></html>`
+  let fetchCalls = 0
+  const { loadCurrentProblemData, extractSourceExamMeta, embeddedAnswers } = loadFunctions(
+    'scripts/allen_pdf_workbook_0.1.10.user.js',
+    '\n  bootLoop();',
+    ['loadCurrentProblemData', 'extractSourceExamMeta', 'embeddedAnswers'],
+    {
+      location: {
+        href: 'https://www.allenslibrary.com/study/chapter/1914/problem/120086',
+        origin: 'https://www.allenslibrary.com',
+        pathname: '/study/chapter/1914/problem/120086',
+      },
+      fetch: async (url, options) => {
+        fetchCalls += 1
+        assert.equal(url, 'https://www.allenslibrary.com/study/chapter/1914/problem/120086')
+        assert.equal(options.credentials, 'include')
+        assert.equal(options.cache, 'no-store')
+        return { ok: true, text: async () => pageHtml }
+      },
+    },
+  )
+  const loadedProblem = await loadCurrentProblemData()
+  assert.equal(fetchCalls, 1)
+  assert.equal(loadedProblem.problemId, 120086)
+  assert.deepEqual(
+    { ...extractSourceExamMeta('MD2601', '202601 | 고득점 대비 핵심 문항 | 알렌의 서재', loadedProblem) },
+    {
+      sourceLabel: 'MD2601 3교시, 30번',
+      sourceExam: 'MD2601',
+      sourceSession: 3,
+      sourceQuestionNumber: 30,
+    },
+  )
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(
+      embeddedAnswers(['비타민B6', '비타민B12', '비타민C', '비타민D', '비타민K'], loadedProblem),
     )),
     [{ index: 1, text: '비타민B12' }],
   )
