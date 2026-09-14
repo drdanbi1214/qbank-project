@@ -339,7 +339,7 @@ def main() -> None:
     if export_failures:
         print(f"브라우저에서 포함하지 못한 이미지 {len(export_failures)}개는 원격 주소에서 복구합니다.")
 
-    for item in items:
+    for item_index, item in enumerate(items):
         chapter = str(item.get("chapter") or "").strip()
         group = groups[chapter]
         question_text = sanitize_question(item.get("question"))
@@ -354,7 +354,7 @@ def main() -> None:
                 client.post("theory_questions", [{
                     "theory_document_id": group["id"],
                     "question_id": question_id,
-                    "sort_order": skipped + inserted,
+                    "sort_order": item_index,
                     "link_source": "import",
                 }], prefer="resolution=merge-duplicates,return=minimal")
             continue
@@ -415,7 +415,7 @@ def main() -> None:
             client.post("theory_questions", [{
                 "theory_document_id": group["id"],
                 "question_id": question_id,
-                "sort_order": inserted,
+                "sort_order": item_index,
                 "link_source": "import",
             }], prefer="return=minimal")
             existing_by_hash[allen_hash] = question_id
