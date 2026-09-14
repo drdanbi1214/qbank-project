@@ -380,7 +380,7 @@ export function TheorySubjectPage() {
           )}
           {!selected && (
             current ? (
-              <TheoryGroupLanding subjectId={subject.id} document={current} children={childrenOf(current.id)} questionCount={kmleCounts.get(current.id) ?? 0} />
+              <TheoryGroupLanding subjectId={subject.id} document={current} children={childrenOf(current.id)} questionCount={kmleCounts.get(current.id) ?? 0} kmleCounts={kmleCounts} />
             ) : (
               <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
                 <p className="text-sm text-slate-500 dark:text-slate-400">부속 이론 또는 단원을 선택하세요.</p>
@@ -486,11 +486,12 @@ function TheorySectionLanding({ subjectId, subjectName, sections, documents, kml
   )
 }
 
-function TheoryGroupLanding({ subjectId, document, children, questionCount }: {
+function TheoryGroupLanding({ subjectId, document, children, questionCount, kmleCounts }: {
   subjectId: string
   document: TheoryDocument
   children: TheoryDocument[]
   questionCount: number
+  kmleCounts: Map<string, number>
 }) {
   return (
     <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
@@ -507,14 +508,32 @@ function TheoryGroupLanding({ subjectId, document, children, questionCount }: {
       {children.length > 0 ? (
         <ul className="mt-5 grid gap-2 sm:grid-cols-2">
           {children.map((child) => (
-            <li key={child.id}>
+            <li
+              key={child.id}
+              className="flex items-center rounded-lg border border-slate-200 transition-colors hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:hover:bg-brand-900/20"
+            >
               <Link
                 to={`/theory/${subjectId}/${child.id}`}
-                className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 transition-colors hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:hover:bg-brand-900/20"
+                className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2"
               >
                 <Icon name="theory" size={18} className="shrink-0 text-brand-600 dark:text-brand-300" />
                 <span className="min-w-0 flex-1 truncate font-medium">{child.title}</span>
-                <Icon name="chevron-right" size={17} className="shrink-0 text-slate-400" />
+              </Link>
+              {(kmleCounts.get(child.id) ?? 0) > 0 && (
+                <Link
+                  to={`/solve?theory=${child.id}&returnTo=${encodeURIComponent(`/theory/${subjectId}/${document.id}`)}`}
+                  className="shrink-0 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 transition-colors hover:border-violet-400 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/60"
+                  aria-label={`${child.title} 국시 ${kmleCounts.get(child.id)}문항 풀기`}
+                >
+                  국시 {kmleCounts.get(child.id)}
+                </Link>
+              )}
+              <Link
+                to={`/theory/${subjectId}/${child.id}`}
+                className="grid self-stretch shrink-0 place-items-center px-3 text-slate-400"
+                aria-label={`${child.title} 이론 보기`}
+              >
+                <Icon name="chevron-right" size={17} />
               </Link>
             </li>
           ))}
