@@ -9,12 +9,14 @@ import {
 } from '@/lib/queries/updateNotices'
 
 /** 다음 업데이트 안내를 띄울 때 이 키와 아래 문구를 함께 바꾼다. */
-const NOTICE_KEY = '2026-09-14-kmle-attach-and-hematology-theory'
+const NOTICE_KEY = '2026-09-15-kmle-cross-subject-search-and-colors'
 const SESSION_KEY_PREFIX = 'qbank:update-notice-seen:'
 const UPDATES = [
   '이론·테마 본문에서 국시 KMLE 문제를 검색해 바로 첨부할 수 있습니다.',
-  '혈액 단원의 Allen 이론 목차와 내용을 교체했습니다.',
-  '국시 문제는 단원별로 순차적으로 업데이트할 예정입니다.',
+  '국시 검색은 이제 다른 과목 문제도 함께 찾고, 관련도가 비슷하면 지금 보고 있는 과목을 먼저 보여줍니다.',
+  '고른 문제가 마음에 안 들면 다시 검색하지 않고, 미리보기 화면의 ← → 화살표로 검색 결과의 다른 후보를 바로 넘겨볼 수 있습니다.',
+  '본문에 넣은 국시 카드는 보라색으로 표시되어 일반 야마 카드와 구분되고, 정답도 노란색으로 바로 표시됩니다.',
+  '정신건강의학과·외과총론 국시 문제를 시험 삼아 먼저 넣었습니다. 다른 과목도 순차적으로 업데이트할 예정입니다.',
 ]
 
 const KMLE_ATTACH_IMAGES = [
@@ -87,7 +89,7 @@ export function LatestUpdatePopup() {
 
   return (
     <Modal
-      title="국시 KMLE 첨부와 혈액 이론 업데이트 (9/14)"
+      title="국시 KMLE 첨부 개선 (9/15)"
       wide
       onClose={() => {
         if (!busy) close()
