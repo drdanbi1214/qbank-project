@@ -280,9 +280,9 @@ export function TheorySubjectPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400">아직 등록된 이론이 없습니다.</p>
         </div>
       ) : usesSectionLanding && !activeSection && !outlineEditing ? (
-        <TheorySectionLanding subjectId={subject.id} subjectName={subject.name} sections={sectionRoots} documents={documents} />
+        <TheorySectionLanding subjectId={subject.id} subjectName={subject.name} sections={sectionRoots} documents={documents} kmleCounts={kmleCounts} />
       ) : nestedSectionRoots.length > 0 && !outlineEditing ? (
-        <TheorySectionLanding subjectId={subject.id} subjectName={activeSection?.title ?? subject.name} sections={nestedSectionRoots} documents={documents} />
+        <TheorySectionLanding subjectId={subject.id} subjectName={activeSection?.title ?? subject.name} sections={nestedSectionRoots} documents={documents} kmleCounts={kmleCounts} />
       ) : (
         <div className="grid gap-3 lg:grid-cols-[13.5rem_minmax(0,1fr)]">
           <nav className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
@@ -422,11 +422,12 @@ function findSectionRoot(document: TheoryDocument, documents: TheoryDocument[], 
   return null
 }
 
-function TheorySectionLanding({ subjectId, subjectName, sections, documents }: {
+function TheorySectionLanding({ subjectId, subjectName, sections, documents, kmleCounts }: {
   subjectId: string
   subjectName: string
   sections: TheoryDocument[]
   documents: TheoryDocument[]
+  kmleCounts: Map<string, number>
 }) {
   const contentCounts = useMemo(() => {
     const children = new Map<string, TheoryDocument[]>()
@@ -446,10 +447,13 @@ function TheorySectionLanding({ subjectId, subjectName, sections, documents }: {
       <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">확인할 {subjectName} 이론을 선택하세요.</p>
       <ul className="grid gap-3 sm:grid-cols-2">
         {sections.map((section) => (
-          <li key={section.id}>
+          <li
+            key={section.id}
+            className="flex items-center rounded-xl border border-slate-200 bg-white transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
+          >
             <Link
               to={`/theory/${subjectId}/${section.id}`}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
+              className="flex min-w-0 flex-1 items-center gap-3 py-5 pl-5 pr-2"
             >
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
                 <Icon name="theory" />
@@ -458,7 +462,22 @@ function TheorySectionLanding({ subjectId, subjectName, sections, documents }: {
                 <span className="block font-semibold">{section.title}</span>
                 <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">이론 {contentCounts.get(section.id) ?? 0}개</span>
               </span>
-              <Icon name="chevron-right" size={18} className="text-slate-400" />
+            </Link>
+            {(kmleCounts.get(section.id) ?? 0) > 0 && (
+              <Link
+                to={`/solve?theory=${section.id}&returnTo=${encodeURIComponent(`/theory/${subjectId}`)}`}
+                className="shrink-0 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-sm font-semibold text-violet-700 transition-colors hover:border-violet-400 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/60"
+                aria-label={`${section.title} 국시 ${kmleCounts.get(section.id)}문항 풀기`}
+              >
+                국시 {kmleCounts.get(section.id)}
+              </Link>
+            )}
+            <Link
+              to={`/theory/${subjectId}/${section.id}`}
+              className="grid self-stretch shrink-0 place-items-center px-4 text-slate-400"
+              aria-label={`${section.title} 이론 보기`}
+            >
+              <Icon name="chevron-right" size={18} />
             </Link>
           </li>
         ))}
