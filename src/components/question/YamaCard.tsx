@@ -161,6 +161,10 @@ function YamaBody({
     question.groupId,
   )
 
+  // 이 묶음이 국시 KMLE 문제에서 시작됐는지로 배지 문구와 강조색을 정한다.
+  // 그룹 전체가 하나의 색을 쓰므로, 대표 문제의 출처만 보면 된다.
+  const isKmle = taxonomy?.examById.get(question.examId)?.questionBank === 'kmle'
+
   /** 어느 카드에 무엇을 붙이는 중인지 */
   const [adding, setAdding] = useState<{ anchorId: string; variant: VariantType } | null>(null)
   const [peeking, setPeeking] = useState<ClusterSibling | null>(null)
@@ -212,7 +216,10 @@ function YamaBody({
     <div
       data-print-pending={siblings === null ? 'yama' : undefined}
       className={cn(
-        'rounded-lg border-l-2 border-sky-500 bg-sky-100/80 px-3 py-2.5 dark:border-sky-600 dark:bg-sky-950/35',
+        'rounded-lg border-l-2 px-3 py-2.5',
+        isKmle
+          ? 'border-violet-500 bg-violet-100/80 dark:border-violet-600 dark:bg-violet-950/35'
+          : 'border-sky-500 bg-sky-100/80 dark:border-sky-600 dark:bg-sky-950/35',
         selected && 'ring-2 ring-brand-500',
       )}
     >
@@ -220,11 +227,12 @@ function YamaBody({
         <span
           data-drag-handle={editing ? '' : undefined}
           className={cn(
-            'rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white',
+            'rounded px-1.5 py-0.5 font-semibold text-white',
+            isKmle ? 'bg-violet-600' : 'bg-sky-600',
             editing && 'cursor-grab active:cursor-grabbing',
           )}
         >
-          야마
+          {isKmle ? '국시' : '야마'}
         </span>
         <span className="text-slate-500 dark:text-slate-400">
           유사 문제 {cards.length + 1}개
@@ -257,6 +265,7 @@ function YamaBody({
           key={`${question.id}-${topicScope?.yamaDisplayMode ?? 'all'}`}
           className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
           kind="anchor"
+          isKmle={isKmle}
           questionId={question.id}
           examLabel={`${examLabel(question.examId)} ${question.questionNumber}번`}
           stemBlocks={question.stemBlocks}
@@ -279,6 +288,7 @@ function YamaBody({
             key={`${row.id}-${topicScope?.yamaDisplayMode ?? 'all'}`}
             className={editing ? undefined : 'mb-2.5 break-inside-avoid'}
             kind="variant"
+            isKmle={isKmle}
             questionId={row.id}
             examLabel={`${examLabel(row.examId)} ${row.questionNumber}번`}
             stemBlocks={row.stemBlocks}
@@ -368,6 +378,7 @@ function YamaBody({
 function QuestionCard({
   className,
   kind,
+  isKmle,
   questionId,
   examLabel,
   stemBlocks,
@@ -386,6 +397,7 @@ function QuestionCard({
 }: {
   className?: string
   kind: 'anchor' | 'variant'
+  isKmle: boolean
   questionId: string
   examLabel: string
   stemBlocks: SolveQuestion['stemBlocks']
@@ -412,24 +424,25 @@ function QuestionCard({
   const [graded, setGraded] = useState(false)
   const [grading, setGrading] = useState(false)
   const [gradeError, setGradeError] = useState<string | null>(null)
-  const [authoringYamaAnswer, setAuthoringYamaAnswer] = useState<number[] | null>(null)
+  const [authoringAnswer, setAuthoringAnswer] = useState<number[] | null>(null)
   const startedAt = useRef(0)
 
   useEffect(() => {
     startedAt.current = Date.now()
   }, [])
 
-  // 레옵스 작성자는 해설을 쓰면서 복기 당시의 Y답을 확인할 수 있어야 한다.
-  // 읽기 화면에서는 문제를 풀기 전에 정답 요청 자체를 하지 않아 미리 노출되지 않는다.
+  // 레옵스 작성자는 해설을 쓰면서 정답(복기 Y답 또는 국시 편집자답)을 확인할 수
+  // 있어야 한다. 읽기 화면에서는 문제를 풀기 전에 정답 요청 자체를 하지 않아
+  // 미리 노출되지 않는다.
   useEffect(() => {
     if (interactive) return
     let active = true
     void revealAnswer(questionId)
       .then((revealed) => {
-        if (active) setAuthoringYamaAnswer(revealed?.yamaAnswer ?? [])
+        if (active) setAuthoringAnswer(revealed ? effectiveAnswer(revealed) : [])
       })
       .catch(() => {
-        if (active) setAuthoringYamaAnswer([])
+        if (active) setAuthoringAnswer([])
       })
     return () => {
       active = false
@@ -488,8 +501,10 @@ function QuestionCard({
       className={cn(
         'rounded-lg border bg-white p-3 dark:bg-slate-900',
         kind === 'anchor'
-          ? 'border-sky-300 shadow-sm dark:border-sky-700'
-          : 'border-sky-200 dark:border-sky-800',
+          ? (isKmle
+            ? 'border-violet-300 shadow-sm dark:border-violet-700'
+            : 'border-sky-300 shadow-sm dark:border-sky-700')
+          : (isKmle ? 'border-violet-200 dark:border-violet-800' : 'border-sky-200 dark:border-sky-800'),
         className,
       )}
     >
@@ -498,7 +513,7 @@ function QuestionCard({
           className={cn(
             'rounded px-1.5 py-0.5 font-bold',
             kind === 'anchor'
-              ? 'bg-sky-600 text-white'
+              ? (isKmle ? 'bg-violet-600 text-white' : 'bg-sky-600 text-white')
               : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
           )}
         >
@@ -570,20 +585,20 @@ function QuestionCard({
       ) : (
         <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
           {choices.map((choice) => {
-            const isYamaAnswer = !interactive && authoringYamaAnswer?.includes(choice.no)
+            const isAnswer = !interactive && authoringAnswer?.includes(choice.no)
             return (
               <li
                 key={choice.no}
                 className={cn(
                   'flex items-start gap-1.5 rounded px-1 py-0.5 text-slate-700 dark:text-slate-300',
-                  isYamaAnswer &&
+                  isAnswer &&
                     'bg-yellow-200/80 font-semibold text-slate-900 dark:bg-yellow-400/25 dark:text-yellow-100',
                 )}
               >
                 <span className="min-w-0 flex-1">{choice.text ?? '(이미지 보기)'}</span>
-                {isYamaAnswer && (
+                {isAnswer && (
                   <span className="shrink-0 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                    Y답
+                    {isKmle ? '정답' : 'Y답'}
                   </span>
                 )}
               </li>
@@ -598,14 +613,20 @@ function QuestionCard({
             type="button"
             onClick={() => void grade()}
             disabled={selectedChoices.length === 0 || grading}
-            className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40',
+              isKmle ? 'bg-violet-600 hover:bg-violet-700' : 'bg-sky-600 hover:bg-sky-700',
+            )}
           >
             {grading ? '채점 중…' : '채점하기'}
           </button>
           <button
             type="button"
             onClick={() => setShowSolution(true)}
-            className="px-1 py-1.5 text-xs text-slate-500 hover:text-sky-700 dark:text-slate-400 dark:hover:text-sky-300"
+            className={cn(
+              'px-1 py-1.5 text-xs text-slate-500 dark:text-slate-400',
+              isKmle ? 'hover:text-violet-700 dark:hover:text-violet-300' : 'hover:text-sky-700 dark:hover:text-sky-300',
+            )}
           >
             풀이 바로 보기
           </button>
