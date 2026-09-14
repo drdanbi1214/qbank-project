@@ -25,10 +25,10 @@ type Props = {
 }
 
 /**
- * 학번 · 시험 · 번호로 문제를 찾고, 확정 전에 전문을 한 번 보여준다.
+ * 검색어나 붙여 넣은 내용으로 문제를 찾고, 확정 전에 전문을 한 번 보여준다.
  *
- * 자동 유사도 매칭을 쓰지 않기로 했으므로 오류원은 사람의 입력 실수뿐이다.
- * 클릭을 한 번 더 받는 대신 엉뚱한 문제가 붙는 사고를 막는다.
+ * KMLE는 붙여 넣은 내용과 가까운 후보를 관련도 순으로 보여주지만 자동으로
+ * 확정하지 않는다. 클릭을 한 번 더 받아 엉뚱한 문제가 붙는 사고를 막는다.
  *
  * 클러스터 묶기와 테마 야마 삽입이 같은 흐름을 쓴다.
  */
@@ -70,6 +70,7 @@ export function QuestionLookup({
   // 지문·선지 키워드로 찾기. 학번과 번호를 모를 때가 더 많다.
   const [keyword, setKeyword] = useState('')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
+  const [pickedHit, setPickedHit] = useState<SearchHit | null>(null)
 
   const examsInCohort = useMemo(
     () => candidates.filter((exam) => exam.cohort === cohort),
@@ -121,6 +122,7 @@ export function QuestionLookup({
     setBusy(true)
     setError(null)
     setFound(null)
+    setPickedHit(null)
     void searchQuestions({ query: trimmed, includeSolutions: false, subjectId, questionBank })
       .then((rows) => setHits(rows.filter((row) => row.questionId !== excludeQuestionId)))
       .catch((caught: unknown) => {
@@ -145,6 +147,7 @@ export function QuestionLookup({
             return
           }
           setHits(null)
+          setPickedHit(hit)
           setFound(result)
         })
         .catch((caught: unknown) => {
@@ -175,13 +178,23 @@ export function QuestionLookup({
           onKeyDown={(event) => {
             if (event.key === 'Enter') searchByKeyword()
           }}
-          placeholder="지문이나 선지 키워드로 찾기"
+          placeholder={
+            questionBank === 'kmle'
+              ? '문제·선지·해설 내용을 붙여 넣거나 키워드로 찾기'
+              : '지문이나 선지 키워드로 찾기'
+          }
           className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
         />
         <Button size="sm" variant="secondary" onClick={searchByKeyword} disabled={busy}>
           검색
         </Button>
       </div>
+
+      {questionBank === 'kmle' && (
+        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+          긴 문제나 해설을 그대로 붙여 넣어도 가장 비슷한 문제부터 표시합니다.
+        </p>
+      )}
 
       {hits !== null && (
         <div className="mb-2 max-h-64 overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
@@ -200,8 +213,15 @@ export function QuestionLookup({
                   >
                     <span className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="font-medium text-brand-600 dark:text-brand-300">
-                        {examLabelOf(hit.examId)} {hit.questionNumber}번
+                        {questionBank === 'kmle'
+                          ? (hit.sourceCode || examLabelOf(hit.examId))
+                          : `${examLabelOf(hit.examId)} ${hit.questionNumber}번`}
                       </span>
+                      {hit.chapter && (
+                        <span className="text-slate-500 dark:text-slate-400">
+                          {hit.chapter}
+                        </span>
+                      )}
                       <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
                         {hit.matchedIn}
                       </span>
@@ -217,68 +237,81 @@ export function QuestionLookup({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-slate-400">또는</span>
-        <select
-          value={cohort}
-          onChange={(event) => {
-            setCohort(event.target.value)
-            setFound(null)
-          }}
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
-        >
-          {cohorts.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-
-        {/* 시험이 하나뿐이면 고를 것이 없다. 26학번 내과만 학년말고사 + 계통 Y1~Y8 로 9개다. */}
-        {examsInCohort.length > 1 && (
+      {questionBank !== 'kmle' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-400">또는</span>
           <select
-            value={examId}
+            value={cohort}
             onChange={(event) => {
-              setPickedExamId(event.target.value)
+              setCohort(event.target.value)
               setFound(null)
             }}
             className="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
           >
-            {examsInCohort.map((exam) => (
-              <option key={exam.id} value={exam.id}>
-                {[exam.examCode, exam.examSubjectLabel, exam.examName].filter(Boolean).join(' ')}
+            {cohorts.map((value) => (
+              <option key={value} value={value}>
+                {value}
               </option>
             ))}
           </select>
-        )}
 
-        <input
-          type="number"
-          inputMode="numeric"
-          value={number}
-          onChange={(event) => setNumber(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') search()
-          }}
-          placeholder="번호"
-          className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums dark:border-slate-600 dark:bg-slate-800"
-        />
+          {/* 시험이 하나뿐이면 고를 것이 없다. 26학번 내과만 학년말고사 + 계통 Y1~Y8 로 9개다. */}
+          {examsInCohort.length > 1 && (
+            <select
+              value={examId}
+              onChange={(event) => {
+                setPickedExamId(event.target.value)
+                setFound(null)
+              }}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
+            >
+              {examsInCohort.map((exam) => (
+                <option key={exam.id} value={exam.id}>
+                  {[exam.examCode, exam.examSubjectLabel, exam.examName]
+                    .filter(Boolean)
+                    .join(' ')}
+                </option>
+              ))}
+            </select>
+          )}
 
-        <Button size="sm" onClick={search} disabled={busy}>
-          찾기
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
-          취소
-        </Button>
-        {busy && <Spinner />}
-      </div>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={number}
+            onChange={(event) => setNumber(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') search()
+            }}
+            placeholder="번호"
+            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums dark:border-slate-600 dark:bg-slate-800"
+          />
+
+          <Button size="sm" onClick={search} disabled={busy}>
+            찾기
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            취소
+          </Button>
+          {busy && <Spinner />}
+        </div>
+      ) : (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            취소
+          </Button>
+          {busy && <Spinner />}
+        </div>
+      )}
 
       {error && <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
 
       {found && (
         <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
           <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-            {examLabelOf(found.examId)} {found.questionNumber}번
+            {questionBank === 'kmle' && pickedHit
+              ? [pickedHit.sourceCode, pickedHit.chapter].filter(Boolean).join(' · ')
+              : `${examLabelOf(found.examId)} ${found.questionNumber}번`}
           </p>
           <StemBlocks blocks={found.stemBlocks} />
           <ol className="mt-2 space-y-1 text-sm">

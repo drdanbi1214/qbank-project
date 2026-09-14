@@ -113,6 +113,36 @@ export type SearchHit = {
   /** `문제`, `선지` 또는 `풀이` */
   matchedIn: string
   snippet: string | null
+  /** KMLE 수집 원문의 대제목. 한양대 문제에는 없다. */
+  chapter?: string | null
+  /** MD17, 임종평25-2 같은 Allen 출처 코드. */
+  sourceCode?: string | null
+}
+
+export async function searchKmleQuestions(params: {
+  query: string
+  subjectId?: string | null
+  limit?: number
+}): Promise<SearchHit[]> {
+  const { data, error } = await supabase.rpc('search_kmle_questions', {
+    p_query: params.query,
+    p_subject_id: params.subjectId ?? undefined,
+    p_limit: params.limit ?? 50,
+  })
+  if (error) throw error
+
+  return (data ?? []).map((row) => ({
+    questionId: row.question_id,
+    examId: row.exam_id,
+    unitId: row.unit_id,
+    questionNumber: row.question_number ?? 0,
+    stemText: row.stem_text,
+    chapter: row.allen_chapter,
+    sourceCode: row.allen_code,
+    score: row.score ?? 0,
+    matchedIn: row.matched_in ?? '문제',
+    snippet: row.snippet,
+  }))
 }
 
 export async function searchQuestions(params: {
@@ -122,6 +152,13 @@ export async function searchQuestions(params: {
   subjectId?: string | null
   cohort?: string | null
 }): Promise<SearchHit[]> {
+  if (params.questionBank === 'kmle') {
+    return searchKmleQuestions({
+      query: params.query,
+      subjectId: params.subjectId,
+    })
+  }
+
   const { data, error } = await supabase.rpc('search_questions', {
     p_query: params.query,
     p_question_bank: params.questionBank ?? 'hanyang_2026',

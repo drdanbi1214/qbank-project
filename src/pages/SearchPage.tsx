@@ -515,13 +515,19 @@ export function SearchPage() {
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="font-semibold text-brand-600 dark:text-brand-300">
-                      {examLabelOf(hit.examId)} {hit.questionNumber}번
+                      {questionBank === 'kmle'
+                        ? (hit.sourceCode || examLabelOf(hit.examId))
+                        : `${examLabelOf(hit.examId)} ${hit.questionNumber}번`}
                     </span>
-                    <span className="text-slate-400">
-                      {hit.unitId
-                        ? (taxonomy?.unitById.get(hit.unitId)?.name ?? '미분류')
-                        : '미분류'}
-                    </span>
+                    {questionBank === 'kmle' && hit.chapter ? (
+                      <span className="text-slate-400">{hit.chapter}</span>
+                    ) : (
+                      <span className="text-slate-400">
+                        {hit.unitId
+                          ? (taxonomy?.unitById.get(hit.unitId)?.name ?? '미분류')
+                          : '미분류'}
+                      </span>
+                    )}
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {hit.matchedIn}에서 일치
                     </span>

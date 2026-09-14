@@ -3807,6 +3807,25 @@ export type Database = {
           unit_id: string
         }[]
       }
+      search_kmle_questions: {
+        Args: {
+          p_limit?: number
+          p_query: string
+          p_subject_id?: string
+        }
+        Returns: {
+          allen_chapter: string
+          allen_code: string
+          exam_id: string
+          matched_in: string
+          question_id: string
+          question_number: number
+          score: number
+          snippet: string
+          stem_text: string
+          unit_id: string
+        }[]
+      }
       search_result_snippet: {
         Args: { input_text: string; query_text: string; radius?: number }
         Returns: string
