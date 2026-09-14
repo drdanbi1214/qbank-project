@@ -207,6 +207,24 @@ export function TopicsPage() {
     resolvePick.current = null
   }, [])
 
+  // 국시는 기존 야마와 다른 문제은행만 보여 주지만, 본문에는 같은 문제 카드
+  // 노드로 저장한다. 그래서 풀이/메모 표시 방식은 기존 레옵스와 그대로 맞는다.
+  const [pickingKmle, setPickingKmle] = useState(false)
+  const resolveKmle = useRef<((id: string | null) => void) | null>(null)
+
+  const requestKmle = useCallback(() => {
+    setPickingKmle(true)
+    return new Promise<string | null>((resolve) => {
+      resolveKmle.current = resolve
+    })
+  }, [])
+
+  const finishKmle = useCallback((id: string | null) => {
+    setPickingKmle(false)
+    resolveKmle.current?.(id)
+    resolveKmle.current = null
+  }, [])
+
   // 이론 넣기도 같은 방식이다. 이미 올라와 있는 이론 문서를 찾아 본문에 꽂는다.
   const [pickingTheory, setPickingTheory] = useState(false)
   const resolveTheory = useRef<((id: string | null) => void) | null>(null)
@@ -662,6 +680,7 @@ export function TopicsPage() {
                   minHeight="30rem"
                   onUploadError={setError}
                   onRequestYama={requestYama}
+                  onRequestKmle={requestKmle}
                   onRequestTheory={requestTheory}
                   onRequestLecture={userId ? requestLecture : undefined}
                 />
@@ -813,6 +832,7 @@ export function TopicsPage() {
                   minHeight="30rem"
                   onUploadError={setError}
                   onRequestYama={requestYama}
+                  onRequestKmle={requestKmle}
                   onRequestTheory={requestTheory}
                   onRequestLecture={userId ? requestLecture : undefined}
                 />
@@ -862,6 +882,27 @@ export function TopicsPage() {
               confirmLabel="본문에 넣기"
               onCancel={() => finishPick(null)}
               onPick={(found) => finishPick(found.id)}
+            />
+          </div>
+        </div>
+      )}
+
+      {pickingKmle && taxonomy && (
+        <div
+          className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <h3 className="mb-3 text-sm font-semibold">본문에 넣을 국시 KMLE 고르기</h3>
+            <QuestionLookup
+              exams={taxonomy.exams}
+              subjectId={subjectId}
+              questionBank="kmle"
+              examLabelOf={examLabelOf}
+              confirmLabel="본문에 넣기"
+              onCancel={() => finishKmle(null)}
+              onPick={(found) => finishKmle(found.id)}
             />
           </div>
         </div>

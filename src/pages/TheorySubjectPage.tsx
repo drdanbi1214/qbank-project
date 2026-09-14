@@ -12,6 +12,7 @@ import {
   createTheoryDocument,
   deleteTheoryDocument,
   fetchTheoryDocuments,
+  fetchTheoryQuestionCounts,
   renameTheoryDocument,
   swapTheoryOrder,
   updateTheoryDocumentContent,
@@ -26,10 +27,12 @@ import { cn } from '@/utils/cn'
 
 export function TheorySubjectPage() {
   const { subjectId, documentId } = useParams()
-  const { session, isAdmin } = useAuth()
+  const { session, isAdmin, hasPermission } = useAuth()
+  const canUseKmle = isAdmin || hasPermission('study_legendob')
   const { taxonomy, loading: taxonomyLoading } = useData()
   const embed = useEmbedPickers({ subjectId: subjectId, theory: true, lectureUserId: session?.user.id ?? null })
   const [documents, setDocuments] = useState<TheoryDocument[] | null>(null)
+  const [kmleCounts, setKmleCounts] = useState<Map<string, number>>(() => new Map())
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -44,11 +47,18 @@ export function TheorySubjectPage() {
   const load = useCallback(() => {
     if (!subjectId) return
     void fetchTheoryDocuments(subjectId)
-      .then(setDocuments)
+      .then(async (rows) => {
+        setDocuments(rows)
+        if (!canUseKmle) {
+          setKmleCounts(new Map())
+          return
+        }
+        setKmleCounts(await fetchTheoryQuestionCounts(rows.map((row) => row.id)))
+      })
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '이론을 불러오지 못했습니다.')
       })
-  }, [subjectId])
+  }, [subjectId, canUseKmle])
 
   useEffect(load, [load])
 
@@ -288,7 +298,7 @@ export function TheorySubjectPage() {
                 </button>
               </div>
             )}
-            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} editing={outlineEditing} onShift={shift} onMove={setMoving} onRename={rename} onAdd={addChild} onDelete={removeDocument} />)}
+            {navigationRoots.map((document) => <TheoryNavBranch key={document.id} document={document} subjectId={subject.id} selectedId={current?.id} childrenOf={childrenOf} expanded={visibleExpanded} onToggle={toggleExpanded} kmleCounts={kmleCounts} editing={outlineEditing} onShift={shift} onMove={setMoving} onRename={rename} onAdd={addChild} onDelete={removeDocument} />)}
           </nav>
 
           {selected && (
@@ -370,7 +380,7 @@ export function TheorySubjectPage() {
           )}
           {!selected && (
             current ? (
-              <TheoryGroupLanding subjectId={subject.id} document={current} children={childrenOf(current.id)} />
+              <TheoryGroupLanding subjectId={subject.id} document={current} children={childrenOf(current.id)} questionCount={kmleCounts.get(current.id) ?? 0} />
             ) : (
               <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
                 <p className="text-sm text-slate-500 dark:text-slate-400">부속 이론 또는 단원을 선택하세요.</p>
@@ -457,14 +467,23 @@ function TheorySectionLanding({ subjectId, subjectName, sections, documents }: {
   )
 }
 
-function TheoryGroupLanding({ subjectId, document, children }: {
+function TheoryGroupLanding({ subjectId, document, children, questionCount }: {
   subjectId: string
   document: TheoryDocument
   children: TheoryDocument[]
+  questionCount: number
 }) {
   return (
     <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
       <h2 className="text-2xl font-bold tracking-tight">{document.title}</h2>
+      {questionCount > 0 && (
+        <Link
+          to={`/solve?theory=${document.id}&returnTo=${encodeURIComponent(`/theory/${subjectId}/${document.id}`)}`}
+          className="mt-4 inline-flex items-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700"
+        >
+          국시 {questionCount}문항 풀기
+        </Link>
+      )}
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">아래 소주제에서 필요한 이론을 선택하세요.</p>
       {children.length > 0 ? (
         <ul className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -498,8 +517,8 @@ type OutlineTools = {
   onDelete?: (document: TheoryDocument) => Promise<void>
 }
 
-function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, depth = 0, editing, onShift, onMove, onRename, onAdd, onDelete }: {
-  document: TheoryDocument; subjectId: string; selectedId?: string; childrenOf: (id: string) => TheoryDocument[]; expanded: Set<string>; onToggle: (id: string) => void; depth?: number
+function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded, onToggle, kmleCounts, depth = 0, editing, onShift, onMove, onRename, onAdd, onDelete }: {
+  document: TheoryDocument; subjectId: string; selectedId?: string; childrenOf: (id: string) => TheoryDocument[]; expanded: Set<string>; onToggle: (id: string) => void; kmleCounts: Map<string, number>; depth?: number
 } & OutlineTools) {
   const children = childrenOf(document.id)
   const hasChildren = children.length > 0
@@ -533,7 +552,7 @@ function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded
             )}
           />
         ) : (
-          <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} depth={depth} expanded={isExpanded} onToggle={hasChildren && !editing ? () => onToggle(document.id) : undefined} />
+          <TheoryNavItem document={document} subjectId={subjectId} selectedId={selectedId} group={hasChildren} questionCount={kmleCounts.get(document.id) ?? 0} depth={depth} expanded={isExpanded} onToggle={hasChildren && !editing ? () => onToggle(document.id) : undefined} />
         )}
       </div>
       {editing && draft === null && (
@@ -547,7 +566,7 @@ function TheoryNavBranch({ document, subjectId, selectedId, childrenOf, expanded
         </span>
       )}
     </div>
-    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} onRename={onRename} onAdd={onAdd} onDelete={onDelete} />)}
+    {hasChildren && isExpanded && children.map((child) => <TheoryNavBranch key={child.id} document={child} subjectId={subjectId} selectedId={selectedId} childrenOf={childrenOf} expanded={expanded} onToggle={onToggle} kmleCounts={kmleCounts} depth={depth + 1} editing={editing} onShift={onShift} onMove={onMove} onRename={onRename} onAdd={onAdd} onDelete={onDelete} />)}
   </div>
 }
 
@@ -570,6 +589,7 @@ function TheoryNavItem({
   subjectId,
   selectedId,
   group = false,
+  questionCount = 0,
   depth = 0,
   expanded = false,
   onToggle,
@@ -578,6 +598,7 @@ function TheoryNavItem({
   subjectId: string
   selectedId?: string
   group?: boolean
+  questionCount?: number
   depth?: number
   expanded?: boolean
   onToggle?: () => void
@@ -594,6 +615,15 @@ function TheoryNavItem({
   if (!document.hasContent) return (
     <div className={className}>
       {group ? <Link to={`/theory/${subjectId}/${document.id}`} className="min-w-0 flex-1 truncate">{label}</Link> : label}
+      {questionCount > 0 && (
+        <Link
+          to={`/solve?theory=${document.id}&returnTo=${encodeURIComponent(`/theory/${subjectId}/${document.id}`)}`}
+          title={`${document.title} 국시 ${questionCount}문항 풀기`}
+          className="shrink-0 rounded border border-violet-200 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-200 dark:hover:bg-violet-950/40"
+        >
+          국시 {questionCount}
+        </Link>
+      )}
       {onToggle && <button type="button" onClick={onToggle} aria-label={`${document.title} ${expanded ? '접기' : '펼치기'}`} className="px-1 text-slate-400">{expanded ? '⌄' : '›'}</button>}
     </div>
   )

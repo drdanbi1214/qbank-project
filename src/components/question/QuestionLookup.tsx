@@ -4,12 +4,14 @@ import { Spinner } from '@/components/ui/Spinner'
 import { StemBlocks } from '@/components/question/StemBlocks'
 import { findQuestionById, findQuestionInExam, type LookupResult } from '@/lib/queries/clusters'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
-import type { Exam } from '@/lib/queries/taxonomy'
+import type { Exam, QuestionBank } from '@/lib/queries/taxonomy'
 
 type Props = {
   exams: Exam[]
   /** 이 과목의 시험만 후보로 둔다. null 이면 전체 */
   subjectId: string | null
+  /** 야마와 국시 선택창이 서로 다른 문제은행만 검색하도록 한다. */
+  questionBank?: QuestionBank
   /** 후보에서 뺄 시험 (기준 문제가 있는 시험 등) */
   excludeExamId?: string
   /** 이 문제를 고르면 거부한다 */
@@ -33,6 +35,7 @@ type Props = {
 export function QuestionLookup({
   exams,
   subjectId,
+  questionBank = 'hanyang_2026',
   excludeExamId,
   excludeQuestionId,
   rejectGrouped = false,
@@ -45,9 +48,11 @@ export function QuestionLookup({
     () =>
       exams.filter(
         (exam) =>
-          (!subjectId || exam.subjectId === subjectId) && exam.id !== excludeExamId,
+          (!subjectId || exam.subjectId === subjectId)
+          && exam.id !== excludeExamId
+          && exam.questionBank === questionBank,
       ),
-    [exams, subjectId, excludeExamId],
+    [exams, subjectId, questionBank, excludeExamId],
   )
 
   const cohorts = useMemo(
@@ -116,14 +121,14 @@ export function QuestionLookup({
     setBusy(true)
     setError(null)
     setFound(null)
-    void searchQuestions({ query: trimmed, includeSolutions: false, subjectId })
+    void searchQuestions({ query: trimmed, includeSolutions: false, subjectId, questionBank })
       .then((rows) => setHits(rows.filter((row) => row.questionId !== excludeQuestionId)))
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : '검색하지 못했습니다.')
         setHits([])
       })
       .finally(() => setBusy(false))
-  }, [keyword, subjectId, excludeQuestionId])
+  }, [keyword, subjectId, questionBank, excludeQuestionId])
 
   const pickHit = useCallback(
     (hit: SearchHit) => {

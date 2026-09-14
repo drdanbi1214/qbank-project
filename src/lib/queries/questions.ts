@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { toClusterRole, type ClusterRole } from '@/lib/queries/clusters'
+import type { QuestionBank } from '@/lib/queries/taxonomy'
 import {
   parseAnswerPayload,
   parseChoices,
@@ -135,6 +136,8 @@ export type QuestionFilter = {
   subjectId?: string
   /** unit_id 가 비어 있는 문제만 (라벨링 대기) */
   unlabeledOnly?: boolean
+  /** 과목/미분류 조회에 국시 문제가 섞이지 않게 기본은 한양대 문제은행이다. */
+  questionBank?: QuestionBank
 }
 
 /**
@@ -155,6 +158,7 @@ export async function fetchQuestions(filter: QuestionFilter): Promise<SolveQuest
       .from('exams')
       .select('id')
       .eq('subject_id', filter.subjectId)
+      .eq('question_bank', filter.questionBank ?? 'hanyang_2026')
     if (error) throw error
     examIds = (exams ?? []).map((row) => row.id)
     if (examIds.length === 0) return []

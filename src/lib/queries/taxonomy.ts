@@ -38,7 +38,11 @@ export type Exam = {
   totalQuestions: number | null
   restoredQuestions: number | null
   overview: string | null
+  /** 기존 한양대 문제와 새 국시 문제를 서로 다른 시험지로 취급한다. */
+  questionBank: QuestionBank
 }
+
+export type QuestionBank = 'hanyang_2026' | 'kmle'
 
 export type Taxonomy = {
   subjects: Subject[]
@@ -60,7 +64,7 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
     supabase
       .from('exams')
       .select(
-        'id, cohort, subject_id, curriculum, exam_code, exam_name, exam_subject_label, status, exam_date, source_page_start, source_page_end, duration_min, format, total_questions, restored_questions, overview',
+        'id, cohort, subject_id, curriculum, exam_code, exam_name, exam_subject_label, status, exam_date, source_page_start, source_page_end, duration_min, format, total_questions, restored_questions, overview, question_bank',
       ),
   ])
 
@@ -106,6 +110,7 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
       totalQuestions: row.total_questions,
       restoredQuestions: row.restored_questions,
       overview: row.overview,
+      questionBank: row.question_bank === 'kmle' ? ('kmle' as const) : ('hanyang_2026' as const),
     }))
     .sort((a, b) => a.cohort.localeCompare(b.cohort, 'ko'))
 

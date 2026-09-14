@@ -1,7 +1,10 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ProgressBadge } from '@/components/ui/ProgressBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
+import { useAuth } from '@/lib/auth'
+import { cn } from '@/utils/cn'
+import type { QuestionBank } from '@/lib/queries/taxonomy'
 
 type ExamGroup = {
   key: string
@@ -24,6 +27,11 @@ function cohortExamLabel(cohort: string): string {
 /** 시험 묶음(있으면) -> 과목 -> 차수 순으로 시험을 나열한다. */
 export function ExamsPage() {
   const { taxonomy, loading, examProgress } = useData()
+  const { hasPermission, isAdmin } = useAuth()
+  const [params, setParams] = useSearchParams()
+  const canViewKmle = isAdmin || hasPermission('study_legendob')
+  const requestedBank = params.get('bank')
+  const bank: QuestionBank = requestedBank === 'kmle' && canViewKmle ? 'kmle' : 'hanyang_2026'
 
   if (loading) {
     return (
@@ -33,7 +41,7 @@ export function ExamsPage() {
     )
   }
 
-  const exams = taxonomy?.exams ?? []
+  const exams = (taxonomy?.exams ?? []).filter((exam) => exam.questionBank === bank)
   const groupMap = new Map<string, ExamGroup>()
   for (const exam of exams) {
     const isCurriculum = Boolean(exam.curriculum)
@@ -61,10 +69,20 @@ export function ExamsPage() {
 
   return (
     <section>
+      <QuestionBankTabs
+        value={bank}
+        showKmle={canViewKmle}
+        onChange={(next) => {
+          const updated = new URLSearchParams(params)
+          if (next === 'kmle') updated.set('bank', 'kmle')
+          else updated.delete('bank')
+          setParams(updated, { replace: true })
+        }}
+      />
       <header className="mb-4">
         <h1 className="text-xl font-bold">시험별 보기</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          연도별 학년말고사와 교육과정 시험을 찾아보세요.
+          {bank === 'kmle' ? '국시 KMLE 문제를 과목별로 찾아보세요.' : '2026 한양대 시험 문제를 찾아보세요.'}
         </p>
       </header>
 
@@ -146,5 +164,37 @@ export function ExamsPage() {
         </div>
       )}
     </section>
+  )
+}
+
+function QuestionBankTabs({ value, showKmle, onChange }: {
+  value: QuestionBank
+  showKmle: boolean
+  onChange: (value: QuestionBank) => void
+}) {
+  const tabs: { value: QuestionBank; label: string }[] = [
+    { value: 'hanyang_2026', label: '2026 한양대' },
+    ...(showKmle ? [{ value: 'kmle' as const, label: '국시 KMLE' }] : []),
+  ]
+  return (
+    <div className="mb-4 inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="tablist" aria-label="문제은행">
+      {tabs.map((tab) => (
+        <button
+          key={tab.value}
+          type="button"
+          role="tab"
+          aria-selected={value === tab.value}
+          onClick={() => onChange(tab.value)}
+          className={cn(
+            'rounded-lg px-4 py-2 text-sm font-semibold transition-colors',
+            value === tab.value
+              ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-200'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
   )
 }

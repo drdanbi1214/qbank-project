@@ -17,6 +17,7 @@ import {
 import { collapseIdentical, fetchCollapseSetting } from '@/lib/queries/clusters'
 import { fetchSession, finishSession, startSession, updateSessionOrder, updateSessionProgress } from '@/lib/queries/study'
 import { examShortLabel } from '@/lib/queries/taxonomy'
+import { fetchTheoryQuestionIds } from '@/lib/queries/theory'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 
@@ -27,6 +28,7 @@ import { useData } from '@/lib/data'
  *   /solve?subject=<id>         과목 전체
  *   /solve?subject=<id>&unlabeled=1  해당 과목의 미분류 문제
  *   /solve?question=<id>        단건
+ *   /solve?theory=<id>          이론 대제목에 연결된 국시 KMLE
  *   /solve?session=<id>         저장된 학습 세션 (이어풀기, 오답 재풀이, 북마크 재풀이)
  * 현재 위치는 &i=<index> 로 URL 에 남겨 새로고침과 뒤로가기에서 유지된다.
  */
@@ -49,6 +51,7 @@ function SolveWorkspace() {
   const examId = params.get('exam')
   const subjectId = params.get('subject')
   const questionId = params.get('question')
+  const theoryId = params.get('theory')
   // 저장된 세션을 만들지 않고 그 자리에서 몇 문제를 이어 풀 때 쓴다.
   // 야마 카드의 "풀어보기" 가 묶인 문제를 통째로 넘긴다.
   const questionIds = params.get('questions')
@@ -60,7 +63,7 @@ function SolveWorkspace() {
   const autoWrite = params.get('write') === '1'
 
   // 요청 키를 결과에 함께 저장해 로딩 상태를 파생시킨다.
-  const requestKey = `${unitId ?? ''}|${examId ?? ''}|${subjectId ?? ''}|${questionId ?? ''}|${questionIds ?? ''}|${sessionId ?? ''}|${unlabeled}`
+  const requestKey = `${unitId ?? ''}|${examId ?? ''}|${subjectId ?? ''}|${questionId ?? ''}|${theoryId ?? ''}|${questionIds ?? ''}|${sessionId ?? ''}|${unlabeled}`
 
   const [loaded, setLoaded] = useState<{
     key: string
@@ -122,7 +125,9 @@ function SolveWorkspace() {
         // 거기서 걸렀는데, 문제가 쌓이면서 PostgREST 반환 상한(기본 1000행)에
         // 걸려 뒤쪽 문제는 목록에 아예 오지 않았다. 그래서 배정 화면에서
         // 넘어오면 '이 범위에 풀 문제가 없습니다' 가 떴다.
-        const rawRows = questionId
+        const rawRows = theoryId
+          ? await fetchTheoryQuestionIds(theoryId).then(fetchQuestionsByIds)
+          : questionId
           ? await fetchQuestionById(questionId).then((one) => (one ? [one] : []))
           : await fetchQuestions({
               unitId: unitId ?? undefined,
@@ -148,7 +153,7 @@ function SolveWorkspace() {
           const created = await startSession({
             userId,
             mode: 'sequential',
-            scope: { unit_id: unitId, exam_id: examId, subject_id: subjectId, return_to: explicitReturnTo },
+            scope: { unit_id: unitId, exam_id: examId, subject_id: subjectId, theory_document_id: theoryId, return_to: explicitReturnTo },
             questionIds: finalRows.map((row) => row.id),
           })
           if (active) trackedSession.current = created
@@ -166,7 +171,7 @@ function SolveWorkspace() {
     return () => {
       active = false
     }
-  }, [unitId, examId, subjectId, questionId, questionIds, sessionId, unlabeled, requestKey, userId, loadNonce, navigate, explicitReturnTo])
+  }, [unitId, examId, subjectId, questionId, theoryId, questionIds, sessionId, unlabeled, requestKey, userId, loadNonce, navigate, explicitReturnTo])
 
   // 세션으로 들어왔고 URL 에 위치가 없으면 저장된 위치에서 이어간다.
   const savedIndex = loaded?.key === requestKey ? loaded.startIndex : 0

@@ -895,6 +895,7 @@ export type Database = {
           format: string | null
           id: string
           overview: string | null
+          question_bank: string
           required_permission: string | null
           restored_questions: number | null
           source_file_url: string | null
@@ -918,6 +919,7 @@ export type Database = {
           format?: string | null
           id?: string
           overview?: string | null
+          question_bank?: string
           required_permission?: string | null
           restored_questions?: number | null
           source_file_url?: string | null
@@ -941,6 +943,7 @@ export type Database = {
           format?: string | null
           id?: string
           overview?: string | null
+          question_bank?: string
           required_permission?: string | null
           restored_questions?: number | null
           source_file_url?: string | null
@@ -2665,6 +2668,45 @@ export type Database = {
           },
         ]
       }
+      theory_questions: {
+        Row: {
+          created_at: string
+          link_source: string
+          question_id: string
+          sort_order: number
+          theory_document_id: string
+        }
+        Insert: {
+          created_at?: string
+          link_source?: string
+          question_id: string
+          sort_order?: number
+          theory_document_id: string
+        }
+        Update: {
+          created_at?: string
+          link_source?: string
+          question_id?: string
+          sort_order?: number
+          theory_document_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_questions_theory_document_id_fkey"
+            columns: ["theory_document_id"]
+            isOneToOne: false
+            referencedRelation: "theory_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       theory_memos: {
         Row: {
           anchor_from: number
@@ -3619,6 +3661,13 @@ export type Database = {
         Args: { p_question_id: string }
         Returns: undefined
       }
+      get_theory_question_ids: {
+        Args: { p_theory_document_id: string }
+        Returns: {
+          question_id: string
+          sort_order: number
+        }[]
+      }
       is_active_member: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_display_name_available: { Args: { p_name: string }; Returns: boolean }
@@ -3744,6 +3793,7 @@ export type Database = {
           p_include_solutions?: boolean
           p_limit?: number
           p_query: string
+          p_question_bank: string
           p_subject_id?: string
         }
         Returns: {

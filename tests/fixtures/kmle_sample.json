@@ -1,0 +1,35 @@
+{
+  "schema": "qbank-kmle-v1",
+  "exportedAt": "2026-09-14T00:00:00.000Z",
+  "imageFailures": [],
+  "items": [
+    {
+      "id": "allen_test_circulation_general",
+      "code": "TEST",
+      "chapter": "순환기 총론",
+      "question": "조건 해석\nA-\n13px\nA+\nKMLE 가져오기 검증용 가상 문항입니다.",
+      "choices": ["가상 선지 1", "가상 선지 2"],
+      "contentHtml": "<table><tr><th>항목</th><th>값</th></tr><tr><td>검사</td><td>정상</td></tr></table>",
+      "answers": [{"index": 0, "text": "가상 선지 1"}],
+      "choiceRates": ["70%", "30%"],
+      "explanationHtml": "<h4>해설</h4><p>실제 등록에는 사용하지 않는 검증 데이터입니다.</p>",
+      "explanationAssetsHtml": "",
+      "url": "https://allenslibrary.com/example",
+      "collectedAt": "2026-09-14T00:00:00.000Z"
+    },
+    {
+      "id": "allen_test_hypertension",
+      "code": "TEST-2",
+      "chapter": "고혈압",
+      "question": "두 번째 대제목 연결 검증용 가상 문항입니다.",
+      "choices": ["가상 선지 1", "가상 선지 2"],
+      "contentHtml": "",
+      "answers": [{"index": 1, "text": "가상 선지 2"}],
+      "choiceRates": ["30%", "70%"],
+      "explanationHtml": "<h4>해설</h4><p>실제 등록에는 사용하지 않는 검증 데이터입니다.</p>",
+      "explanationAssetsHtml": "",
+      "url": "https://allenslibrary.com/example-2",
+      "collectedAt": "2026-09-14T00:00:00.000Z"
+    }
+  ]
+}

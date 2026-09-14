@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import type { QuestionBank } from '@/lib/queries/taxonomy'
 
 // =============================================================================
 // Phase 4 학습 도구 조회
@@ -117,11 +118,13 @@ export type SearchHit = {
 export async function searchQuestions(params: {
   query: string
   includeSolutions: boolean
+  questionBank?: QuestionBank
   subjectId?: string | null
   cohort?: string | null
 }): Promise<SearchHit[]> {
   const { data, error } = await supabase.rpc('search_questions', {
     p_query: params.query,
+    p_question_bank: params.questionBank ?? 'hanyang_2026',
     p_include_solutions: params.includeSolutions,
     p_subject_id: params.subjectId ?? undefined,
     p_cohort: params.cohort ?? undefined,

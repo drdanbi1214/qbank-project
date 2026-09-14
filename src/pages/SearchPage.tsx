@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { useData } from '@/lib/data'
 import { useAuth } from '@/lib/auth'
 import { PERMISSION } from '@/lib/permissions'
-import { examShortLabel } from '@/lib/queries/taxonomy'
+import { examShortLabel, type QuestionBank } from '@/lib/queries/taxonomy'
 import { searchQuestions, type SearchHit } from '@/lib/queries/study'
 import { fetchLectureDocuments, mixLectureHits, type LectureDocument } from '@/lib/queries/lectures'
 import { searchTheoryDocuments, type TheorySearchHit } from '@/lib/queries/theory'
@@ -29,10 +29,14 @@ export function SearchPage() {
   const { taxonomy } = useData()
   const { hasPermission, isAdmin } = useAuth()
   const canViewStudySolutions = isAdmin || hasPermission('study_hapbon3')
+  const canViewKmle = isAdmin || hasPermission('study_legendob')
   const canSearchNotes =
     isAdmin || hasPermission(PERMISSION.mediprepLectureNotesView)
 
   const query = params.get('q') ?? ''
+  const questionBank: QuestionBank = params.get('bank') === 'kmle' && canViewKmle
+    ? 'kmle'
+    : 'hanyang_2026'
   const encodedSources = params.get('sources')
   const legacyDefault = params.get('lectures') === '1' ? 'lectures' : 'questions'
   const selectedSources = new Set(
@@ -74,7 +78,7 @@ export function SearchPage() {
     message: string
   } | null>(null)
 
-  const requestKey = `${searchNonce}|${query}|${includeQuestionSearch}|${includeSolutions}|${includeTheory}|${includeLectures}|${includeNotes}|${subjectId ?? ''}|${cohort ?? ''}`
+  const requestKey = `${searchNonce}|${query}|${questionBank}|${includeQuestionSearch}|${includeSolutions}|${includeTheory}|${includeLectures}|${includeNotes}|${subjectId ?? ''}|${cohort ?? ''}`
   const error = failed?.key === requestKey ? failed.message : null
   const lectureError = lectureFailed?.key === requestKey ? lectureFailed.message : null
   const theoryError = theoryFailed?.key === requestKey ? theoryFailed.message : null
@@ -90,6 +94,7 @@ export function SearchPage() {
       void searchQuestions({
         query,
         includeSolutions,
+        questionBank,
         subjectId,
         cohort,
       })
@@ -150,6 +155,7 @@ export function SearchPage() {
     }
   }, [
     query,
+    questionBank,
     includeSolutions,
     includeLectures,
     includeNotes,
@@ -183,8 +189,10 @@ export function SearchPage() {
   )
 
   const cohorts = useMemo(
-    () => [...new Set((taxonomy?.exams ?? []).map((exam) => exam.cohort))].sort(),
-    [taxonomy],
+    () => [...new Set((taxonomy?.exams ?? [])
+      .filter((exam) => exam.questionBank === questionBank)
+      .map((exam) => exam.cohort))].sort(),
+    [taxonomy, questionBank],
   )
 
   // 검색 범위마다 끝나는 시간이 다르다. 먼저 끝난 결과는 바로 보여 주되, 아래의
@@ -251,6 +259,20 @@ export function SearchPage() {
 
   return (
     <section>
+      <div className="mb-4 inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="tablist" aria-label="문제은행">
+        <QuestionBankTab
+          active={questionBank === 'hanyang_2026'}
+          label="2026 한양대"
+          onClick={() => update({ bank: null, cohort: null })}
+        />
+        {canViewKmle && (
+          <QuestionBankTab
+            active={questionBank === 'kmle'}
+            label="국시 KMLE"
+            onClick={() => update({ bank: 'kmle', cohort: null })}
+          />
+        )}
+      </div>
       <header className="mb-4">
         <h1 className="text-xl font-bold">검색</h1>
       </header>
@@ -528,6 +550,29 @@ export function SearchPage() {
         </>
       )}
     </section>
+  )
+}
+
+function QuestionBankTab({ active, label, onClick }: {
+  active: boolean
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'rounded-lg px-4 py-2 text-sm font-semibold transition-colors',
+        active
+          ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-200'
+          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
+      )}
+    >
+      {label}
+    </button>
   )
 }
 

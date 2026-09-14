@@ -82,6 +82,8 @@ type Props = {
    * 넘기지 않으면 버튼 자체가 없다 — 테마 편집에서만 쓴다.
    */
   onRequestYama?: () => Promise<string | null>
+  /** 레옵스 전용 국시 KMLE 문제 삽입 버튼. 저장 노드는 야마와 같은 문제 카드다. */
+  onRequestKmle?: () => Promise<string | null>
   /** 이론 넣기 버튼. 부모가 이론 고르기 화면을 띄우고 문서 id 를 돌려준다. */
   onRequestTheory?: () => Promise<string | null>
   /**
@@ -109,6 +111,7 @@ export function RichTextEditor({
   uploadImageFile = uploadImage,
   uploadVideoFile,
   onRequestYama,
+  onRequestKmle,
   onRequestTheory,
   onRequestLecture,
   contentClassName,
@@ -533,6 +536,14 @@ export function RichTextEditor({
         run: () => requestAndInsertYama(editor, onRequestYama),
       })
     }
+    if (onRequestKmle) {
+      commands.push({
+        id: 'kmle',
+        label: '국시',
+        className: 'text-violet-700 dark:text-violet-300',
+        run: () => requestAndInsertYama(editor, onRequestKmle),
+      })
+    }
     if (onRequestTheory) {
       commands.push({
         id: 'theory',
@@ -622,7 +633,7 @@ export function RichTextEditor({
       },
     )
     return commands
-  }, [editor, onRequestLecture, onRequestTheory, onRequestYama])
+  }, [editor, onRequestKmle, onRequestLecture, onRequestTheory, onRequestYama])
 
   if (!editor) return null
 
@@ -642,6 +653,7 @@ export function RichTextEditor({
         onPickVideo={uploadVideoFile ? insertVideos : undefined}
         extra={toolbarExtra}
         onRequestYama={onRequestYama}
+        onRequestKmle={onRequestKmle}
         onRequestTheory={onRequestTheory}
         onRequestLecture={onRequestLecture}
       />
@@ -923,6 +935,7 @@ function Toolbar({
   onPickVideo,
   extra,
   onRequestYama,
+  onRequestKmle,
   onRequestTheory,
   onRequestLecture,
 }: {
@@ -933,6 +946,7 @@ function Toolbar({
   onPickVideo?: (view: EditorView, files: File[]) => void
   extra?: ReactNode
   onRequestYama?: () => Promise<string | null>
+  onRequestKmle?: () => Promise<string | null>
   onRequestTheory?: () => Promise<string | null>
   /** 강의록에서 고른 쪽들. 여러 쪽을 한 번에 넣을 수 있다. */
   onRequestLecture?: () => Promise<LecturePageAttrs[] | null>
@@ -977,6 +991,15 @@ function Toolbar({
           onClick={() => requestAndInsertYama(editor, onRequestYama)}
         >
           <span className="px-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">야마</span>
+        </ToolButton>
+      )}
+      {onRequestKmle && (
+        <ToolButton
+          label="국시 KMLE 넣기"
+          active={false}
+          onClick={() => requestAndInsertYama(editor, onRequestKmle)}
+        >
+          <span className="px-0.5 text-xs font-bold text-violet-700 dark:text-violet-300">국시</span>
         </ToolButton>
       )}
       {onRequestTheory && (

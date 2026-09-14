@@ -259,3 +259,30 @@ export async function fetchTheoryTitles(
     title: row.title,
   }))
 }
+
+/** KMLE 문제는 내용이 있는 소제목이 아니라 이론 목차의 대제목에 연결한다. */
+export async function fetchTheoryQuestionIds(theoryDocumentId: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc('get_theory_question_ids', {
+    p_theory_document_id: theoryDocumentId,
+  })
+  if (error) throw error
+  return (data ?? []).map((row) => row.question_id)
+}
+
+/** 목차의 각 대제목 옆에 표시할 KMLE 문항 수. RLS가 권한 없는 연결을 거른다. */
+export async function fetchTheoryQuestionCounts(
+  theoryDocumentIds: string[],
+): Promise<Map<string, number>> {
+  if (theoryDocumentIds.length === 0) return new Map()
+  const { data, error } = await supabase
+    .from('theory_questions')
+    .select('theory_document_id')
+    .in('theory_document_id', theoryDocumentIds)
+  if (error) throw error
+
+  const counts = new Map<string, number>()
+  for (const row of data ?? []) {
+    counts.set(row.theory_document_id, (counts.get(row.theory_document_id) ?? 0) + 1)
+  }
+  return counts
+}
