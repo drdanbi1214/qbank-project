@@ -58,9 +58,11 @@ class AllenHtmlParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.blocks: list[dict] = []
-        self.table: list[list[str]] | None = None
-        self.row: list[str] | None = None
+        self.table: list[dict] | None = None
+        self.row: dict | None = None
         self.cell: list[str] | None = None
+        self.cell_tag: str | None = None
+        self.in_thead = False
         self.text_tag: str | None = None
         self.text_parts: list[str] = []
 
@@ -68,10 +70,15 @@ class AllenHtmlParser(HTMLParser):
         values = dict(attrs)
         if tag == "table":
             self.table = []
+        elif tag == "thead" and self.table is not None:
+            self.in_thead = True
         elif tag == "tr" and self.table is not None:
-            self.row = []
+            self.row = {"cells": [], "in_thead": self.in_thead}
         elif tag in ("th", "td") and self.row is not None:
             self.cell = []
+            self.cell_tag = tag
+        elif self.cell is not None and tag == "br":
+            self.cell.append("\n")
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "li") and self.table is None:
             self.text_tag = tag
             self.text_parts = []
@@ -89,25 +96,54 @@ class AllenHtmlParser(HTMLParser):
             self.text_parts.append(data)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in ("th", "td") and self.cell is not None and self.row is not None:
-            self.row.append(" ".join("".join(self.cell).split()))
+        if tag in ("p", "div", "li") and self.cell is not None:
+            self.cell.append("\n")
+        elif tag in ("th", "td") and self.cell is not None and self.row is not None:
+            self.row["cells"].append((normalize_html_text(self.cell), self.cell_tag or tag))
             self.cell = None
+            self.cell_tag = None
         elif tag == "tr" and self.row is not None and self.table is not None:
-            if any(self.row):
+            if any(cell for cell, _ in self.row["cells"]):
                 self.table.append(self.row)
             self.row = None
+        elif tag == "thead" and self.table is not None:
+            self.in_thead = False
         elif tag == "table" and self.table is not None:
             if self.table:
-                width = max(len(row) for row in self.table)
-                rows = [row + [""] * (width - len(row)) for row in self.table]
-                self.blocks.append({"type": "table", "headers": rows[0], "rows": rows[1:]})
+                width = max(len(row["cells"]) for row in self.table)
+                rows = [
+                    [cell for cell, _ in row["cells"]] + [""] * (width - len(row["cells"]))
+                    for row in self.table
+                ]
+                first = self.table[0]
+                first_is_header = bool(first["in_thead"]) or all(
+                    cell_tag == "th" for _, cell_tag in first["cells"]
+                )
+                first_label = rows[0][0].strip().casefold() if rows[0] else ""
+                first_is_header = first_is_header or first_label in {
+                    "항목", "구분", "분류", "검사항목"
+                }
+                self.blocks.append({
+                    "type": "table",
+                    "headers": rows[0] if first_is_header else [],
+                    "rows": rows[1:] if first_is_header else rows,
+                })
             self.table = None
         elif tag == self.text_tag:
-            text = " ".join("".join(self.text_parts).split())
+            text = normalize_html_text(self.text_parts)
             if text:
                 self.blocks.append({"type": "text", "content": text})
             self.text_tag = None
             self.text_parts = []
+
+
+def normalize_html_text(parts: list[str]) -> str:
+    """HTML 블록 안의 공백은 정리하되 명시적인 줄바꿈은 보존한다."""
+    return "\n".join(
+        " ".join(line.split())
+        for line in "".join(parts).splitlines()
+        if line.strip()
+    )
 
 
 def html_blocks(value: str | None) -> list[dict]:
@@ -115,6 +151,39 @@ def html_blocks(value: str | None) -> list[dict]:
     parser.feed(value or "")
     parser.close()
     return parser.blocks
+
+
+def explanation_blocks(item: dict) -> list[dict]:
+    """구버전 JSON의 표 중복을 제거하고 본문에 있던 자리로 되돌린다."""
+    primary = html_blocks(item.get("explanationHtml"))
+    assets = html_blocks(item.get("explanationAssetsHtml"))
+    trailing: list[dict] = []
+
+    for block in assets:
+        if block.get("type") != "table":
+            trailing.append(block)
+            continue
+        cell_lines = [
+            line
+            for row in [block.get("headers", []), *block.get("rows", [])]
+            for cell in row
+            for line in str(cell).splitlines()
+            if line.strip()
+        ]
+        placed = False
+        for start in range(len(primary) - len(cell_lines) + 1):
+            candidate = primary[start:start + len(cell_lines)]
+            if all(
+                part.get("type") == "text" and part.get("content") == line
+                for part, line in zip(candidate, cell_lines)
+            ):
+                primary[start:start + len(cell_lines)] = [block]
+                placed = True
+                break
+        if not placed:
+            trailing.append(block)
+
+    return primary + trailing
 
 
 def decode_data_url(url: str) -> tuple[bytes, str]:
@@ -293,6 +362,11 @@ def main() -> None:
     parser.add_argument("json_files", type=Path, nargs="+", help="같은 과목에서 받은 KMLE JSON 파일들")
     parser.add_argument("--subject", required=True, help="앱에 등록된 과목명 (예: 순환기)")
     parser.add_argument("--apply", action="store_true", help="미리보기가 아니라 실제 DB에 반영")
+    parser.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="같은 Allen 식별자로 이미 등록된 문제도 새 JSON 내용으로 갱신",
+    )
     args = parser.parse_args()
 
     items: list[dict] = []
@@ -328,6 +402,7 @@ def main() -> None:
         next_number = (latest[0]["question_number"] + 1) if latest else 1
 
     inserted = 0
+    updated = 0
     skipped = 0
     drafts = 0
     warnings: list[str] = []
@@ -347,9 +422,10 @@ def main() -> None:
         if not allen_hash:
             raw = f"{question_text}\n{json.dumps(item.get('choices', []), ensure_ascii=False)}"
             allen_hash = "allen_" + hashlib.sha256(raw.encode()).hexdigest()[:24]
-        if allen_hash in existing_by_hash:
+        existing_question_id = existing_by_hash.get(allen_hash)
+        if existing_question_id and not args.update_existing:
             skipped += 1
-            question_id = existing_by_hash[allen_hash]
+            question_id = existing_question_id
             if args.apply:
                 client.post("theory_questions", [{
                     "theory_document_id": group["id"],
@@ -365,8 +441,7 @@ def main() -> None:
         stem_blocks += html_blocks(item.get("contentHtml"))
         stem_blocks = upload_inline_images(stem_blocks, client, prefix + "/stem", args.apply, item_warnings)
 
-        explanation = html_blocks(item.get("explanationHtml"))
-        explanation += html_blocks(item.get("explanationAssetsHtml"))
+        explanation = explanation_blocks(item)
         explanation = upload_inline_images(explanation, client, prefix + "/explanation", args.apply, item_warnings)
 
         answers = sorted({int(answer["index"]) + 1 for answer in item.get("answers", []) if "index" in answer})
@@ -397,8 +472,34 @@ def main() -> None:
             "completeness": "image_missing" if item_warnings else "complete",
             "status": "published" if published else "draft",
         }
-        print(f"  {next_number}번 ← {code or allen_hash} ({'공개' if published else '검토 필요'})")
+        action = "갱신" if existing_question_id else f"{next_number}번"
+        print(f"  {action} ← {code or allen_hash} ({'공개' if published else '검토 필요'})")
         warnings.extend(f"{code or allen_hash}: {message}" for message in item_warnings)
+
+        source_body = {
+            "allen_chapter": chapter,
+            "allen_code": code,
+            "choice_rates": item.get("choiceRates", []),
+            "source_url": item.get("url"),
+            "collected_at": item.get("collectedAt"),
+        }
+        if existing_question_id:
+            question_id = existing_question_id
+            if args.apply and exam_id:
+                update_body = {
+                    key: value for key, value in body.items()
+                    if key not in {"exam_id", "unit_id", "question_number"}
+                }
+                client.patch("questions", {"id": f"eq.{question_id}"}, update_body)
+                client.patch("kmle_sources", {"question_id": f"eq.{question_id}"}, source_body)
+                client.post("theory_questions", [{
+                    "theory_document_id": group["id"],
+                    "question_id": question_id,
+                    "sort_order": item_index,
+                    "link_source": "import",
+                }], prefer="resolution=merge-duplicates,return=minimal")
+            updated += 1
+            continue
 
         if args.apply and exam_id:
             created = client.post("questions", [body])[0]
@@ -406,11 +507,7 @@ def main() -> None:
             client.post("kmle_sources", [{
                 "question_id": question_id,
                 "allen_hash": allen_hash,
-                "allen_chapter": chapter,
-                "allen_code": code,
-                "choice_rates": item.get("choiceRates", []),
-                "source_url": item.get("url"),
-                "collected_at": item.get("collectedAt"),
+                **source_body,
             }], prefer="return=minimal")
             client.post("theory_questions", [{
                 "theory_document_id": group["id"],
@@ -432,7 +529,7 @@ def main() -> None:
             "restored_questions": len(total),
         })
 
-    print(f"\n새 문제 {inserted}개 · 중복 건너뜀 {skipped}개 · 검토 필요 {drafts}개")
+    print(f"\n새 문제 {inserted}개 · 기존 문제 갱신 {updated}개 · 중복 건너뜀 {skipped}개 · 검토 필요 {drafts}개")
     if warnings:
         print("경고:")
         for message in warnings:

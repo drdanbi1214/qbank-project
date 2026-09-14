@@ -212,7 +212,7 @@ function StemTable({
                 <th
                   key={index}
                   scope="col"
-                  className="border border-slate-300 px-3 py-2 text-left font-semibold dark:border-slate-600"
+                  className="whitespace-pre-wrap border border-slate-300 px-3 py-2 text-left align-top font-semibold dark:border-slate-600"
                 >
                   {renderMarkedText(header, headerStarts[index] ?? 0, marks)}
                 </th>
@@ -226,7 +226,7 @@ function StemTable({
               {row.map((cell, cellIndex) => (
                 <td
                   key={cellIndex}
-                  className="border border-slate-300 px-3 py-2 dark:border-slate-600"
+                  className="whitespace-pre-wrap border border-slate-300 px-3 py-2 align-top dark:border-slate-600"
                 >
                   {renderMarkedText(cell, rowStarts[rowIndex]?.[cellIndex] ?? 0, marks)}
                 </td>
