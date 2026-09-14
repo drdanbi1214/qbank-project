@@ -52,6 +52,29 @@ def sanitize_question(value: object) -> str:
     return "\n".join(lines)
 
 
+def source_exam_metadata(item: dict) -> dict:
+    """새 수집기의 원시험·교시·번호를 DB 열 이름으로 정규화한다."""
+    code = str(item.get("code") or "").strip() or None
+    source_label = str(item.get("sourceLabel") or "").strip() or None
+    source_exam = str(item.get("sourceExam") or "").strip() or code
+
+    def positive_integer(value: object) -> int | None:
+        if value in (None, ""):
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
+    return {
+        "allen_exam": source_exam,
+        "allen_session": positive_integer(item.get("sourceSession")),
+        "allen_question_number": positive_integer(item.get("sourceQuestionNumber")),
+        "allen_label": source_label,
+    }
+
+
 class AllenHtmlParser(HTMLParser):
     """수집기가 저장한 제한된 HTML을 문제의 text/table/image 블록으로 바꾼다."""
 
@@ -216,10 +239,25 @@ def image_mime(data: bytes, declared: str, url: str) -> str:
     return guessed if guessed and guessed.startswith("image/") else "application/octet-stream"
 
 
-def download_allen_image(url: str) -> tuple[bytes, str]:
+ALLEN_MEDIA_HOST = "media.allenslibrary.com"
+ALLEN_MEDIA_HOSTS = {ALLEN_MEDIA_HOST, f"dev.{ALLEN_MEDIA_HOST}"}
+ALLEN_S3_HOST = "s3.ap-northeast-2.amazonaws.com"
+
+
+def allowed_allen_image_url(url: str) -> str:
+    """Allen CDN 주소와 같은 버킷을 가리키는 S3 경로형 주소만 허용한다."""
     parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or parsed.hostname != "media.allenslibrary.com":
-        raise ValueError("허용되지 않은 원격 이미지 주소")
+    if parsed.scheme in ("http", "https") and ".." not in parsed.path.split("/"):
+        if parsed.hostname in ALLEN_MEDIA_HOSTS:
+            return url
+        # 일부 Allen 문항은 같은 이미지를 S3 경로형 주소로 싣는다.
+        if parsed.hostname == ALLEN_S3_HOST and parsed.path.startswith(f"/{ALLEN_MEDIA_HOST}/"):
+            return url
+    raise ValueError("허용되지 않은 원격 이미지 주소")
+
+
+def download_allen_image(url: str) -> tuple[bytes, str]:
+    url = allowed_allen_image_url(url)
     response = requests.get(
         url,
         headers={
@@ -479,6 +517,7 @@ def main() -> None:
         source_body = {
             "allen_chapter": chapter,
             "allen_code": code,
+            **source_exam_metadata(item),
             "choice_rates": item.get("choiceRates", []),
             "source_url": item.get("url"),
             "collected_at": item.get("collectedAt"),

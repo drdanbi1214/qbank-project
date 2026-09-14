@@ -1055,6 +1055,66 @@ export type Database = {
           },
         ]
       }
+      kmle_sources: {
+        Row: {
+          allen_chapter: string
+          allen_code: string | null
+          allen_exam: string | null
+          allen_hash: string
+          allen_label: string | null
+          allen_question_number: number | null
+          allen_session: number | null
+          choice_rates: Json
+          collected_at: string | null
+          imported_at: string
+          question_id: string
+          source_url: string | null
+        }
+        Insert: {
+          allen_chapter: string
+          allen_code?: string | null
+          allen_exam?: string | null
+          allen_hash: string
+          allen_label?: string | null
+          allen_question_number?: number | null
+          allen_session?: number | null
+          choice_rates?: Json
+          collected_at?: string | null
+          imported_at?: string
+          question_id: string
+          source_url?: string | null
+        }
+        Update: {
+          allen_chapter?: string
+          allen_code?: string | null
+          allen_exam?: string | null
+          allen_hash?: string
+          allen_label?: string | null
+          allen_question_number?: number | null
+          allen_session?: number | null
+          choice_rates?: Json
+          collected_at?: string | null
+          imported_at?: string
+          question_id?: string
+          source_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kmle_sources_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kmle_sources_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "questions_solve"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learning_activity_daily: {
         Row: {
           activity_date: string

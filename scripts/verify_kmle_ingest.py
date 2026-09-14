@@ -29,6 +29,7 @@ try:
         resolve_group,
         resolve_subject,
         sanitize_question,
+        source_exam_metadata,
         upload_inline_images,
     )
     from .supabase_credentials import load_supabase_credentials
@@ -41,6 +42,7 @@ except ImportError:  # ``python3 scripts/verify_kmle_ingest.py``로 실행할 �
         resolve_group,
         resolve_subject,
         sanitize_question,
+        source_exam_metadata,
         upload_inline_images,
     )
     from supabase_credentials import load_supabase_credentials
@@ -181,6 +183,10 @@ def main() -> None:
         rates = item.get("choiceRates")
         if isinstance(rates, list) and rates and len(rates) != len(choices):
             errors.append(f"{label}: choiceRates와 choices 개수 불일치")
+        for field in ("sourceSession", "sourceQuestionNumber"):
+            value = item.get(field)
+            if value is not None and (not isinstance(value, int) or value <= 0):
+                errors.append(f"{label}: {field}은 양의 정수여야 함")
 
     if errors:
         print("JSON 사전 검사 실패:")
@@ -240,6 +246,7 @@ def main() -> None:
         {
             "select": (
                 "allen_hash,question_id,allen_chapter,allen_code,choice_rates,"
+                "allen_exam,allen_session,allen_question_number,allen_label,"
                 "source_url,collected_at"
             ),
         },
@@ -315,6 +322,7 @@ def main() -> None:
         expected_source = {
             "allen_chapter": chapter,
             "allen_code": code,
+            **source_exam_metadata(item),
             "choice_rates": item.get("choiceRates", []),
             "source_url": item.get("url"),
             "collected_at": item.get("collectedAt"),

@@ -1,15 +1,14 @@
 // ==UserScript==
 // @name         Allen PDF 수집 → KMLE JSON 내보내기
 // @namespace    local.allen-kmle-json
-// @version      0.10.4
-// @description  원시험 정보와 이미지를 검증하며 Allen 과목 전체를 KMLE JSON 하나로 내보냅니다.
+// @version      0.10.3
+// @description  Allen 과목 목차를 이어서 수집하고 모든 대제목을 과목별 KMLE JSON 하나로 내보냅니다.
 // @match        *://allenslibrary.com/*
 // @match        *://*.allenslibrary.com/*
 // @run-at       document-idle
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
 // @connect      media.allenslibrary.com
-// @connect      dev.media.allenslibrary.com
 // @connect      s3.ap-northeast-2.amazonaws.com
 // ==/UserScript==
 
@@ -26,10 +25,8 @@
   const CRAWL_STATE_KEY = 'allenKmleSubjectCrawlV3';
   const SUBJECT_ITEMS_KEY = 'allenKmleSubjectItemsV1';
   const SUBJECT_CHECKPOINT_KEY = 'allenKmleSubjectCheckpointV1';
-  const LAST_IMAGE_FAILURES_KEY = 'allenKmleLastImageFailuresV1';
   const ORIGINAL_AUTOMATION_KEY = 'allenPdfKmleAutomationV1';
-  const REQUIRED_ORIGINAL_VERSION = '0.1.8';
-  const IMAGE_MAX_ATTEMPTS = 4;
+  const REQUIRED_ORIGINAL_VERSION = '0.1.7';
   let exporting = false;
   let crawlTicking = false;
 
@@ -108,24 +105,11 @@
     return new Blob([blob], { type });
   }
 
-  function retryableImageError(message, retryable = true) {
-    const error = new Error(message);
-    error.retryable = retryable;
-    return error;
-  }
-
-  function wait(milliseconds) {
-    return new Promise((resolve) => setTimeout(resolve, milliseconds));
-  }
-
-  function requestImageBlobOnce(url) {
+  function downloadImageBlob(url) {
     const target = new URL(url, location.href);
     if (target.origin === location.origin || typeof GM_xmlhttpRequest !== 'function') {
       return fetch(target.href, { credentials: 'include' }).then((response) => {
-        if (!response.ok) {
-          const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
-          throw retryableImageError(`HTTP ${response.status}`, retryable);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.blob().then((blob) => normalizeImageBlob(blob, target.href));
       });
     }
@@ -142,49 +126,22 @@
         onload: (response) => {
           const status = Number(response.status || 0);
           if (status < 200 || status >= 300) {
-            const retryable = status === 0 || status === 408 || status === 429 || status >= 500;
-            reject(retryableImageError(`HTTP ${status || '응답 없음'}`, retryable));
+            reject(new Error(`HTTP ${status || '응답 없음'}`));
             return;
           }
           if (response.response instanceof Blob) {
             resolve(normalizeImageBlob(response.response, target.href));
             return;
           }
-          reject(retryableImageError('이미지 응답을 Blob으로 받지 못했습니다.'));
+          reject(new Error('이미지 응답을 Blob으로 받지 못했습니다.'));
         },
-        onerror: (error) => {
-          const message = String(error?.error || error?.details || '이미지 요청 실패');
-          reject(retryableImageError(message, !/@connect list/i.test(message)));
-        },
-        ontimeout: () => reject(retryableImageError('이미지 요청 시간 초과')),
+        onerror: (error) => reject(new Error(error?.error || error?.details || '이미지 요청 실패')),
+        ontimeout: () => reject(new Error('이미지 요청 시간 초과')),
       });
     });
   }
 
-  async function downloadImageBlob(url) {
-    const errors = [];
-    for (let attempt = 1; attempt <= IMAGE_MAX_ATTEMPTS; attempt += 1) {
-      try {
-        const blob = await requestImageBlobOnce(url);
-        if (attempt > 1) {
-          console.info('[KMLE 이미지 재시도 성공]', { url, attempt });
-        }
-        return blob;
-      } catch (error) {
-        const message = error?.message || String(error);
-        errors.push(message);
-        console.warn('[KMLE 이미지 요청 실패]', { url, attempt, message });
-        if (error?.retryable === false || attempt === IMAGE_MAX_ATTEMPTS) break;
-        await wait(600 * (2 ** (attempt - 1)));
-      }
-    }
-    const failure = new Error(`${errors.length}회 시도 후 실패: ${errors.at(-1) || '알 수 없는 오류'}`);
-    failure.attempts = errors.length;
-    failure.causes = errors;
-    throw failure;
-  }
-
-  async function inlineImages(html, baseUrl, failures, context) {
+  async function inlineImages(html, baseUrl, failures) {
     if (!html) return '';
     const documentCopy = new DOMParser().parseFromString(`<main>${html}</main>`, 'text/html');
     const images = [...documentCopy.querySelectorAll('main img')];
@@ -195,23 +152,7 @@
         const absolute = new URL(raw, baseUrl || location.href).href;
         image.setAttribute('src', await blobToDataUrl(await downloadImageBlob(absolute)));
       } catch (error) {
-        let absolute = raw;
-        try {
-          absolute = new URL(raw, baseUrl || location.href).href;
-        } catch (_) {
-          // 원문 주소를 진단 로그에 그대로 남긴다.
-        }
-        failures.push({
-          itemId: context.itemId,
-          code: context.code || null,
-          chapter: context.chapter || null,
-          pageUrl: context.pageUrl || baseUrl || null,
-          field: context.field,
-          imageUrl: absolute,
-          attempts: error?.attempts || 1,
-          errors: error?.causes || [error?.message || String(error)],
-          failedAt: new Date().toISOString(),
-        });
+        failures.push(`${raw}: ${error?.message || error}`);
       }
     }
     return documentCopy.querySelector('main')?.innerHTML || html;
@@ -296,10 +237,9 @@
   function clickOriginalAuto() {
     const auto = document.getElementById('allen-pdf-auto');
     if (!auto) {
-      alert(`Allen PDF 수집 스크립트 ${REQUIRED_ORIGINAL_VERSION}을 함께 켜 주세요.`);
+      alert('Allen PDF 수집 스크립트 0.1.7을 함께 켜 주세요.');
       return false;
     }
-    suppressAutoAlerts();
     auto.click();
     return true;
   }
@@ -768,22 +708,6 @@
       return;
     }
 
-    const incompleteRows = rows.filter((item) => (
-      !Array.isArray(item.answers)
-      || item.answers.length === 0
-      || (!item.explanationHtml && !item.explanationAssetsHtml)
-    ));
-    if (incompleteRows.length) {
-      const examples = incompleteRows.slice(0, 5)
-        .map((item) => item.sourceLabel || item.code || item.id || '출처 미표기')
-        .join(', ');
-      throw new Error([
-        `정답 또는 해설이 없는 문제가 ${incompleteRows.length}개 있어 저장하지 않았습니다.`,
-        `예: ${examples}`,
-        `Allen PDF 수집 ${REQUIRED_ORIGINAL_VERSION}과 이 스크립트로 다시 수집해 주세요.`,
-      ].join('\n'));
-    }
-
     exporting = true;
     const button = document.getElementById(BUTTON_ID);
     if (button) button.textContent = '이미지 포함 중…';
@@ -793,64 +717,20 @@
       for (let index = 0; index < rows.length; index += 1) {
         if (button) button.textContent = `JSON 준비 ${index + 1}/${rows.length}`;
         const item = rows[index];
-        const context = {
-          itemId: item.id,
-          code: item.code,
-          chapter: item.chapter,
-          pageUrl: item.url,
-        };
         items.push({
           ...item,
           question: sanitizeQuestion(item.question),
-          contentHtml: await inlineImages(
-            item.contentHtml,
-            item.url,
-            failures,
-            { ...context, field: 'contentHtml' },
-          ),
-          explanationHtml: await inlineImages(
-            item.explanationHtml,
-            item.url,
-            failures,
-            { ...context, field: 'explanationHtml' },
-          ),
-          explanationAssetsHtml: await inlineImages(
-            item.explanationAssetsHtml,
-            item.url,
-            failures,
-            { ...context, field: 'explanationAssetsHtml' },
-          ),
+          contentHtml: await inlineImages(item.contentHtml, item.url, failures),
+          explanationAssetsHtml: await inlineImages(item.explanationAssetsHtml, item.url, failures),
         });
       }
       const chapters = new Set(items.map((item) => item.chapter).filter(Boolean));
-      const effectiveTitle = downloadTitle || (chapters.size === 1 ? items[0]?.chapter : '과목_전체');
-      if (failures.length) {
-        sessionStorage.setItem(LAST_IMAGE_FAILURES_KEY, JSON.stringify(failures));
-        let logFilename = '';
-        try {
-          logFilename = await downloadJson({
-            schema: 'qbank-kmle-image-failures-v1',
-            exportedAt: new Date().toISOString(),
-            subject: effectiveTitle,
-            itemCount: items.length,
-            failures,
-          }, `${effectiveTitle}_이미지_오류`);
-        } catch (logError) {
-          console.error('[KMLE 이미지 오류 로그 저장 실패]', logError);
-        }
-        throw new Error([
-          `이미지 ${failures.length}장을 끝까지 포함하지 못해 본 JSON 저장을 중단했습니다.`,
-          logFilename ? `진단 로그: ${logFilename}` : '진단 로그는 브라우저 콘솔과 sessionStorage에 남겼습니다.',
-          '수집한 문제는 보관되어 있으므로 KMLE JSON 저장을 눌러 다시 시도할 수 있습니다.',
-        ].join('\n'));
-      }
-      sessionStorage.removeItem(LAST_IMAGE_FAILURES_KEY);
       const filename = await downloadJson({
         schema: 'qbank-kmle-v1',
         exportedAt: new Date().toISOString(),
         items,
         imageFailures: failures,
-      }, effectiveTitle);
+      }, downloadTitle || (chapters.size === 1 ? items[0]?.chapter : '과목_전체'));
 
       const result = { filename, count: items.length, failures: failures.length };
       if (showAlert) {
@@ -904,12 +784,7 @@
       button.type = 'button';
       button.textContent = 'KMLE JSON 저장';
       button.style.cssText = 'width:142px;padding:9px 8px;border:1px solid #A78BFA;border-radius:9px;background:#F3E8FF;color:#6D28D9;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px #0002;white-space:nowrap';
-      button.addEventListener('click', () => {
-        void exportKmle().catch((error) => {
-          console.error('[KMLE JSON 저장]', error);
-          alert(`KMLE JSON 저장 중단\n${error?.message || error}`);
-        });
-      });
+      button.addEventListener('click', () => void exportKmle());
       host.insertBefore(button, progress || null);
     }
     resumeAfterFirstPageMove();

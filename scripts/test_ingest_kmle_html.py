@@ -4,7 +4,56 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scripts.ingest_kmle import explanation_blocks, html_blocks
+from scripts.ingest_kmle import (
+    allowed_allen_image_url,
+    explanation_blocks,
+    html_blocks,
+    source_exam_metadata,
+)
+
+
+class AllenSourceMetadataTests(unittest.TestCase):
+    def test_structured_exam_metadata_is_preserved(self) -> None:
+        self.assertEqual(source_exam_metadata({
+            "code": "임종평23-2",
+            "sourceLabel": "임종평23-2 2교시, 43번",
+            "sourceExam": "임종평23-2",
+            "sourceSession": 2,
+            "sourceQuestionNumber": 43,
+        }), {
+            "allen_exam": "임종평23-2",
+            "allen_session": 2,
+            "allen_question_number": 43,
+            "allen_label": "임종평23-2 2교시, 43번",
+        })
+
+    def test_legacy_json_falls_back_to_code(self) -> None:
+        self.assertEqual(source_exam_metadata({"code": "MD23"}), {
+            "allen_exam": "MD23",
+            "allen_session": None,
+            "allen_question_number": None,
+            "allen_label": None,
+        })
+
+
+class AllenImageUrlTests(unittest.TestCase):
+    def test_media_and_path_style_s3_urls_are_allowed(self) -> None:
+        for url in (
+            "https://media.allenslibrary.com/problem/119186/2A_71_q_1.png",
+            "https://dev.media.allenslibrary.com/problems/111047/7FpdSCKvQB9Y4Lualn93s.webp",
+            "https://s3.ap-northeast-2.amazonaws.com/media.allenslibrary.com/problem/119186/2A_71_q_1.png",
+        ):
+            self.assertEqual(allowed_allen_image_url(url), url)
+
+    def test_other_hosts_buckets_and_dot_segments_are_rejected(self) -> None:
+        for url in (
+            "https://example.com/problem/1.png",
+            "https://s3.ap-northeast-2.amazonaws.com/other-bucket/problem/1.png",
+            "https://s3.ap-northeast-2.amazonaws.com/media.allenslibrary.com/../other-bucket/1.png",
+            "file:///etc/passwd",
+        ):
+            with self.assertRaises(ValueError):
+                allowed_allen_image_url(url)
 
 
 class AllenHtmlParserTests(unittest.TestCase):
