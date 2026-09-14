@@ -9,13 +9,27 @@ import {
 } from '@/lib/queries/updateNotices'
 
 /** 다음 업데이트 안내를 띄울 때 이 키와 아래 문구를 함께 바꾼다. */
-const NOTICE_KEY = '2026-09-10-editor-slash-commands-and-callouts'
+const NOTICE_KEY = '2026-09-14-kmle-attach-and-hematology-theory'
 const SESSION_KEY_PREFIX = 'qbank:update-notice-seen:'
 const UPDATES = [
-  '글 작성 중 /를 입력하면 야마·알렌·강의록 삽입 명령을 작은 팝업에서 고르고 Enter로 바로 실행할 수 있습니다.',
-  '/callout 또는 /콜아웃을 입력하면 중요한 내용을 담는 💡 콜아웃 상자를 넣을 수 있습니다.',
-  '/따라서·/왜냐면은 ∴·∵로, =/=·<=·\\>= 같은 입력은 ≠·≤·≥ 기호로 빠르게 바뀝니다.',
-  'alpha·beta·gamma를 입력하면 후보 팝업이 뜨고, Enter를 눌러 α·β·γ를 넣을 수 있습니다.',
+  '이론·테마 본문에서 국시 KMLE 문제를 검색해 바로 첨부할 수 있습니다.',
+  '혈액 단원의 Allen 이론 목차와 내용을 교체했습니다.',
+  '국시 문제는 단원별로 순차적으로 업데이트할 예정입니다.',
+]
+
+const KMLE_ATTACH_IMAGES = [
+  {
+    src: '/updates/kmle-attach-2026-09/screenshot-31.png',
+    alt: '글쓰기 화면 상단의 국시 버튼',
+  },
+  {
+    src: '/updates/kmle-attach-2026-09/screenshot-27.png',
+    alt: '슬래시 명령 메뉴의 국시 버튼',
+  },
+  {
+    src: '/updates/kmle-attach-2026-09/screenshot-21.png',
+    alt: '국시 KMLE 문제 유사도 검색 결과',
+  },
 ]
 
 /**
@@ -73,7 +87,8 @@ export function LatestUpdatePopup() {
 
   return (
     <Modal
-      title="새로운 글쓰기 기능 (9/10)"
+      title="국시 KMLE 첨부와 혈액 이론 업데이트 (9/14)"
+      wide
       onClose={() => {
         if (!busy) close()
       }}
@@ -101,6 +116,22 @@ export function LatestUpdatePopup() {
           </li>
         ))}
       </ul>
+      <div className="mt-5 space-y-3">
+        <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+          툴바의 <strong className="font-semibold text-violet-700 dark:text-violet-300">국시</strong>를 누르거나
+          {' '}<strong className="font-semibold text-slate-800 dark:text-slate-100">/ 메뉴</strong>에서 국시를 선택한 뒤,
+          문제 내용이나 해설을 붙여 넣으면 가장 비슷한 문제부터 찾을 수 있습니다.
+        </p>
+        {KMLE_ATTACH_IMAGES.map((image) => (
+          <img
+            key={image.src}
+            src={image.src}
+            alt={image.alt}
+            loading="eager"
+            className="h-auto w-full rounded-xl border border-slate-200 bg-white object-contain shadow-sm dark:border-slate-700"
+          />
+        ))}
+      </div>
       {error && (
         <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
           다시 보지 않기 설정을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.
