@@ -100,10 +100,10 @@ export function TopicSidebar({
   }
 
   return (
-    <nav className="h-fit space-y-1 rounded-xl border border-slate-300 bg-white p-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900 md:sticky md:top-20 md:flex md:max-h-[calc(100dvh-6rem)] md:flex-col md:overflow-hidden">
-      <div className="flex items-center justify-end gap-1.5 px-1 pb-1">
-        <span className="ml-auto text-[11px] font-medium text-slate-500 dark:text-slate-400">
-          {(topics ?? []).length}개 글
+    <nav className="h-fit space-y-1 px-1 dark:bg-transparent md:sticky md:top-20 md:flex md:max-h-[calc(100dvh-6rem)] md:flex-col md:overflow-hidden">
+      <div className="flex items-center justify-end gap-1.5 px-2 pb-2">
+        <span className="mr-auto text-xs font-medium text-slate-500 dark:text-slate-400">
+          목차 · {(topics ?? []).length}개 글
         </span>
         {onCollapse && (
           <button
@@ -121,7 +121,7 @@ export function TopicSidebar({
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
         placeholder="주제 찾기 (제목·본문)"
-        className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-900 outline-none placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
+        className="mb-2 w-full rounded-md border border-slate-300 bg-transparent px-2.5 py-1.5 text-sm text-slate-900 outline-none placeholder:text-slate-500 focus:border-brand-500 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400"
       />
 
       <div className="min-h-0 space-y-1 md:overflow-y-auto md:overscroll-contain md:pr-1">
@@ -134,11 +134,11 @@ export function TopicSidebar({
             "{keyword.trim()}" 에 맞는 주제가 없습니다.
           </p>
         ) : (
-          groups.map((group) => {
+          groups.map((group, index) => {
             const empty = group.rows.length === 0
-            // 아직 테마를 안 골랐으면 전부 펼쳐 두고, 고른 뒤에는 그 테마가 든
-            // 단원만 남긴다. 사람이 직접 접거나 편 단원은 그 선택을 따른다.
-            const natural = topicId === undefined || group.key === selectedUnit
+            // 과목 첫 화면에는 가운데에 전체 목차가 있으므로, 좌측은 짧은 색인으로
+            // 시작한다. 글을 고른 뒤에는 그 글이 든 단원만 자연스럽게 펼친다.
+            const natural = group.key === selectedUnit
             // 빈 단원은 펼쳐 봐야 나올 것이 없어 늘 접어 둔다.
             // 검색 중에는 접힌 단원 때문에 결과를 놓치지 않도록 전부 펼친다.
             const open = !empty && (searching || (toggled[group.key] ?? natural))
@@ -157,19 +157,23 @@ export function TopicSidebar({
                     }}
                     title={empty ? `${group.name}에 첫 글 작성` : undefined}
                     className={cn(
-                      'flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-semibold transition-colors',
+                      'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors',
                       empty
                         ? onNewTopic
-                          ? 'border border-dashed border-sky-300 bg-sky-50 text-sky-950 hover:border-sky-400 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:border-sky-700 dark:hover:bg-sky-900/50'
-                          : 'cursor-default bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-400'
-                        : 'bg-sky-50 text-sky-950 hover:bg-sky-100 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/50',
+                          ? 'text-slate-600 hover:bg-slate-100 hover:text-sky-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-sky-200'
+                          : 'cursor-default text-slate-500 dark:text-slate-400'
+                        : open
+                          ? 'bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100'
+                          : 'text-slate-700 hover:bg-slate-100 hover:text-sky-800 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-sky-200',
                     )}
                   >
-                    <span className="w-3 shrink-0 text-[10px]">
-                      {empty ? '＋' : open ? '▼' : '▶'}
+                    <span className="w-5 shrink-0 tabular-nums text-[11px] text-slate-400 dark:text-slate-500">
+                      {String(index + 1).padStart(2, '0')}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{group.name}</span>
-                    <span className="shrink-0 tabular-nums text-xs">{group.rows.length}</span>
+                    <span className="shrink-0 tabular-nums text-xs text-slate-500 dark:text-slate-400">
+                      {group.rows.length}
+                    </span>
                   </button>
                   {onNewTopic && (
                     <button
@@ -189,13 +193,13 @@ export function TopicSidebar({
                 </div>
 
                 {open && (
-                  <div className="space-y-0.5 pl-2">
+                  <div className="space-y-0.5 pl-7">
                     {group.rows.map((row) => (
                       <Link
                         key={row.id}
                         to={`/topics/${subjectId}/${row.id}`}
                         className={cn(
-                          'block rounded-lg px-3 py-1.5 text-sm transition-colors',
+                          'block rounded-md px-2 py-1.5 text-sm transition-colors',
                           row.id === topicId
                             ? 'border-l-2 border-sky-400 font-semibold text-sky-800 dark:border-sky-600 dark:text-sky-200'
                             : 'font-medium text-slate-700 hover:text-sky-800 dark:text-slate-200 dark:hover:text-sky-200',

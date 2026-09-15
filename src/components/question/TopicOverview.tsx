@@ -20,10 +20,9 @@ const NO_UNIT = ''
 /**
  * 과목만 고르고 아직 글은 고르지 않았을 때 가운데에 펼치는 전체 목차.
  *
- * 예전에는 "왼쪽에서 주제를 고르세요" 한 줄만 놓았다. 과목에 처음 들어온
- * 사람에게는 그 과목에 무엇이 쌓여 있는지가 먼저 보여야 한다. 왼쪽 목차는
- * 폭이 좁아 제목이 잘리는데, 여기서는 단원별로 넓게 늘어놓을 수 있다.
- * 하나를 고르면 그 자리에 글이 들어서고 목차는 왼쪽에만 남는다.
+ * 과목에 처음 들어오면 무엇이 쌓였는지를 넓은 한 줄 목록으로 보여 준다.
+ * 좌측 목차는 빠른 이동용으로만 두고, 여기서는 긴 단원명·글 수·작성일을
+ * 같은 열에 맞춰 읽을 수 있게 한다. 하나를 고르면 이 자리에 글이 들어선다.
  */
 export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
   if (topics === null) {
@@ -63,61 +62,69 @@ export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
-      <header className="mb-3 border-b border-slate-200 pb-3 dark:border-slate-700">
+    <div className="mx-auto max-w-5xl">
+      <header className="flex items-baseline justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-700">
         <h2 className="text-xl font-bold tracking-tight">전체 목차</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          글 {topics.length}개 · 단원 {units.length}개. 읽을 글을 고르면 이 자리에 펼쳐집니다.
+        <p className="shrink-0 text-sm text-slate-500 dark:text-slate-400">
+          글 {topics.length}개 · 주제 {units.length}개
         </p>
       </header>
 
-      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-        {groups.map((group) => (
-          <section key={group.key} className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-sky-900 dark:text-sky-200">
-                {group.name}
-              </h3>
-              <span className="shrink-0 tabular-nums text-xs text-slate-500 dark:text-slate-400">
-                {group.rows.length}
-              </span>
-              {onNewTopic && (
-                <button
-                  type="button"
-                  onClick={() => onNewTopic(group.key === NO_UNIT ? null : group.key)}
-                  aria-label={`${group.name}에 새 주제`}
-                  title={`${group.name}에 새 주제`}
-                  className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:text-slate-400 dark:hover:bg-slate-800"
-                >
-                  ＋
-                </button>
-              )}
-            </div>
-
-            {group.rows.length === 0 ? (
-              <p className="mt-1 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                아직 글이 없습니다.
-              </p>
-            ) : (
-              <ul className="mt-1 space-y-0.5">
-                {group.rows.map((row) => (
-                  <li key={row.id}>
-                    <Link
-                      to={`/topics/${subjectId}/${row.id}`}
-                      className="flex items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-sky-50 hover:text-sky-800 dark:text-slate-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-200"
+      <ol className="divide-y divide-slate-200 dark:divide-slate-700">
+        {groups.map((group, index) => (
+          <li key={group.key} className="py-4">
+            <section className="min-w-0">
+              <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-baseline gap-x-3">
+                <span className="tabular-nums text-xs text-slate-400 dark:text-slate-500">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="min-w-0 text-base font-semibold tracking-tight text-slate-800 dark:text-slate-100">
+                  {group.name}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 tabular-nums text-xs text-slate-500 dark:text-slate-400">
+                    {group.rows.length}글
+                  </span>
+                  {onNewTopic && (
+                    <button
+                      type="button"
+                      onClick={() => onNewTopic(group.key === NO_UNIT ? null : group.key)}
+                      aria-label={`${group.name}에 새 주제`}
+                      title={`${group.name}에 새 주제`}
+                      className="rounded px-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-brand-600 dark:text-slate-500 dark:hover:bg-slate-800"
                     >
-                      <span className="min-w-0 flex-1 truncate font-medium">{row.title}</span>
-                      <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
-                        {formatShortDate(row.updatedAt)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                      ＋
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {group.rows.length === 0 ? (
+                <p className="mt-2 pl-11 text-sm text-slate-500 dark:text-slate-400">
+                  아직 작성한 풀이가 없습니다.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-0.5 pl-11">
+                  {group.rows.map((row) => (
+                    <li key={row.id}>
+                      <Link
+                        to={`/topics/${subjectId}/${row.id}`}
+                        className="flex items-baseline gap-3 rounded-md py-1 text-sm text-slate-700 transition-colors hover:text-sky-800 dark:text-slate-200 dark:hover:text-sky-200"
+                      >
+                        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
+                        <span className="min-w-0 flex-1 font-medium">{row.title}</span>
+                        <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                          {formatShortDate(row.updatedAt)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   )
 }
