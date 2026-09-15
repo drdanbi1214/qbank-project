@@ -29,9 +29,19 @@ function answerNumbers(value: unknown): number[] {
     .sort((a, b) => a - b)
 }
 
+function answersByQuestion(value: unknown): Record<string, number[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([questionId]) => questionId.trim() !== '')
+      .map(([questionId, answer]) => [questionId, answerNumbers(answer)]),
+  )
+}
+
 function YamaEmbedView({ node, selected, editor, deleteNode, updateAttributes }: NodeViewProps) {
   const questionId = typeof node.attrs.questionId === 'string' ? node.attrs.questionId : null
   const solverAnswer = answerNumbers(node.attrs.solverAnswer)
+  const solverAnswers = answersByQuestion(node.attrs.solverAnswers)
 
   return (
     <NodeViewWrapper
@@ -50,8 +60,11 @@ function YamaEmbedView({ node, selected, editor, deleteNode, updateAttributes }:
       <YamaCard
         questionId={questionId}
         solverAnswer={solverAnswer}
+        solverAnswers={solverAnswers}
         onSolverAnswerChange={editor.isEditable
-          ? (answer) => updateAttributes({ solverAnswer: answer })
+          ? (targetQuestionId, answer) => updateAttributes({
+              solverAnswers: { ...solverAnswers, [targetQuestionId]: answer },
+            })
           : undefined}
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
@@ -90,6 +103,24 @@ export const YamaEmbed = Node.create({
           return answer.length ? { 'data-solver-answer': answer.join(',') } : {}
         },
       },
+      solverAnswers: {
+        default: {},
+        parseHTML: (element) => {
+          const raw = element.getAttribute('data-solver-answers')
+          if (!raw) return {}
+          try {
+            return answersByQuestion(JSON.parse(raw))
+          } catch {
+            return {}
+          }
+        },
+        renderHTML: (attributes) => {
+          const answers = answersByQuestion(attributes.solverAnswers)
+          return Object.keys(answers).length
+            ? { 'data-solver-answers': JSON.stringify(answers) }
+            : {}
+        },
+      },
     }
   },
 
@@ -110,7 +141,10 @@ export const YamaEmbed = Node.create({
       insertYama:
         (questionId: string) =>
         ({ commands }) =>
-          commands.insertContent({ type: this.name, attrs: { questionId, solverAnswer: [] } }),
+          commands.insertContent({
+            type: this.name,
+            attrs: { questionId, solverAnswer: [], solverAnswers: {} },
+          }),
     }
   },
 })

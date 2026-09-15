@@ -28,8 +28,10 @@ type Props = {
   questionId: string | null
   /** 이 레옵스 게시물에서 풀이자가 선택한 답. 문제의 기준 답과 분리해 저장한다. */
   solverAnswer?: number[]
+  /** 한 야마 묶음 안의 대표·유사 문제별 풀이자 답. */
+  solverAnswers?: Record<string, number[]>
   /** 편집기에서만 넘어온다. */
-  onSolverAnswerChange?: (answer: number[]) => void
+  onSolverAnswerChange?: (questionId: string, answer: number[]) => void
   /** 편집기에서 노드가 선택된 상태 */
   selected?: boolean
   /** 편집기에서만 넘어온다. 있으면 빼기·묶기 버튼을 보여준다. */
@@ -68,6 +70,7 @@ function codeOf(caught: unknown): string | null {
 export function YamaCard({
   questionId,
   solverAnswer = [],
+  solverAnswers = {},
   onSolverAnswerChange,
   selected = false,
   onRemove,
@@ -135,6 +138,7 @@ export function YamaCard({
       selected={selected}
       subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
       solverAnswer={solverAnswer}
+      solverAnswers={solverAnswers}
       onSolverAnswerChange={onSolverAnswerChange}
       onRemove={onRemove}
     />
@@ -156,6 +160,7 @@ function YamaBody({
   selected,
   subjectId,
   solverAnswer,
+  solverAnswers,
   onSolverAnswerChange,
   onRemove,
 }: {
@@ -163,7 +168,8 @@ function YamaBody({
   selected: boolean
   subjectId: string | null
   solverAnswer: number[]
-  onSolverAnswerChange?: (answer: number[]) => void
+  solverAnswers: Record<string, number[]>
+  onSolverAnswerChange?: (questionId: string, answer: number[]) => void
   onRemove?: () => void
 }) {
   const { taxonomy } = useData()
@@ -297,8 +303,10 @@ function YamaBody({
           onDetach={detach}
           interactive={!editing}
           defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
-          solverAnswer={solverAnswer}
-          onSolverAnswerChange={onSolverAnswerChange}
+          solverAnswer={Object.hasOwn(solverAnswers, question.id) ? solverAnswers[question.id] : solverAnswer}
+          onSolverAnswerChange={onSolverAnswerChange
+            ? (answer) => onSolverAnswerChange(question.id, answer)
+            : undefined}
         />
 
         {orderedCards.map((row) => (
@@ -323,6 +331,10 @@ function YamaBody({
             onDetach={detach}
             interactive={!editing}
             defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
+            solverAnswer={solverAnswers[row.id] ?? []}
+            onSolverAnswerChange={onSolverAnswerChange
+              ? (answer) => onSolverAnswerChange(row.id, answer)
+              : undefined}
           />
         ))}
 

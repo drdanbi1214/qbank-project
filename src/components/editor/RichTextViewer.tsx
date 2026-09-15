@@ -415,9 +415,27 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
             .filter((item): item is number => Number.isInteger(item) && Number(item) > 0)
             .sort((a, b) => a - b)
         : []
+      const solverAnswers = node.attrs?.solverAnswers
+        && typeof node.attrs.solverAnswers === 'object'
+        && !Array.isArray(node.attrs.solverAnswers)
+        ? Object.fromEntries(
+            Object.entries(node.attrs.solverAnswers)
+              .filter(([key, value]) => key.trim() !== '' && Array.isArray(value))
+              .map(([key, value]) => [
+                key,
+                [...new Set(value as unknown[])]
+                  .filter((item): item is number => Number.isInteger(item) && Number(item) > 0)
+                  .sort((a, b) => a - b),
+              ]),
+          )
+        : {}
       return (
         <div className="my-3">
-          <YamaCard questionId={questionId} solverAnswer={solverAnswer} />
+          <YamaCard
+            questionId={questionId}
+            solverAnswer={solverAnswer}
+            solverAnswers={solverAnswers}
+          />
         </div>
       )
     }
