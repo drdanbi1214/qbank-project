@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { Spinner } from '@/components/ui/Spinner'
 import { AnswerNotice } from '@/components/question/AnswerNotice'
+import { AnswerOpinions } from '@/components/question/AnswerOpinions'
 import { ChoiceList } from '@/components/question/ChoiceList'
 import { StatsBar } from '@/components/question/StatsBar'
 import { StemBlocks } from '@/components/question/StemBlocks'
@@ -505,6 +506,14 @@ export function QuestionView({
 
           <AnswerNotice answer={answer} />
 
+          <AnswerOpinions
+            questionId={question.id}
+            choices={question.choices}
+            baselineAnswer={effectiveAnswer(answer)}
+            baselineLabel="채점 기준 답"
+            allowEdit={!autoWrite}
+          />
+
           {lectureSources.length > 0 && (
             <section className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 dark:border-sky-900 dark:bg-sky-950/20">
               <h3 className="mb-2 text-sm font-semibold text-sky-950 dark:text-sky-100">출제 강의</h3>
@@ -560,7 +569,7 @@ export function QuestionView({
             </section>
           )}
 
-          {/* 배정 화면에서 들어온 경우 편집자답 체크 + 풀이 작성이 결합된 전용 폼을 연다. */}
+          {/* 배정 화면에서는 풀이자 개인 답 체크와 풀이 작성이 결합된 전용 폼을 연다. */}
           {autoWrite && (
             <AssignmentEditor
               questionId={question.id}

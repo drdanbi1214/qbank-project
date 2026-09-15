@@ -38,10 +38,8 @@ function answersByQuestion(value: unknown): Record<string, number[]> {
   )
 }
 
-function YamaEmbedView({ node, selected, editor, deleteNode, updateAttributes }: NodeViewProps) {
+function YamaEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
   const questionId = typeof node.attrs.questionId === 'string' ? node.attrs.questionId : null
-  const solverAnswer = answerNumbers(node.attrs.solverAnswer)
-  const solverAnswers = answersByQuestion(node.attrs.solverAnswers)
 
   return (
     <NodeViewWrapper
@@ -59,13 +57,6 @@ function YamaEmbedView({ node, selected, editor, deleteNode, updateAttributes }:
     >
       <YamaCard
         questionId={questionId}
-        solverAnswer={solverAnswer}
-        solverAnswers={solverAnswers}
-        onSolverAnswerChange={editor.isEditable
-          ? (targetQuestionId, answer) => updateAttributes({
-              solverAnswers: { ...solverAnswers, [targetQuestionId]: answer },
-            })
-          : undefined}
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
       />

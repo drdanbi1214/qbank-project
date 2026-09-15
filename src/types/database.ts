@@ -1831,6 +1831,58 @@ export type Database = {
           },
         ]
       }
+      question_answer_opinions: {
+        Row: {
+          answer: number[]
+          author_id: string
+          created_at: string
+          id: string
+          permission_keys: string[]
+          question_id: string
+          updated_at: string
+        }
+        Insert: {
+          answer: number[]
+          author_id: string
+          created_at?: string
+          id?: string
+          permission_keys?: string[]
+          question_id: string
+          updated_at?: string
+        }
+        Update: {
+          answer?: number[]
+          author_id?: string
+          created_at?: string
+          id?: string
+          permission_keys?: string[]
+          question_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_answer_opinions_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_answer_opinions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_answer_opinions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_solve"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_lecture_sources: {
         Row: {
           lecture_source_id: string
@@ -3543,6 +3595,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_exam: { Args: { p_exam_id: string }; Returns: boolean }
+      can_view_answer_dispute: {
+        Args: { p_question_id: string }
+        Returns: boolean
+      }
       can_view_question: { Args: { p_question_id: string }; Returns: boolean }
       can_view_solution: { Args: { p_solution_id: string }; Returns: boolean }
       can_view_solution_target: {
@@ -3827,6 +3883,10 @@ export type Database = {
           server_revision: number
           server_updated_at: string
         }[]
+      }
+      save_my_answer_opinion: {
+        Args: { p_answer: number[]; p_question_id: string }
+        Returns: string
       }
       search_lecture_documents: {
         Args: {

@@ -13,7 +13,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { createSolution, type SolutionReference } from '@/lib/queries/solutions'
-import { setEditorAnswer } from '@/lib/queries/questions'
+import { saveMyAnswerOpinion } from '@/lib/queries/answerOpinions'
 import { assignUnit } from '@/lib/queries/admin'
 import { useData } from '@/lib/data'
 import { circled, type Choice, type QuestionType } from '@/types/question'
@@ -27,7 +27,7 @@ type Props = {
   groupId: string | null
   questionType: QuestionType
   choices: Choice[]
-  /** 이미 편집자답이 있으면 그 값으로 시작한다 (재검토하는 경우) */
+  /** 기존 편집자답은 공식 기준 답으로만 보여주고 풀이자 개인 답의 초깃값으로 쓴다. */
   currentEditorAnswer: number[]
   /** 복기 당시 통용됐던 답. 편집자답이 없으면 이 값으로 선택을 미리 채워둔다. */
   yamaAnswer: number[] | null
@@ -42,8 +42,8 @@ type Props = {
  * 배정 화면에서 문항을 검토할 때 쓰는 결합 폼.
  *
  * 일반 풀이 작성(SolutionEditor)과 다른 점은, 풀이 본문만 쓰는 게 아니라
- * 이 자리에서 편집자답도 함께 확정한다는 것이다. 등록을 누르면 두 가지를
- * 한 번에 저장한다: questions.editor_answer 갱신 + 풀이 등록.
+ * 이 자리에서 풀이자 개인 답도 함께 기록한다는 것이다. 등록을 누르면 두 가지를
+ * 한 번에 저장한다: 사람별 답 의견 + 풀이 등록.
  *
  * 이 화면에서의 조회/열람은 attempts 를 남기지 않는다. 누적 풀이 횟수에도
  * 잡히지 않는다 (QuestionView 가 자동 공개를 submit_attempt 가 아니라
@@ -64,7 +64,7 @@ export function AssignmentEditor({
   const navigate = useNavigate()
   const { taxonomy } = useData()
   const { profile, updateProfile } = useAuth()
-  // 편집자답이 아직 없으면 야마답으로 미리 채워, 편집자가 다시 고를 필요 없이
+  // 편집자답이 아직 없으면 야마답으로 미리 채워, 풀이자가 다시 고를 필요 없이
   // 다르다고 판단할 때만 바꾸도록 한다.
   const initialSelection = currentEditorAnswer.length > 0 ? currentEditorAnswer : (yamaAnswer ?? [])
   const answerIsStructurallyOptional = questionType === 'essay' || choices.length === 0
@@ -185,7 +185,7 @@ export function AssignmentEditor({
     setBusy(true)
     setError(null)
     try {
-      await setEditorAnswer(questionId, selection)
+      await saveMyAnswerOpinion(questionId, selection)
       if (unitId !== currentUnitId) await assignUnit([questionId], unitId)
       await createSolution({
         target: { questionId, groupId },
@@ -230,7 +230,7 @@ export function AssignmentEditor({
       <div className="mb-4">
         {!pickerOpen ? (
           <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-            편집자 답을 체크해주세요
+            풀이자 답을 체크해주세요
           </Button>
         ) : (
           <div>
@@ -307,7 +307,7 @@ export function AssignmentEditor({
             </button>
             {(answerIsStructurallyOptional || answerNotApplicable) && (
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                편집자 답 없이 풀이만 등록합니다.
+                풀이자 답 의견 없이 풀이만 등록합니다.
               </p>
             )}
           </div>

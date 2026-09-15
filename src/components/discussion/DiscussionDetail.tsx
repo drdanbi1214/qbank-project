@@ -4,6 +4,7 @@ import { CommentComposer } from '@/components/discussion/CommentComposer'
 import { CommentThread } from '@/components/discussion/CommentThread'
 import { DiscussionComposer } from '@/components/discussion/DiscussionComposer'
 import { LinkedQuestionCard } from '@/components/discussion/LinkedQuestionCard'
+import { AnswerOpinions } from '@/components/question/AnswerOpinions'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
@@ -210,6 +211,12 @@ export function DiscussionDetail({
             unitId={discussion.questionUnitId}
             stem={discussion.questionStem}
           />
+          {discussion.category === '정답이의' && (
+            <AnswerOpinions
+              questionId={discussion.questionId}
+              allowEdit={false}
+            />
+          )}
         </div>
       )}
 

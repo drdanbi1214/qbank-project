@@ -5,18 +5,18 @@ import { QuestionLookup } from '@/components/question/QuestionLookup'
 import { useCluster } from '@/components/question/useCluster'
 import { TopicSolutionBox } from '@/components/question/TopicSolutionBox'
 import { useTopicScope } from '@/components/question/TopicContext'
+import { AnswerOpinions } from '@/components/question/AnswerOpinions'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/auth'
 import { useData } from '@/lib/data'
 import {
   fetchQuestionById,
   revealAnswer,
-  setEditorAnswer,
   submitAttempt,
   type SolveQuestion,
 } from '@/lib/queries/questions'
 import { examShortLabel } from '@/lib/queries/taxonomy'
-import { effectiveAnswer, formatAnswer, type AnswerPayload } from '@/types/question'
+import { circled, effectiveAnswer, formatAnswer, type AnswerPayload } from '@/types/question'
 import {
   recordClusterAttachFailure,
   setVariantNote,
@@ -27,12 +27,6 @@ import { cn } from '@/utils/cn'
 
 type Props = {
   questionId: string | null
-  /** 이 레옵스 게시물에서 풀이자가 선택한 답. 문제의 기준 답과 분리해 저장한다. */
-  solverAnswer?: number[]
-  /** 한 야마 묶음 안의 대표·유사 문제별 풀이자 답. */
-  solverAnswers?: Record<string, number[]>
-  /** 편집기에서만 넘어온다. */
-  onSolverAnswerChange?: (questionId: string, answer: number[]) => void
   /** 편집기에서 노드가 선택된 상태 */
   selected?: boolean
   /** 편집기에서만 넘어온다. 있으면 빼기·묶기 버튼을 보여준다. */
@@ -70,9 +64,6 @@ function codeOf(caught: unknown): string | null {
  */
 export function YamaCard({
   questionId,
-  solverAnswer = [],
-  solverAnswers = {},
-  onSolverAnswerChange,
   selected = false,
   onRemove,
 }: Props) {
@@ -138,9 +129,6 @@ export function YamaCard({
       question={question}
       selected={selected}
       subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
-      solverAnswer={solverAnswer}
-      solverAnswers={solverAnswers}
-      onSolverAnswerChange={onSolverAnswerChange}
       onRemove={onRemove}
     />
   )
@@ -160,17 +148,11 @@ function YamaBody({
   question,
   selected,
   subjectId,
-  solverAnswer,
-  solverAnswers,
-  onSolverAnswerChange,
   onRemove,
 }: {
   question: SolveQuestion
   selected: boolean
   subjectId: string | null
-  solverAnswer: number[]
-  solverAnswers: Record<string, number[]>
-  onSolverAnswerChange?: (questionId: string, answer: number[]) => void
   onRemove?: () => void
 }) {
   const { taxonomy } = useData()
@@ -304,10 +286,6 @@ function YamaBody({
           onDetach={detach}
           interactive={!editing}
           defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
-          solverAnswer={Object.hasOwn(solverAnswers, question.id) ? solverAnswers[question.id] : solverAnswer}
-          onSolverAnswerChange={onSolverAnswerChange
-            ? (answer) => onSolverAnswerChange(question.id, answer)
-            : undefined}
         />
 
         {orderedCards.map((row) => (
@@ -332,10 +310,6 @@ function YamaBody({
             onDetach={detach}
             interactive={!editing}
             defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
-            solverAnswer={solverAnswers[row.id] ?? []}
-            onSolverAnswerChange={onSolverAnswerChange
-              ? (answer) => onSolverAnswerChange(row.id, answer)
-              : undefined}
           />
         ))}
 
@@ -425,8 +399,6 @@ function QuestionCard({
   onDetach,
   interactive,
   defaultView,
-  solverAnswer = [],
-  onSolverAnswerChange,
 }: {
   className?: string
   kind: 'anchor' | 'variant'
@@ -446,10 +418,9 @@ function QuestionCard({
   onDetach: (id: string) => void
   interactive: boolean
   defaultView: 'question' | 'solution'
-  solverAnswer?: number[]
-  onSolverAnswerChange?: (answer: number[]) => void
 }) {
   const { refreshProgress } = useData()
+  const topicScope = useTopicScope()
   const [editingNote, setEditingNote] = useState(false)
   const [noteValue, setNoteValue] = useState(note ?? '')
   const [showSolution, setShowSolution] = useState(defaultView === 'solution')
@@ -460,8 +431,6 @@ function QuestionCard({
   const [grading, setGrading] = useState(false)
   const [gradeError, setGradeError] = useState<string | null>(null)
   const [authoringAnswer, setAuthoringAnswer] = useState<AnswerPayload | null>(null)
-  const [choosingSolverAnswer, setChoosingSolverAnswer] = useState(false)
-  const [savingSolverAnswer, setSavingSolverAnswer] = useState(false)
   const startedAt = useRef(0)
 
   useEffect(() => {
@@ -536,38 +505,6 @@ function QuestionCard({
   const referenceAnswer = interactive
     ? (answer ? effectiveAnswer(answer) : null)
     : (authoringAnswer ? effectiveAnswer(authoringAnswer) : null)
-  const comparisonAnswer = !interactive && (authoringAnswer?.yamaAnswer?.length ?? 0) > 0
-    ? authoringAnswer?.yamaAnswer ?? []
-    : referenceAnswer
-  const solverAnswerVisible = solverAnswer.length > 0 && (!interactive || showSolution)
-  const solverDiffers = solverAnswerVisible && comparisonAnswer !== null
-    ? solverAnswer.length !== comparisonAnswer.length
-      || solverAnswer.some((choice, index) => choice !== comparisonAnswer[index])
-    : null
-
-  const toggleSolverAnswer = (choice: number) => {
-    if (!onSolverAnswerChange) return
-    const next = solverAnswer.includes(choice)
-      ? solverAnswer.filter((value) => value !== choice)
-      : [...solverAnswer, choice].sort((a, b) => a - b)
-    onSolverAnswerChange(next)
-  }
-
-  const commitSolverAnswer = async () => {
-    if (solverAnswer.length === 0 || savingSolverAnswer) return
-    setSavingSolverAnswer(true)
-    try {
-      // 일반 문제의 풀이 등록과 같은 저장 경로를 사용한다. questions 갱신 트리거가
-      // 편집 이력을 남기고, Y답과 다르면 정답이의 게시판을 자동으로 연다.
-      await setEditorAnswer(questionId, solverAnswer)
-      setAuthoringAnswer(await revealAnswer(questionId))
-      setChoosingSolverAnswer(false)
-    } catch (caught) {
-      window.alert(messageOf(caught, '풀이자 답을 문제에 반영하지 못했습니다.'))
-    } finally {
-      setSavingSolverAnswer(false)
-    }
-  }
 
   return (
     <section
@@ -618,46 +555,7 @@ function QuestionCard({
             ✕
           </button>
         )}
-        {onSolverAnswerChange && (
-          <button
-            type="button"
-            onClick={() => setChoosingSolverAnswer((value) => !value)}
-            className={cn(
-              'rounded border px-1.5 py-0.5 font-semibold',
-              solverAnswer.length
-                ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300'
-                : 'border-slate-300 text-slate-500 hover:border-brand-400 hover:text-brand-700 dark:border-slate-600 dark:text-slate-400',
-            )}
-          >
-            {solverAnswer.length ? `풀이자 답 ${formatAnswer(solverAnswer)}` : '풀이자 답을 체크해주세요'}
-          </button>
-        )}
       </div>
-
-      {choosingSolverAnswer && onSolverAnswerChange && (
-        <div className="mb-2 rounded-md border border-rose-200 bg-rose-50/70 px-2.5 py-2 text-xs dark:border-rose-900 dark:bg-rose-950/25">
-          <div className="flex flex-wrap items-center gap-2">
-            <strong className="text-rose-800 dark:text-rose-200">풀이자가 정답으로 보는 선지를 선택하세요.</strong>
-            {solverAnswer.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onSolverAnswerChange([])}
-                className="ml-auto text-slate-500 underline dark:text-slate-400"
-              >
-                지우기
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void commitSolverAnswer()}
-              disabled={solverAnswer.length === 0 || savingSolverAnswer}
-              className="rounded bg-rose-600 px-2 py-1 font-semibold text-white hover:bg-rose-700"
-            >
-              {savingSolverAnswer ? '반영 중…' : '선택 완료'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {editingNote && (
         <input
@@ -698,7 +596,6 @@ function QuestionCard({
         <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
           {choices.map((choice) => {
             const isAnswer = !interactive && referenceAnswer?.includes(choice.no)
-            const isSolverAnswer = solverAnswer.includes(choice.no)
             return (
               <li
                 key={choice.no}
@@ -706,30 +603,9 @@ function QuestionCard({
                   'flex items-start gap-1.5 rounded px-1 py-0.5 text-slate-700 dark:text-slate-300',
                   isAnswer &&
                     'bg-yellow-200/80 font-semibold text-slate-900 dark:bg-yellow-400/25 dark:text-yellow-100',
-                  choosingSolverAnswer && 'cursor-pointer ring-1 ring-inset ring-transparent hover:ring-rose-300',
-                  choosingSolverAnswer && isSolverAnswer && 'bg-rose-100 ring-rose-400 dark:bg-rose-950/40',
                 )}
-                onClick={choosingSolverAnswer ? () => toggleSolverAnswer(choice.no) : undefined}
               >
-                {choosingSolverAnswer && (
-                  <button
-                    type="button"
-                    aria-pressed={isSolverAnswer}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      toggleSolverAnswer(choice.no)
-                    }}
-                    className={cn(
-                      'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold',
-                      isSolverAnswer
-                        ? 'border-rose-600 bg-rose-600 text-white'
-                        : 'border-slate-300 bg-white text-transparent dark:border-slate-600 dark:bg-slate-900',
-                    )}
-                    aria-label={`${choice.no}번을 풀이자 답으로 선택`}
-                  >
-                    ✓
-                  </button>
-                )}
+                <span className="shrink-0 font-medium text-slate-400">{circled(choice.no)}</span>
                 <span className="min-w-0 flex-1">{choice.text ?? '(이미지 보기)'}</span>
                 {isAnswer && (
                   <span className="shrink-0 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -742,22 +618,15 @@ function QuestionCard({
         </ol>
       )}
 
-      {solverAnswerVisible && (
-        <p
-          className={cn(
-            'mt-2 rounded-md px-2.5 py-1.5 text-xs font-bold',
-            solverDiffers
-              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200'
-              : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-          )}
-        >
-          풀이자 답 {formatAnswer(solverAnswer)}
-          {solverDiffers === true
-            ? ` · ${authoringAnswer?.yamaAnswer?.length ? 'Y답' : '기준 답'}과 다름`
-            : solverDiffers === false
-              ? ` · ${authoringAnswer?.yamaAnswer?.length ? 'Y답' : '기준 답'}과 같음`
-              : ''}
-        </p>
+      {(!interactive || showSolution) && (
+        <AnswerOpinions
+          questionId={questionId}
+          choices={choices}
+          preferredAuthorId={topicScope?.authorId}
+          baselineAnswer={referenceAnswer}
+          baselineLabel={isKmle ? '국시 정답' : '기준 답'}
+          compact
+        />
       )}
 
       {interactive && !showSolution && (
