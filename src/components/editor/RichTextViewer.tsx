@@ -410,9 +410,14 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
     case 'yamaEmbed': {
       const questionId =
         typeof node.attrs?.questionId === 'string' ? node.attrs.questionId : null
+      const solverAnswer = Array.isArray(node.attrs?.solverAnswer)
+        ? [...new Set(node.attrs.solverAnswer)]
+            .filter((item): item is number => Number.isInteger(item) && Number(item) > 0)
+            .sort((a, b) => a - b)
+        : []
       return (
         <div className="my-3">
-          <YamaCard questionId={questionId} />
+          <YamaCard questionId={questionId} solverAnswer={solverAnswer} />
         </div>
       )
     }

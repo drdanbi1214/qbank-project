@@ -22,8 +22,16 @@ declare module '@tiptap/core' {
  * 본문에는 questionId 만 담는다. 문제 내용을 복사해 두면 원본이 고쳐졌을 때
  * 테마 쪽만 옛 내용으로 남는다.
  */
-function YamaEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
+function answerNumbers(value: unknown): number[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value)]
+    .filter((item): item is number => Number.isInteger(item) && Number(item) > 0)
+    .sort((a, b) => a - b)
+}
+
+function YamaEmbedView({ node, selected, editor, deleteNode, updateAttributes }: NodeViewProps) {
   const questionId = typeof node.attrs.questionId === 'string' ? node.attrs.questionId : null
+  const solverAnswer = answerNumbers(node.attrs.solverAnswer)
 
   return (
     <NodeViewWrapper
@@ -41,6 +49,10 @@ function YamaEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
     >
       <YamaCard
         questionId={questionId}
+        solverAnswer={solverAnswer}
+        onSolverAnswerChange={editor.isEditable
+          ? (answer) => updateAttributes({ solverAnswer: answer })
+          : undefined}
         selected={selected}
         onRemove={editor.isEditable ? deleteNode : undefined}
       />
@@ -63,6 +75,21 @@ export const YamaEmbed = Node.create({
         renderHTML: (attributes) =>
           attributes.questionId ? { 'data-question-id': attributes.questionId } : {},
       },
+      // 풀이자가 이 게시물에서 선택한 답이다. 문제 DB의 Y답/편집자답과 분리해
+      // 같은 문제를 다룬 게시물마다 서로 다른 판단을 기록할 수 있다.
+      solverAnswer: {
+        default: [],
+        parseHTML: (element) => {
+          const raw = element.getAttribute('data-solver-answer')
+          return raw
+            ? answerNumbers(raw.split(',').map((value) => Number.parseInt(value, 10)))
+            : []
+        },
+        renderHTML: (attributes) => {
+          const answer = answerNumbers(attributes.solverAnswer)
+          return answer.length ? { 'data-solver-answer': answer.join(',') } : {}
+        },
+      },
     }
   },
 
@@ -83,7 +110,7 @@ export const YamaEmbed = Node.create({
       insertYama:
         (questionId: string) =>
         ({ commands }) =>
-          commands.insertContent({ type: this.name, attrs: { questionId } }),
+          commands.insertContent({ type: this.name, attrs: { questionId, solverAnswer: [] } }),
     }
   },
 })

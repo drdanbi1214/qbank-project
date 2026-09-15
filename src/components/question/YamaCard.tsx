@@ -26,6 +26,10 @@ import { cn } from '@/utils/cn'
 
 type Props = {
   questionId: string | null
+  /** 이 레옵스 게시물에서 풀이자가 선택한 답. 문제의 기준 답과 분리해 저장한다. */
+  solverAnswer?: number[]
+  /** 편집기에서만 넘어온다. */
+  onSolverAnswerChange?: (answer: number[]) => void
   /** 편집기에서 노드가 선택된 상태 */
   selected?: boolean
   /** 편집기에서만 넘어온다. 있으면 빼기·묶기 버튼을 보여준다. */
@@ -61,7 +65,13 @@ function codeOf(caught: unknown): string | null {
  * 문제를 못 가져오면 자리표시자를 그린다. 지워졌거나, 시험이 draft 거나, 보는
  * 사람에게 그 학번 열람 권한이 없는 경우다. 본문 흐름은 끊기지 않는다.
  */
-export function YamaCard({ questionId, selected = false, onRemove }: Props) {
+export function YamaCard({
+  questionId,
+  solverAnswer = [],
+  onSolverAnswerChange,
+  selected = false,
+  onRemove,
+}: Props) {
   const { taxonomy } = useData()
   const [question, setQuestion] = useState<SolveQuestion | null | 'missing'>(
     questionId ? null : 'missing',
@@ -124,6 +134,8 @@ export function YamaCard({ questionId, selected = false, onRemove }: Props) {
       question={question}
       selected={selected}
       subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
+      solverAnswer={solverAnswer}
+      onSolverAnswerChange={onSolverAnswerChange}
       onRemove={onRemove}
     />
   )
@@ -143,11 +155,15 @@ function YamaBody({
   question,
   selected,
   subjectId,
+  solverAnswer,
+  onSolverAnswerChange,
   onRemove,
 }: {
   question: SolveQuestion
   selected: boolean
   subjectId: string | null
+  solverAnswer: number[]
+  onSolverAnswerChange?: (answer: number[]) => void
   onRemove?: () => void
 }) {
   const { taxonomy } = useData()
@@ -281,6 +297,8 @@ function YamaBody({
           onDetach={detach}
           interactive={!editing}
           defaultView={topicScope?.yamaDisplayMode === 'solve' ? 'question' : 'solution'}
+          solverAnswer={solverAnswer}
+          onSolverAnswerChange={onSolverAnswerChange}
         />
 
         {orderedCards.map((row) => (
@@ -394,6 +412,8 @@ function QuestionCard({
   onDetach,
   interactive,
   defaultView,
+  solverAnswer = [],
+  onSolverAnswerChange,
 }: {
   className?: string
   kind: 'anchor' | 'variant'
@@ -413,6 +433,8 @@ function QuestionCard({
   onDetach: (id: string) => void
   interactive: boolean
   defaultView: 'question' | 'solution'
+  solverAnswer?: number[]
+  onSolverAnswerChange?: (answer: number[]) => void
 }) {
   const { refreshProgress } = useData()
   const [editingNote, setEditingNote] = useState(false)
@@ -425,6 +447,7 @@ function QuestionCard({
   const [grading, setGrading] = useState(false)
   const [gradeError, setGradeError] = useState<string | null>(null)
   const [authoringAnswer, setAuthoringAnswer] = useState<number[] | null>(null)
+  const [choosingSolverAnswer, setChoosingSolverAnswer] = useState(false)
   const startedAt = useRef(0)
 
   useEffect(() => {
@@ -496,6 +519,23 @@ function QuestionCard({
     }
   }, [grading, questionId, selectedChoices, refreshProgress])
 
+  const referenceAnswer = interactive
+    ? (answer ? effectiveAnswer(answer) : null)
+    : authoringAnswer
+  const solverAnswerVisible = solverAnswer.length > 0 && (!interactive || showSolution)
+  const solverDiffers = solverAnswerVisible && referenceAnswer !== null
+    ? solverAnswer.length !== referenceAnswer.length
+      || solverAnswer.some((choice, index) => choice !== referenceAnswer[index])
+    : null
+
+  const toggleSolverAnswer = (choice: number) => {
+    if (!onSolverAnswerChange) return
+    const next = solverAnswer.includes(choice)
+      ? solverAnswer.filter((value) => value !== choice)
+      : [...solverAnswer, choice].sort((a, b) => a - b)
+    onSolverAnswerChange(next)
+  }
+
   return (
     <section
       className={cn(
@@ -545,7 +585,45 @@ function QuestionCard({
             ✕
           </button>
         )}
+        {onSolverAnswerChange && (
+          <button
+            type="button"
+            onClick={() => setChoosingSolverAnswer((value) => !value)}
+            className={cn(
+              'rounded border px-1.5 py-0.5 font-semibold',
+              solverAnswer.length
+                ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300'
+                : 'border-slate-300 text-slate-500 hover:border-brand-400 hover:text-brand-700 dark:border-slate-600 dark:text-slate-400',
+            )}
+          >
+            {solverAnswer.length ? `풀이자 답 ${formatAnswer(solverAnswer)}` : '풀이자 답을 체크해주세요'}
+          </button>
+        )}
       </div>
+
+      {choosingSolverAnswer && onSolverAnswerChange && (
+        <div className="mb-2 rounded-md border border-rose-200 bg-rose-50/70 px-2.5 py-2 text-xs dark:border-rose-900 dark:bg-rose-950/25">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong className="text-rose-800 dark:text-rose-200">풀이자가 정답으로 보는 선지를 선택하세요.</strong>
+            {solverAnswer.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSolverAnswerChange([])}
+                className="ml-auto text-slate-500 underline dark:text-slate-400"
+              >
+                지우기
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setChoosingSolverAnswer(false)}
+              className="rounded bg-rose-600 px-2 py-1 font-semibold text-white hover:bg-rose-700"
+            >
+              선택 완료
+            </button>
+          </div>
+        </div>
+      )}
 
       {editingNote && (
         <input
@@ -586,6 +664,7 @@ function QuestionCard({
         <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
           {choices.map((choice) => {
             const isAnswer = !interactive && authoringAnswer?.includes(choice.no)
+            const isSolverAnswer = solverAnswer.includes(choice.no)
             return (
               <li
                 key={choice.no}
@@ -593,8 +672,30 @@ function QuestionCard({
                   'flex items-start gap-1.5 rounded px-1 py-0.5 text-slate-700 dark:text-slate-300',
                   isAnswer &&
                     'bg-yellow-200/80 font-semibold text-slate-900 dark:bg-yellow-400/25 dark:text-yellow-100',
+                  choosingSolverAnswer && 'cursor-pointer ring-1 ring-inset ring-transparent hover:ring-rose-300',
+                  choosingSolverAnswer && isSolverAnswer && 'bg-rose-100 ring-rose-400 dark:bg-rose-950/40',
                 )}
+                onClick={choosingSolverAnswer ? () => toggleSolverAnswer(choice.no) : undefined}
               >
+                {choosingSolverAnswer && (
+                  <button
+                    type="button"
+                    aria-pressed={isSolverAnswer}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      toggleSolverAnswer(choice.no)
+                    }}
+                    className={cn(
+                      'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold',
+                      isSolverAnswer
+                        ? 'border-rose-600 bg-rose-600 text-white'
+                        : 'border-slate-300 bg-white text-transparent dark:border-slate-600 dark:bg-slate-900',
+                    )}
+                    aria-label={`${choice.no}번을 풀이자 답으로 선택`}
+                  >
+                    ✓
+                  </button>
+                )}
                 <span className="min-w-0 flex-1">{choice.text ?? '(이미지 보기)'}</span>
                 {isAnswer && (
                   <span className="shrink-0 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -605,6 +706,20 @@ function QuestionCard({
             )
           })}
         </ol>
+      )}
+
+      {solverAnswerVisible && (
+        <p
+          className={cn(
+            'mt-2 rounded-md px-2.5 py-1.5 text-xs font-bold',
+            solverDiffers
+              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200'
+              : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+          )}
+        >
+          풀이자 답 {formatAnswer(solverAnswer)}
+          {solverDiffers === true ? ' · 기준 답과 다름' : solverDiffers === false ? ' · 기준 답과 같음' : ''}
+        </p>
       )}
 
       {interactive && !showSolution && (
