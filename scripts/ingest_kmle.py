@@ -338,11 +338,19 @@ def resolve_group(client: Client, subject_id: str, chapter: str) -> dict:
         "theory_documents",
         {"subject_id": f"eq.{subject_id}", "select": "id,title,has_content,parent_id"},
     )
-    matches = [row for row in rows if normalized_title(row["title"]) == normalized_title(chapter)]
+    # Allen과 달렌 목차가 같은 단원을 가리키지만 제목에서 과목명이 한 번 더
+    # 반복되는 두 경우다. 원본 chapter는 출처 메타데이터에 그대로 보존하고,
+    # 목차를 찾을 때만 달렌 제목으로 정규화한다.
+    chapter_aliases = {
+        normalized_title("신생아 질환 - 고위험 신생아"): normalized_title("신생아 질환 - 고위험"),
+        normalized_title("신생아 질환 - 신생아 황달"): normalized_title("신생아 질환 - 황달"),
+    }
+    expected_title = chapter_aliases.get(normalized_title(chapter), normalized_title(chapter))
+    matches = [row for row in rows if normalized_title(row["title"]) == expected_title]
     group_matches = [row for row in matches if not row["has_content"]]
     candidates = group_matches or matches
     if not candidates:
-        expected = normalized_title(chapter)
+        expected = expected_title
         suggestions = sorted(
             rows,
             key=lambda row: difflib.SequenceMatcher(

@@ -15,10 +15,14 @@ import re
 import sys
 import urllib.parse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+
+
+STORAGE_CHECK_WORKERS = 16
 
 try:
     from .ingest_exam import Client
@@ -378,17 +382,24 @@ def main() -> None:
         )
 
     verified_storage_objects = 0
-    if not args.skip_storage:
-        for logical_url in sorted(set(stored_image_urls) - {"PLACEHOLDER", ""}):
+    storage_urls = sorted(set(stored_image_urls) - {"PLACEHOLDER", ""})
+    if not args.skip_storage and storage_urls:
+        def check_storage(logical_url: str) -> tuple[str, bool, str | None]:
             try:
-                exists = storage_object_exists(client, logical_url)
+                return logical_url, storage_object_exists(client, logical_url), None
             except Exception as error:
-                errors.append(f"저장소 확인 실패: {logical_url} ({error})")
-                continue
-            if not exists:
-                errors.append(f"저장소 객체 없음: {logical_url}")
-                continue
-            verified_storage_objects += 1
+                return logical_url, False, str(error)
+
+        workers = min(STORAGE_CHECK_WORKERS, len(storage_urls))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = executor.map(check_storage, storage_urls)
+            for logical_url, exists, failure in results:
+                if failure:
+                    errors.append(f"저장소 확인 실패: {logical_url} ({failure})")
+                elif not exists:
+                    errors.append(f"저장소 객체 없음: {logical_url}")
+                else:
+                    verified_storage_objects += 1
 
     print(f"과목: {subject['name']} (입력명: {args.subject})")
     print(f"JSON 문항: {len(items)}개 · 고유 id: {len(set(ids))}개")
@@ -397,7 +408,7 @@ def main() -> None:
     print(f"DB 문제 대조: {len(question_by_id)}/{len(items)}개")
     print(f"이미지: JSON 변환 {expected_images}개 · DB {stored_images}개 · PLACEHOLDER {placeholders}개")
     if not args.skip_storage:
-        print(f"저장소 객체: {verified_storage_objects}/{len(set(stored_image_urls) - {'PLACEHOLDER', ''})}개 존재")
+        print(f"저장소 객체: {verified_storage_objects}/{len(storage_urls)}개 존재")
     print(f"표: JSON 변환 {expected_tables}개 · DB {stored_tables}개")
     if export_failures:
         print(f"참고: JSON imageFailures {len(export_failures)}개(원격 복구 결과는 위 대조에 포함)")
