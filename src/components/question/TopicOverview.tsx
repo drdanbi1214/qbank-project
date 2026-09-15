@@ -70,11 +70,11 @@ export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
         </p>
       </header>
 
-      <ol className="divide-y divide-slate-200 dark:divide-slate-700">
+      <ol className="space-y-3 pt-4">
         {groups.map((group, index) => (
-          <li key={group.key} className="py-4">
-            <section className="min-w-0">
-              <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-baseline gap-x-3">
+          <li key={group.key}>
+            <section className="min-w-0 rounded-xl bg-slate-100 p-4 dark:bg-slate-800/80">
+              <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-baseline gap-x-3 px-1">
                 <span className="tabular-nums text-xs text-slate-400 dark:text-slate-500">
                   {String(index + 1).padStart(2, '0')}
                 </span>
@@ -100,16 +100,16 @@ export function TopicOverview({ topics, units, subjectId, onNewTopic }: Props) {
               </div>
 
               {group.rows.length === 0 ? (
-                <p className="mt-2 pl-11 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                   아직 작성한 풀이가 없습니다.
                 </p>
               ) : (
-                <ul className="mt-2 space-y-0.5 pl-11">
+                <ul className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60">
                   {group.rows.map((row) => (
-                    <li key={row.id}>
+                    <li key={row.id} className="border-b border-slate-100 last:border-b-0 dark:border-slate-800">
                       <Link
                         to={`/topics/${subjectId}/${row.id}`}
-                        className="flex items-baseline gap-3 rounded-md py-1 text-sm text-slate-700 transition-colors hover:text-sky-800 dark:text-slate-200 dark:hover:text-sky-200"
+                        className="flex items-baseline gap-3 px-4 py-2.5 text-sm text-slate-700 transition-colors hover:bg-sky-50 hover:text-sky-800 dark:text-slate-200 dark:hover:bg-sky-950/30 dark:hover:text-sky-200"
                       >
                         <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
                         <span className="min-w-0 flex-1 font-medium">{row.title}</span>
