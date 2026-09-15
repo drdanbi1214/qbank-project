@@ -11,6 +11,7 @@ import { useData } from '@/lib/data'
 import {
   fetchQuestionById,
   revealAnswer,
+  setEditorAnswer,
   submitAttempt,
   type SolveQuestion,
 } from '@/lib/queries/questions'
@@ -458,8 +459,9 @@ function QuestionCard({
   const [graded, setGraded] = useState(false)
   const [grading, setGrading] = useState(false)
   const [gradeError, setGradeError] = useState<string | null>(null)
-  const [authoringAnswer, setAuthoringAnswer] = useState<number[] | null>(null)
+  const [authoringAnswer, setAuthoringAnswer] = useState<AnswerPayload | null>(null)
   const [choosingSolverAnswer, setChoosingSolverAnswer] = useState(false)
+  const [savingSolverAnswer, setSavingSolverAnswer] = useState(false)
   const startedAt = useRef(0)
 
   useEffect(() => {
@@ -474,10 +476,10 @@ function QuestionCard({
     let active = true
     void revealAnswer(questionId)
       .then((revealed) => {
-        if (active) setAuthoringAnswer(revealed ? effectiveAnswer(revealed) : [])
+        if (active) setAuthoringAnswer(revealed)
       })
       .catch(() => {
-        if (active) setAuthoringAnswer([])
+        if (active) setAuthoringAnswer(null)
       })
     return () => {
       active = false
@@ -533,11 +535,14 @@ function QuestionCard({
 
   const referenceAnswer = interactive
     ? (answer ? effectiveAnswer(answer) : null)
-    : authoringAnswer
+    : (authoringAnswer ? effectiveAnswer(authoringAnswer) : null)
+  const comparisonAnswer = !interactive && (authoringAnswer?.yamaAnswer?.length ?? 0) > 0
+    ? authoringAnswer?.yamaAnswer ?? []
+    : referenceAnswer
   const solverAnswerVisible = solverAnswer.length > 0 && (!interactive || showSolution)
-  const solverDiffers = solverAnswerVisible && referenceAnswer !== null
-    ? solverAnswer.length !== referenceAnswer.length
-      || solverAnswer.some((choice, index) => choice !== referenceAnswer[index])
+  const solverDiffers = solverAnswerVisible && comparisonAnswer !== null
+    ? solverAnswer.length !== comparisonAnswer.length
+      || solverAnswer.some((choice, index) => choice !== comparisonAnswer[index])
     : null
 
   const toggleSolverAnswer = (choice: number) => {
@@ -546,6 +551,22 @@ function QuestionCard({
       ? solverAnswer.filter((value) => value !== choice)
       : [...solverAnswer, choice].sort((a, b) => a - b)
     onSolverAnswerChange(next)
+  }
+
+  const commitSolverAnswer = async () => {
+    if (solverAnswer.length === 0 || savingSolverAnswer) return
+    setSavingSolverAnswer(true)
+    try {
+      // 일반 문제의 풀이 등록과 같은 저장 경로를 사용한다. questions 갱신 트리거가
+      // 편집 이력을 남기고, Y답과 다르면 정답이의 게시판을 자동으로 연다.
+      await setEditorAnswer(questionId, solverAnswer)
+      setAuthoringAnswer(await revealAnswer(questionId))
+      setChoosingSolverAnswer(false)
+    } catch (caught) {
+      window.alert(messageOf(caught, '풀이자 답을 문제에 반영하지 못했습니다.'))
+    } finally {
+      setSavingSolverAnswer(false)
+    }
   }
 
   return (
@@ -628,10 +649,11 @@ function QuestionCard({
             )}
             <button
               type="button"
-              onClick={() => setChoosingSolverAnswer(false)}
+              onClick={() => void commitSolverAnswer()}
+              disabled={solverAnswer.length === 0 || savingSolverAnswer}
               className="rounded bg-rose-600 px-2 py-1 font-semibold text-white hover:bg-rose-700"
             >
-              선택 완료
+              {savingSolverAnswer ? '반영 중…' : '선택 완료'}
             </button>
           </div>
         </div>
@@ -675,7 +697,7 @@ function QuestionCard({
       ) : (
         <ol className="mt-1.5 space-y-0.5 text-[13px] leading-snug">
           {choices.map((choice) => {
-            const isAnswer = !interactive && authoringAnswer?.includes(choice.no)
+            const isAnswer = !interactive && referenceAnswer?.includes(choice.no)
             const isSolverAnswer = solverAnswer.includes(choice.no)
             return (
               <li
@@ -730,7 +752,11 @@ function QuestionCard({
           )}
         >
           풀이자 답 {formatAnswer(solverAnswer)}
-          {solverDiffers === true ? ' · 기준 답과 다름' : solverDiffers === false ? ' · 기준 답과 같음' : ''}
+          {solverDiffers === true
+            ? ` · ${authoringAnswer?.yamaAnswer?.length ? 'Y답' : '기준 답'}과 다름`
+            : solverDiffers === false
+              ? ` · ${authoringAnswer?.yamaAnswer?.length ? 'Y답' : '기준 답'}과 같음`
+              : ''}
         </p>
       )}
 
