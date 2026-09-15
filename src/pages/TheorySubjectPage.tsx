@@ -671,6 +671,15 @@ function TheoryNavItem({
       <Link to={`/theory/${subjectId}/${document.id}`} className="min-w-0 flex-1 truncate">
       {label}
       </Link>
+      {questionCount > 0 && (
+        <Link
+          to={`/solve?theory=${document.id}&returnTo=${encodeURIComponent(`/theory/${subjectId}/${document.id}`)}`}
+          title={`${document.title} 국시 ${questionCount}문항 풀기`}
+          className="shrink-0 rounded border border-violet-200 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-200 dark:hover:bg-violet-950/40"
+        >
+          국시 {questionCount}
+        </Link>
+      )}
       {onToggle && <button type="button" onClick={onToggle} aria-label={`${document.title} ${expanded ? '접기' : '펼치기'}`} className="px-1 text-slate-400">{expanded ? '⌄' : '›'}</button>}
       <span className="shrink-0 rounded border border-brand-200 px-1.5 py-0.5 text-[11px] font-medium text-brand-700 dark:border-brand-800 dark:text-brand-200">
         이론

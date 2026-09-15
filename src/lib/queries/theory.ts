@@ -274,15 +274,24 @@ export async function fetchTheoryQuestionCounts(
   theoryDocumentIds: string[],
 ): Promise<Map<string, number>> {
   if (theoryDocumentIds.length === 0) return new Map()
-  const { data, error } = await supabase
-    .from('theory_questions')
-    .select('theory_document_id')
-    .in('theory_document_id', theoryDocumentIds)
-  if (error) throw error
 
+  // PostgREST는 명시적인 range가 없으면 기본 max-rows(1000)에서 결과를
+  // 자른다. 과목 전체의 theory_questions 행이 1000개를 넘으면 뒤쪽 대제목의
+  // 연결이 통째로 빠져 카운트가 0으로 보였다. 모든 행을 받을 때까지
+  // 페이지네이션한다.
   const counts = new Map<string, number>()
-  for (const row of data ?? []) {
-    counts.set(row.theory_document_id, (counts.get(row.theory_document_id) ?? 0) + 1)
+  const pageSize = 1000
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from('theory_questions')
+      .select('theory_document_id')
+      .in('theory_document_id', theoryDocumentIds)
+      .range(offset, offset + pageSize - 1)
+    if (error) throw error
+    for (const row of data ?? []) {
+      counts.set(row.theory_document_id, (counts.get(row.theory_document_id) ?? 0) + 1)
+    }
+    if (!data || data.length < pageSize) break
   }
   return counts
 }
