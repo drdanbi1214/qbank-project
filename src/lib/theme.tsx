@@ -10,7 +10,38 @@ import {
 import { useAuth } from '@/lib/auth'
 
 export type Theme = 'light' | 'dark' | 'system'
-export type FontFamily = 'hamchorom' | 'hamchorom-batang' | 'ibm-plex-sans'
+export type FontFamily =
+  | 'hamchorom'
+  | 'hamchorom-batang'
+  | 'ibm-plex-sans'
+  | 'maruburi'
+  | 'nanum-gothic'
+  | 'nanum-myeongjo'
+  | 'nanum-barun-gothic'
+  | 'nanum-barun-pen'
+  | 'nanum-brush'
+  | 'nanum-pen'
+  | 'nanum-square'
+  | 'nanum-square-round'
+  | 'nanum-human'
+  | 'nanum-square-neo'
+
+const FONT_FAMILY_VALUES: readonly FontFamily[] = [
+  'hamchorom',
+  'hamchorom-batang',
+  'ibm-plex-sans',
+  'maruburi',
+  'nanum-gothic',
+  'nanum-myeongjo',
+  'nanum-barun-gothic',
+  'nanum-barun-pen',
+  'nanum-brush',
+  'nanum-pen',
+  'nanum-square',
+  'nanum-square-round',
+  'nanum-human',
+  'nanum-square-neo',
+]
 
 const THEME_CACHE_KEY = 'qbank.theme.cache'
 const FONT_CACHE_KEY = 'qbank.font.cache'
@@ -44,9 +75,7 @@ function asTheme(value: string | null | undefined): Theme | null {
 }
 
 function asFontFamily(value: string | null | undefined): FontFamily | null {
-  return value === 'hamchorom' || value === 'hamchorom-batang' || value === 'ibm-plex-sans'
-    ? value
-    : null
+  return FONT_FAMILY_VALUES.includes(value as FontFamily) ? (value as FontFamily) : null
 }
 
 function readCache(): Theme {

@@ -245,16 +245,28 @@ export function MyPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">글씨체</span>
-            <div className="flex flex-wrap rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+            <div className="flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
               {([
-                ['hamchorom', '함초롬체 (기본)'],
-                ['hamchorom-batang', '함초롬바탕'],
-                ['ibm-plex-sans', '기존 글씨체 (IBM)'],
-              ] as const).map(([value, label]) => (
+                ['hamchorom', '함초롬체 (기본)', 'var(--font-hamchorom)'],
+                ['hamchorom-batang', '함초롬바탕', 'var(--font-hamchorom-batang)'],
+                ['ibm-plex-sans', '기존 글씨체 (IBM)', 'var(--font-legacy)'],
+                ['maruburi', '마루부리', 'var(--font-maruburi)'],
+                ['nanum-gothic', '나눔고딕', 'var(--font-nanum-gothic)'],
+                ['nanum-myeongjo', '나눔명조', 'var(--font-nanum-myeongjo)'],
+                ['nanum-barun-gothic', '나눔바른고딕', 'var(--font-nanum-barun-gothic)'],
+                ['nanum-barun-pen', '나눔바른펜', 'var(--font-nanum-barun-pen)'],
+                ['nanum-brush', '나눔손글씨 붓', 'var(--font-nanum-brush)'],
+                ['nanum-pen', '나눔손글씨 펜', 'var(--font-nanum-pen)'],
+                ['nanum-square', '나눔스퀘어', 'var(--font-nanum-square)'],
+                ['nanum-square-round', '나눔스퀘어라운드', 'var(--font-nanum-square-round)'],
+                ['nanum-human', '나눔휴먼', 'var(--font-nanum-human)'],
+                ['nanum-square-neo', '나눔스퀘어네오', 'var(--font-nanum-square-neo)'],
+              ] as const).map(([value, label, previewFont]) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setFontFamily(value)}
+                  style={{ fontFamily: previewFont }}
                   className={
                     fontFamily === value
                       ? 'rounded-md bg-white px-3 py-1 text-sm font-medium shadow-sm dark:bg-slate-700'
