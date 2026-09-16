@@ -21,10 +21,31 @@ import {
 } from '@/lib/theme'
 import { uploadAvatar } from '@/lib/uploads'
 
+/** 포인트 색 프리셋. 밝기·채도는 고정하고 색상각(oklch H)만 바꾼다. */
+const ACCENT_HUE_PRESETS = [
+  { hue: 254, label: '파랑 (기본)' },
+  { hue: 340, label: '핑크' },
+  { hue: 25, label: '빨강' },
+  { hue: 55, label: '주황' },
+  { hue: 95, label: '노랑' },
+  { hue: 145, label: '초록' },
+  { hue: 180, label: '민트' },
+  { hue: 295, label: '보라' },
+] as const
+
 /** 마이페이지. 프로필 편집과 학습 통계를 함께 보여준다. */
 export function MyPage() {
   const { profile, updateProfile } = useAuth()
-  const { fontScale, setFontScale, fontFamily, setFontFamily, theme, setTheme } = useTheme()
+  const {
+    fontScale,
+    setFontScale,
+    fontFamily,
+    setFontFamily,
+    accentHue,
+    setAccentHue,
+    theme,
+    setTheme,
+  } = useTheme()
 
   const [nickname, setNickname] = useState(profile?.display_name ?? '')
   const [busy, setBusy] = useState(false)
@@ -276,6 +297,36 @@ export function MyPage() {
                   {label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium">포인트 색상</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {ACCENT_HUE_PRESETS.map(({ hue, label }) => (
+                <button
+                  key={hue}
+                  type="button"
+                  onClick={() => setAccentHue(hue)}
+                  title={label}
+                  aria-label={label}
+                  style={{ backgroundColor: `oklch(0.62 0.18 ${hue})` }}
+                  className={
+                    accentHue === hue
+                      ? 'h-7 w-7 rounded-full ring-2 ring-slate-900 ring-offset-2 ring-offset-white dark:ring-white dark:ring-offset-slate-900'
+                      : 'h-7 w-7 rounded-full ring-1 ring-black/10 dark:ring-white/20'
+                  }
+                />
+              ))}
+              <input
+                type="range"
+                min={0}
+                max={359}
+                value={accentHue}
+                onChange={(event) => setAccentHue(Number(event.target.value))}
+                aria-label="포인트 색 직접 지정"
+                className="w-32 accent-brand-500"
+              />
             </div>
           </div>
 

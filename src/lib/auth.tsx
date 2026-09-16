@@ -40,6 +40,7 @@ export type ProfilePatch = Partial<
     | 'theme'
     | 'font_scale'
     | 'font_family'
+    | 'accent_hue'
     | 'default_solution_permission'
     | 'one_liner'
   >

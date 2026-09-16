@@ -218,16 +218,25 @@
   /* 드래그 툴바의 빨간 글씨 */
   --color-marker-red: #cc1616;
 
-  --color-brand-50: oklch(0.97 0.014 254);
-  --color-brand-100: oklch(0.93 0.032 254);
-  --color-brand-200: oklch(0.88 0.06 254);
-  --color-brand-300: oklch(0.81 0.096 254);
-  --color-brand-400: oklch(0.71 0.14 254);
-  --color-brand-500: oklch(0.62 0.18 254);
-  --color-brand-600: oklch(0.55 0.19 254);
-  --color-brand-700: oklch(0.47 0.17 254);
-  --color-brand-800: oklch(0.4 0.14 254);
-  --color-brand-900: oklch(0.34 0.11 254);
+  --color-brand-50: oklch(0.97 0.014 var(--brand-hue));
+  --color-brand-100: oklch(0.93 0.032 var(--brand-hue));
+  --color-brand-200: oklch(0.88 0.06 var(--brand-hue));
+  --color-brand-300: oklch(0.81 0.096 var(--brand-hue));
+  --color-brand-400: oklch(0.71 0.14 var(--brand-hue));
+  --color-brand-500: oklch(0.62 0.18 var(--brand-hue));
+  --color-brand-600: oklch(0.55 0.19 var(--brand-hue));
+  --color-brand-700: oklch(0.47 0.17 var(--brand-hue));
+  --color-brand-800: oklch(0.4 0.14 var(--brand-hue));
+  --color-brand-900: oklch(0.34 0.11 var(--brand-hue));
+}
+
+/*
+ * 마이페이지 "포인트 색상" 설정. 밝기·채도는 위 브랜드 램프 그대로 두고
+ * 색상각만 계정 설정(profiles.accent_hue)에 맞춰 JS가 인라인으로 덮어쓴다.
+ * 기본값 254는 지금 쓰는 파란색과 같다.
+ */
+:root {
+  --brand-hue: 254;
 }
 
 /* 계정 설정에서 다른 글꼴을 고르면 Tailwind의 font-sans까지 한꺼번에 바뀐다.

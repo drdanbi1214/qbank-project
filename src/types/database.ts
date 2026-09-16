@@ -1722,6 +1722,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          accent_hue: number
           avatar_url: string | null
           cohort: string | null
           created_at: string
@@ -1739,6 +1740,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accent_hue?: number
           avatar_url?: string | null
           cohort?: string | null
           created_at?: string
@@ -1756,6 +1758,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accent_hue?: number
           avatar_url?: string | null
           cohort?: string | null
           created_at?: string
@@ -3691,6 +3694,7 @@ export type Database = {
       get_my_profile: {
         Args: never
         Returns: {
+          accent_hue: number
           avatar_url: string | null
           cohort: string | null
           created_at: string

@@ -46,11 +46,15 @@ const FONT_FAMILY_VALUES: readonly FontFamily[] = [
 const THEME_CACHE_KEY = 'qbank.theme.cache'
 const FONT_CACHE_KEY = 'qbank.font.cache'
 const FONT_FAMILY_CACHE_KEY = 'qbank.font-family.cache'
+const ACCENT_HUE_CACHE_KEY = 'qbank.accent-hue.cache'
 
 /** 글자 크기 배율의 허용 범위와 단계. DB check 제약과 맞춰둔다. */
 export const FONT_SCALE_MIN = 0.85
 export const FONT_SCALE_MAX = 1.4
 export const FONT_SCALE_STEP = 0.05
+
+/** 포인트 색의 기본 색상각. DB 기본값과 맞춰둔다. */
+export const ACCENT_HUE_DEFAULT = 254
 
 type ThemeState = {
   /** 사용자가 고른 설정값 */
@@ -65,6 +69,9 @@ type ThemeState = {
   /** 사이트와 DB 본문에 적용하는 글꼴 */
   fontFamily: FontFamily
   setFontFamily: (next: FontFamily) => void
+  /** 포인트 색의 oklch 색상각(0~359) */
+  accentHue: number
+  setAccentHue: (next: number) => void
 }
 
 const ThemeContext = createContext<ThemeState | null>(null)
@@ -95,6 +102,16 @@ function readFontFamilyCache(): FontFamily {
   return asFontFamily(localStorage.getItem(FONT_FAMILY_CACHE_KEY)) ?? 'hamchorom'
 }
 
+/** 0~359도 범위로 감싸 돌린다(예: -10 -> 350, 370 -> 10). */
+function clampHue(value: number): number {
+  if (!Number.isFinite(value)) return ACCENT_HUE_DEFAULT
+  return ((Math.round(value) % 360) + 360) % 360
+}
+
+function readAccentHueCache(): number {
+  return clampHue(Number(localStorage.getItem(ACCENT_HUE_CACHE_KEY) ?? String(ACCENT_HUE_DEFAULT)))
+}
+
 function systemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
@@ -108,11 +125,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [localTheme, setLocalTheme] = useState<Theme>(() => readCache())
   const [localScale, setLocalScale] = useState<number>(() => readFontCache())
   const [localFontFamily, setLocalFontFamily] = useState<FontFamily>(() => readFontFamilyCache())
+  const [localAccentHue, setLocalAccentHue] = useState<number>(() => readAccentHueCache())
   const [prefersDark, setPrefersDark] = useState(() => systemPrefersDark())
 
   const theme: Theme = asTheme(profile?.theme) ?? localTheme
   const fontScale = clampScale(profile?.font_scale ?? localScale)
   const fontFamily = asFontFamily(profile?.font_family) ?? localFontFamily
+  const accentHue = clampHue(profile?.accent_hue ?? localAccentHue)
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -140,6 +159,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.fontFamily = fontFamily
     localStorage.setItem(FONT_FAMILY_CACHE_KEY, fontFamily)
   }, [fontFamily])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--brand-hue', String(accentHue))
+    localStorage.setItem(ACCENT_HUE_CACHE_KEY, String(accentHue))
+  }, [accentHue])
 
   const setTheme = useCallback(
     (next: Theme) => {
@@ -186,6 +210,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [session, updateProfile],
   )
 
+  const setAccentHue = useCallback(
+    (next: number) => {
+      const value = clampHue(next)
+      setLocalAccentHue(value)
+      localStorage.setItem(ACCENT_HUE_CACHE_KEY, String(value))
+      if (session) {
+        void updateProfile({ accent_hue: value }).catch((error: unknown) => {
+          console.error('포인트 색 설정을 저장하지 못했습니다.', error)
+        })
+      }
+    },
+    [session, updateProfile],
+  )
+
   const value = useMemo<ThemeState>(
     () => ({
       theme,
@@ -196,8 +234,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setFontScale,
       fontFamily,
       setFontFamily,
+      accentHue,
+      setAccentHue,
     }),
-    [theme, resolved, setTheme, toggle, fontScale, setFontScale, fontFamily, setFontFamily],
+    [
+      theme,
+      resolved,
+      setTheme,
+      toggle,
+      fontScale,
+      setFontScale,
+      fontFamily,
+      setFontFamily,
+      accentHue,
+      setAccentHue,
+    ],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
