@@ -37,8 +37,8 @@ const LEAVE_EDITOR_MESSAGE =
 /**
  * 테마 — 주제별 이론 정리.
  *
- * 왼쪽에 과목의 테마 목록, 오른쪽에 본문을 둔다. 위키식이라 볼 수 있는 사람은
- * 바로 고칠 수 있고, 되돌리기는 편집 이력(revisions)으로 한다.
+ * 왼쪽에 과목의 테마 목록, 오른쪽에 본문을 둔다. 열람은 스터디원에게 열고,
+ * 수정은 작성자만 할 수 있다. 되돌리기는 편집 이력(revisions)으로 한다.
  */
 export function TopicsPage() {
   const { subjectId, topicId } = useParams()
@@ -333,8 +333,8 @@ export function TopicsPage() {
   }, [writingActive])
 
   const save = useCallback(() => {
-    if (!editSession || !selected || selected.id !== editSession.topicId) {
-      setError('편집 중인 게시물과 저장 대상이 달라 저장하지 않았습니다.')
+    if (!editSession || !selected || selected.id !== editSession.topicId || selected.createdBy !== userId) {
+      setError('본인이 작성한 게시물만 수정할 수 있습니다.')
       return
     }
     if (!editedContent.current) {
@@ -526,6 +526,10 @@ export function TopicsPage() {
 
   const remove = useCallback(() => {
     if (!selected) return
+    if (selected.createdBy !== userId) {
+      setError('본인이 작성한 게시물만 삭제할 수 있습니다.')
+      return
+    }
     if (!window.confirm(`"${selected.title}" 주제를 지웁니다. 되돌릴 수 없습니다.`)) return
     setBusy(true)
     void deleteTopic(selected.id)
@@ -539,7 +543,7 @@ export function TopicsPage() {
         setError(caught instanceof Error ? caught.message : '지우지 못했습니다.')
       })
       .finally(() => setBusy(false))
-  }, [selected, subjectId, navigate, load])
+  }, [selected, userId, subjectId, navigate, load])
 
   if (!canUse) return <Navigate to="/study" replace />
   if (!subjectId) return <Navigate to="/study" replace />
@@ -760,31 +764,36 @@ export function TopicsPage() {
                     </>
                   ) : (
                     <>
-                      {(isAdmin || selected.createdBy === userId) && (
+                      <Button size="sm" variant="secondary" onClick={() => startDraft(selected.unitId)} disabled={busy}>
+                        새 글 쓰기
+                      </Button>
+                      {selected.createdBy === userId && (
                         <Button size="sm" variant="ghost" onClick={remove} disabled={busy}>
                           삭제
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setEditedUnitId(selected.unitId)
-                          setEditedTitle(selected.title)
-                          editedContent.current = selected.content
-                          setEditorSeed((previous) => ({
-                            doc: selected.content,
-                            version: previous.version + 1,
-                          }))
-                          setDraftDismissed(false)
-                          setEditSession({
-                            topicId: selected.id,
-                            expectedUpdatedAt: selected.updatedAt,
-                          })
-                        }}
-                      >
-                        편집
-                      </Button>
+                      {selected.createdBy === userId && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setEditedUnitId(selected.unitId)
+                            setEditedTitle(selected.title)
+                            editedContent.current = selected.content
+                            setEditorSeed((previous) => ({
+                              doc: selected.content,
+                              version: previous.version + 1,
+                            }))
+                            setDraftDismissed(false)
+                            setEditSession({
+                              topicId: selected.id,
+                              expectedUpdatedAt: selected.updatedAt,
+                            })
+                          }}
+                        >
+                          편집
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>

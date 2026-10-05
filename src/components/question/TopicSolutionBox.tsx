@@ -36,7 +36,7 @@ type Props = {
  */
 export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
   const scope = useTopicScope()
-  const { session, isAdmin } = useAuth()
+  const { session } = useAuth()
   const userId = session?.user.id ?? ''
 
   const embed = useEmbedPickers({ subjectId: null, theory: true, lectureUserId: userId })
@@ -49,7 +49,7 @@ export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
   // 중에 해설 입력칸이 보이면 게시물이 아직 작성 중인 것처럼 보인다.
   // 남의 풀이는 정책이 막는다 (solutions_update 가 author_id = auth.uid()).
   const canEdit =
-    Boolean(scope?.editing) && Boolean(scope?.authorId) && (scope?.authorId === userId || isAdmin)
+    Boolean(scope?.editing) && Boolean(scope?.authorId) && scope?.authorId === userId
 
   const load = useCallback(() => {
     void fetchSolutions({ questionId, groupId })
