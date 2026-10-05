@@ -15,9 +15,16 @@ type HeaderProps = {
   showDrawerButton?: boolean
 }
 
+// 회원 등급 문구만 표시한다. 이 목록은 콘텐츠 접근 권한을 부여하지 않는다.
+const PREMIUM_LABEL_ONLY_PROFILE_IDS = new Set([
+  '4048ad36-ecd4-49fb-b5e2-a62a902925c4', // dopamine
+  'dca819e5-b22c-40a4-8dbc-ccb7f0ef4dd0', // 안녕하신교
+])
+
 export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) {
   const { profile, isAdmin, hasPermission, signOut } = useAuth()
   const isPremiumMember = hasPermission('study_legendob')
+    || (profile !== null && PREMIUM_LABEL_ONLY_PROFILE_IDS.has(profile.id))
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const { openAssignments } = useData()
