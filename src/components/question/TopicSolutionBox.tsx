@@ -54,19 +54,18 @@ export function TopicSolutionBox({ questionId, groupId, choiceCount }: Props) {
   const load = useCallback(() => {
     void fetchSolutions({ questionId, groupId })
       .then((rows) => {
-        const mine = rows.find((row) => {
+        const inTopicScope = (row: Solution) => {
           if (row.author.id !== scope?.authorId) return false
           // 같은 사람이 같은 문제에 합본3·전체공개·레옵스 풀이를 각각 쓸 수
           // 있다. 레옵스 권한과 다른 풀이를 여기서 집어 오면 그 풀이를 고치는
           // 화면이 되어 새 레옵스 풀이를 만들 수 없으므로 공개범위까지 맞춘다.
-          if (row.requiredPermission !== scope?.requiredPermission) return false
-
-          // 그룹 풀이를 쓰는 자리에서는 예전에 문제 하나에만 달아 둔 풀이까지
-          // 조회되지만, 둘은 서로 다른 대상이다. 정확히 같은 대상만 재사용한다.
-          return groupId
-            ? row.groupId === groupId
-            : row.groupId === null && row.questionId === questionId
-        }) ?? null
+          return row.requiredPermission === scope?.requiredPermission
+        }
+        // 현재 그룹에 단 풀이를 우선하고, 그룹을 만들기 전에 이 문제에
+        // 직접 저장한 풀이도 이어서 보여준다. 저장 대상은 바꾸지 않는다.
+        const mine = rows.find((row) => inTopicScope(row) && groupId !== null && row.groupId === groupId)
+          ?? rows.find((row) => inTopicScope(row) && row.questionId === questionId)
+          ?? null
         setSolution(mine)
         draftRef.current = mine?.content ?? solutionTemplateDoc(choiceCount)
       })
