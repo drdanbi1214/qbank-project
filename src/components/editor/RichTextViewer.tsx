@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Formula } from '@/components/question/Formula'
 import { ImageZoomModal } from '@/components/question/ImageZoomModal'
 import { YamaCard } from '@/components/question/YamaCard'
+import { yamaLayoutOf } from '@/components/question/yamaLayout'
 import type { CSSProperties } from 'react'
 import { safeLineHeight } from '@/components/editor/extensions/lineHeight'
 import { LecturePageCard } from '@/components/lecture/LecturePageCard'
@@ -412,7 +413,7 @@ function renderLeaf(node: RichNode, start: number, context: RenderContext): Reac
         typeof node.attrs?.questionId === 'string' ? node.attrs.questionId : null
       return (
         <div className="my-3">
-          <YamaCard questionId={questionId} />
+          <YamaCard questionId={questionId} layout={yamaLayoutOf(node.attrs?.layout)} />
         </div>
       )
     }

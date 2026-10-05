@@ -3,6 +3,7 @@ import type { ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { YamaCard } from '@/components/question/YamaCard'
+import { yamaLayoutOf } from '@/components/question/yamaLayout'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -19,7 +20,7 @@ declare module '@tiptap/core' {
  * ProseMirror 위치 계산에서 크기 1로 센다 — richtext.ts 의 LEAF_TYPES 에도
  * 같은 이름이 등록되어 있어야 인라인 코멘트 위치가 어긋나지 않는다.
  *
- * 본문에는 questionId 만 담는다. 문제 내용을 복사해 두면 원본이 고쳐졌을 때
+ * 본문에는 문제 ID와 이 블록의 배치·선택 답을 담는다. 문제 내용을 복사해 두면 원본이 고쳐졌을 때
  * 테마 쪽만 옛 내용으로 남는다.
  */
 function answerNumbers(value: unknown): number[] {
@@ -38,7 +39,7 @@ function answersByQuestion(value: unknown): Record<string, number[]> {
   )
 }
 
-function YamaEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
+function YamaEmbedView({ node, selected, editor, deleteNode, updateAttributes }: NodeViewProps) {
   const questionId = typeof node.attrs.questionId === 'string' ? node.attrs.questionId : null
 
   return (
@@ -58,6 +59,8 @@ function YamaEmbedView({ node, selected, editor, deleteNode }: NodeViewProps) {
       <YamaCard
         questionId={questionId}
         selected={selected}
+        layout={yamaLayoutOf(node.attrs.layout)}
+        onLayoutChange={editor.isEditable ? (layout) => updateAttributes({ layout }) : undefined}
         onRemove={editor.isEditable ? deleteNode : undefined}
       />
     </NodeViewWrapper>
@@ -78,6 +81,11 @@ export const YamaEmbed = Node.create({
         parseHTML: (element) => element.getAttribute('data-question-id'),
         renderHTML: (attributes) =>
           attributes.questionId ? { 'data-question-id': attributes.questionId } : {},
+      },
+      layout: {
+        default: 'auto',
+        parseHTML: (element) => yamaLayoutOf(element.getAttribute('data-yama-layout')),
+        renderHTML: (attributes) => ({ 'data-yama-layout': yamaLayoutOf(attributes.layout) }),
       },
       // 풀이자가 이 게시물에서 선택한 답이다. 문제 DB의 Y답/편집자답과 분리해
       // 같은 문제를 다룬 게시물마다 서로 다른 판단을 기록할 수 있다.

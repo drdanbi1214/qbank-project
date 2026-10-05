@@ -24,6 +24,7 @@ import {
   type VariantType,
 } from '@/lib/queries/clusters'
 import { cn } from '@/utils/cn'
+import { yamaColumnCount, type YamaLayout } from '@/components/question/yamaLayout'
 
 type Props = {
   questionId: string | null
@@ -31,6 +32,9 @@ type Props = {
   selected?: boolean
   /** 편집기에서만 넘어온다. 있으면 빼기·묶기 버튼을 보여준다. */
   onRemove?: () => void
+  /** 이 본문 블록에 저장된 배치. 다른 글의 같은 야마에는 영향을 주지 않는다. */
+  layout?: YamaLayout
+  onLayoutChange?: (layout: YamaLayout) => void
 }
 
 /** Supabase의 PostgrestError는 Error 인스턴스가 아닐 수 있어 메시지를 직접 꺼낸다. */
@@ -66,6 +70,8 @@ export function YamaCard({
   questionId,
   selected = false,
   onRemove,
+  layout = 'auto',
+  onLayoutChange,
 }: Props) {
   const { taxonomy } = useData()
   const [question, setQuestion] = useState<SolveQuestion | null | 'missing'>(
@@ -130,6 +136,8 @@ export function YamaCard({
       selected={selected}
       subjectId={taxonomy?.examById.get(question.examId)?.subjectId ?? null}
       onRemove={onRemove}
+      layout={layout}
+      onLayoutChange={onLayoutChange}
     />
   )
 }
@@ -149,11 +157,15 @@ function YamaBody({
   selected,
   subjectId,
   onRemove,
+  layout,
+  onLayoutChange,
 }: {
   question: SolveQuestion
   selected: boolean
   subjectId: string | null
   onRemove?: () => void
+  layout: YamaLayout
+  onLayoutChange?: (layout: YamaLayout) => void
 }) {
   const { taxonomy } = useData()
   const { isAdmin, hasPermission } = useAuth()
@@ -195,30 +207,32 @@ function YamaBody({
    * 옮기면 오히려 헷갈린다.
    */
   const orderedCards = useMemo(() => {
-    if (editing) return cards
+    if (editing || layout === 'stacked') return cards
     const hasImage = (row: ClusterSibling) =>
       row.stemBlocks.some((block) => block.type === 'image')
     return [...cards].sort((a, b) => Number(hasImage(a)) - Number(hasImage(b)))
-  }, [cards, editing])
+  }, [cards, editing, layout])
 
   // 한 문제면 카드가 본문 폭을 전부 쓰고, 두 문제면 반씩, 세 문제 이상이면
   // 최대 3열로 둔다. 고정 3열이면 한두 문제뿐일 때 오른쪽이 비고 카드가
   // 불필요하게 좁아진다.
   const cardCount = cards.length + 1
+  const columnCount = yamaColumnCount(layout, cardCount)
   const columnClass = editing
-    ? cardCount >= 3
+    ? columnCount >= 3
       ? 'grid gap-2.5 lg:grid-cols-3'
-      : cardCount === 2
+      : columnCount === 2
         ? 'grid gap-2.5 lg:grid-cols-2'
         : 'grid gap-2.5'
-    : cardCount >= 3
+    : columnCount >= 3
       ? 'lg:columns-3 lg:gap-x-2.5'
-      : cardCount === 2
+      : columnCount === 2
         ? 'lg:columns-2 lg:gap-x-2.5'
         : undefined
 
   return (
     <div
+      data-yama-layout={layout}
       data-print-pending={siblings === null ? 'yama' : undefined}
       className={cn(
         'rounded-lg border-l-2 px-3 py-2.5',
@@ -243,6 +257,31 @@ function YamaBody({
           유사 문제 {cards.length + 1}개
         </span>
         <span className="ml-auto flex items-center gap-2">
+          {onLayoutChange && (
+            <span role="group" aria-label="이 문제 묶음의 배치" className="flex gap-0.5 rounded-md bg-white/80 p-0.5 dark:bg-slate-900/80">
+              {([
+                ['auto', '자동'],
+                ['two-columns', '두 열'],
+                ['stacked', '한 줄씩'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={layout === value}
+                  title={value === 'stacked' ? '문제와 해설을 한 줄에 하나씩 넓게 표시' : value === 'two-columns' ? '넓은 화면에서 최대 두 열로 표시' : '문제 수에 따라 최대 세 열로 표시'}
+                  onClick={() => onLayoutChange(value)}
+                  className={cn(
+                    'rounded px-2 py-1 font-medium',
+                    layout === value
+                      ? 'bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
+          )}
           {onRemove && (
             <button
               type="button"
