@@ -17,6 +17,7 @@ type HeaderProps = {
 
 export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) {
   const { profile, isAdmin, hasPermission, signOut } = useAuth()
+  const isPremiumMember = hasPermission('study_legendob')
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const { openAssignments } = useData()
@@ -105,8 +106,12 @@ export function Header({ onOpenDrawer, showDrawerButton = false }: HeaderProps) 
                   role="menu"
                   className="absolute right-0 z-20 mt-2 max-h-[calc(100dvh-5rem)] w-48 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
                 >
-                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="px-3 pt-2 pb-1 text-xs text-slate-500 dark:text-slate-400">
                     {profile?.email}
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 pb-2 text-sm text-slate-700 dark:text-slate-200">
+                    <span aria-hidden="true">{isPremiumMember ? '🏆' : '✏️'}</span>
+                    <span>{isPremiumMember ? '프리미엄 회원' : '일반회원'}</span>
                   </div>
 
                   {/* 좁은 화면에서는 상단 네비게이션이 숨겨지므로 전체 메뉴를 여기서 제공한다. */}
