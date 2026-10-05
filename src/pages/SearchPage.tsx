@@ -281,7 +281,7 @@ export function SearchPage() {
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="문제·풀이·알렌·강의록·정리본 내용을 검색하세요"
+          placeholder="문제·풀이·알렌·강의록·정리본 또는 23Y24처럼 문항번호 검색"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
         />
         <Button type="submit" disabled={searching || input.trim() === '' || !hasSelectedSource}>

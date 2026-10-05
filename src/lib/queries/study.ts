@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { QuestionBank } from '@/lib/queries/taxonomy'
+import { parseCohortQuestionQuery } from '@/lib/questionSearchCode'
 
 // =============================================================================
 // Phase 4 학습 도구 조회
@@ -119,6 +120,48 @@ export type SearchHit = {
   sourceCode?: string | null
 }
 
+async function searchByCohortQuestionNumber(params: {
+  cohort: string
+  questionNumber: number
+  questionBank: QuestionBank
+  subjectId?: string | null
+}): Promise<SearchHit[]> {
+  let examsQuery = supabase
+    .from('exams')
+    .select('id')
+    .eq('cohort', params.cohort)
+    .eq('question_bank', params.questionBank)
+  if (params.subjectId) examsQuery = examsQuery.eq('subject_id', params.subjectId)
+  const { data: exams, error: examsError } = await examsQuery
+  if (examsError) throw examsError
+  const examIds = (exams ?? []).map((exam) => exam.id)
+  if (examIds.length === 0) return []
+
+  // questions_solve 뷰가 정답 필드를 제외하고 시험 열람 권한도 검사한다.
+  const { data, error } = await supabase
+    .from('questions_solve')
+    .select('id, exam_id, unit_id, question_number, stem_text')
+    .in('exam_id', examIds)
+    .eq('question_number', params.questionNumber)
+    .eq('status', 'published')
+    .order('exam_id')
+  if (error) throw error
+
+  return (data ?? []).flatMap((row) => {
+    if (!row.id || !row.exam_id) return []
+    return [{
+      questionId: row.id,
+      examId: row.exam_id,
+      unitId: row.unit_id,
+      questionNumber: row.question_number ?? params.questionNumber,
+      stemText: row.stem_text,
+      score: 1,
+      matchedIn: '문항번호',
+      snippet: row.stem_text,
+    }]
+  })
+}
+
 export async function searchKmleQuestions(params: {
   query: string
   subjectId?: string | null
@@ -155,6 +198,16 @@ export async function searchQuestions(params: {
   if (params.questionBank === 'kmle') {
     return searchKmleQuestions({
       query: params.query,
+      subjectId: params.subjectId,
+    })
+  }
+
+  const questionCode = parseCohortQuestionQuery(params.query)
+  if (questionCode) {
+    if (params.cohort && params.cohort !== questionCode.cohort) return []
+    return searchByCohortQuestionNumber({
+      ...questionCode,
+      questionBank: params.questionBank ?? 'hanyang_2026',
       subjectId: params.subjectId,
     })
   }
